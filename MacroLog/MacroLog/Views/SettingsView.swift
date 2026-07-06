@@ -48,6 +48,16 @@ struct SettingsView: View {
                 } footer: {
                     Text("Keys are stored in the iOS Keychain, never in UserDefaults. Without a USDA key the app uses the free public DEMO_KEY, which is rate-limited — get a free key at api.data.gov.")
                 }
+
+                Section {
+                    NavigationLink("Match diagnostics") {
+                        DebugLogView()
+                    }
+                } header: {
+                    Text("Developer")
+                } footer: {
+                    Text("Trace of how each logged item was matched: candidates considered, selection reason, and plausibility flags.")
+                }
             }
             .navigationTitle("Settings")
             .onAppear {

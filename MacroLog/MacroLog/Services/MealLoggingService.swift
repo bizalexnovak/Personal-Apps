@@ -13,6 +13,7 @@ struct MealLoggingService {
     @MainActor
     @discardableResult
     func logMeal(from text: String, in context: ModelContext) async throws -> Meal {
+        MatchDebugLog.shared.record(transcript: text)
         let requests = try await parser.parse(text)
 
         var items: [FoodItem] = []

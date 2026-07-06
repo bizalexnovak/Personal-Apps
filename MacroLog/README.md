@@ -53,9 +53,26 @@ raw text ─▶ ClaudeMealParsingService ─▶ [FoodItemRequest] ─▶ USDANut
 
 ### Matching heuristics
 
-Nutrition values from FoodData Central are per 100 g. Quantities are converted to
-grams with a unit table (weights exact; volumes via water density). Count-like units
-("2 large", "1 slice") fall back to an assumed 100 g per piece and the item is
-flagged `matchConfidence = "low"` — shown with a ⚠️ badge — so you can fix it in the
-edit screen. A low name-overlap score between what you said and the matched USDA
-description also flags the item.
+Search-result nutrients from FoodData Central are per 100 g; the matcher's job is
+picking the right entry and the right gram weight:
+
+- **Candidate selection** ranks by: brand mention in the query ("Chobani…") →
+  unit compatibility (discrete units prefer entries with a real package serving
+  like "1 slice" = 15 g) → unit-aware data-type priority (Branded > Survey >
+  SR Legacy for discrete/serving units; Survey (FNDDS) > SR Legacy > Branded for
+  explicit weights/volumes, since branded per-100g data is often dry/raw) →
+  name-overlap score.
+- **Gram resolution**: weights are exact; volumes and discrete units use the
+  matched entry's package serving or the USDA detail record's `foodPortions`
+  ("1 cup, cooked" = 158 g) before falling back to approximations. Inherently
+  discrete items with no real per-piece weight are never silently scaled at
+  100 g — they're flagged low confidence instead.
+- **Plausibility checks** run on every match: calories vs. Atwater (4P+4C+9F)
+  within 15%, physical energy-density bounds, macro mass ≤ food mass, and
+  per-unit calorie sanity bounds by unit size category (a "slice" can't be
+  300 kcal). Any flag forces `matchConfidence = "low"` (⚠️ badge).
+
+Settings → Developer → **Match diagnostics** shows the full trace for every
+lookup: transcript → parsed item → all candidates with scores → selection reason
+→ gram basis → flags. The same trace goes to the console via os.Logger
+(subsystem `com.alexnovak.macrolog`).

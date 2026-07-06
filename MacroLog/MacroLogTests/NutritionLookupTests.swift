@@ -2,19 +2,29 @@ import XCTest
 @testable import MacroLog
 
 final class NutritionLookupTests: XCTestCase {
+    // MARK: - Fixture helpers
+
     private func food(
         _ description: String,
         dataType: String = "SR Legacy",
+        brandOwner: String? = nil,
+        servingSize: Double? = nil,
+        servingSizeUnit: String? = nil,
+        householdServing: String? = nil,
         kcal: Double = 100,
         protein: Double = 10,
-        carbs: Double = 20,
-        fat: Double = 5
+        carbs: Double = 12,
+        fat: Double = 1.3
     ) -> USDAFood {
         USDAFood(
-            fdcId: Int.random(in: 1...1_000_000),
+            fdcId: abs(description.hashValue % 1_000_000),
             description: description,
             dataType: dataType,
-            brandOwner: nil,
+            brandOwner: brandOwner,
+            brandName: nil,
+            servingSize: servingSize,
+            servingSizeUnit: servingSizeUnit,
+            householdServingFullText: householdServing,
             foodNutrients: [
                 .init(nutrientId: 1008, nutrientName: "Energy", unitName: "KCAL", value: kcal),
                 .init(nutrientId: 1003, nutrientName: "Protein", unitName: "G", value: protein),
@@ -24,79 +34,240 @@ final class NutritionLookupTests: XCTestCase {
         )
     }
 
-    // MARK: Unit → grams conversion
+    // Realistic USDA-style fixtures for the four regression cases.
 
-    func testWeightUnitsConvertExactly() {
-        let grams = USDANutritionLookupService.gramsFor(quantity: 2, unit: "oz")
-        XCTAssertEqual(grams.value, 56.7, accuracy: 0.01)
-        XCTAssertTrue(grams.isExact)
-
-        let cup = USDANutritionLookupService.gramsFor(quantity: 1.5, unit: "cups")
-        XCTAssertEqual(cup.value, 360, accuracy: 0.01)
-        XCTAssertTrue(cup.isExact)
-    }
-
-    func testCountUnitsFallBackAndFlagInexact() {
-        let grams = USDANutritionLookupService.gramsFor(quantity: 2, unit: "slice")
-        XCTAssertEqual(grams.value, 200)
-        XCTAssertFalse(grams.isExact)
-    }
-
-    // MARK: Best-match selection
-
-    func testBestMatchPrefersOverlappingDescription() {
-        let foods = [
-            food("Cheese, cheddar"),
-            food("Chicken breast, grilled"),
-            food("Rice, white, cooked"),
-        ]
-        let best = USDANutritionLookupService.bestMatch(for: "grilled chicken breast", in: foods)
-        XCTAssertEqual(best?.food.description, "Chicken breast, grilled")
-        XCTAssertEqual(best?.score ?? 0, 1.0, accuracy: 0.001)
-    }
-
-    func testBestMatchPrefersGenericOverBrandedOnTies() {
-        let foods = [
-            food("Chicken breast", dataType: "Branded"),
-            food("Chicken breast", dataType: "Foundation"),
-        ]
-        let best = USDANutritionLookupService.bestMatch(for: "chicken breast", in: foods)
-        XCTAssertEqual(best?.food.dataType, "Foundation")
-    }
-
-    // MARK: Scaling & confidence
-
-    func testMatchScalesMacrosToGrams() {
-        // 200 g of a 100-kcal/10p/20c/5f per-100g food → doubled macros.
-        let match = USDANutritionLookupService.match(
-            for: FoodItemRequest(name: "white rice", quantity: 200, unit: "g"),
-            food: food("Rice, white, cooked"),
-            nameScore: 1.0
+    private var brandedTurkeyBacon: USDAFood {
+        food(
+            "OSCAR MAYER TURKEY BACON", dataType: "Branded", brandOwner: "Oscar Mayer",
+            servingSize: 15, servingSizeUnit: "g", householdServing: "1 SLICE",
+            kcal: 217, protein: 17.2, carbs: 2.2, fat: 15.5
         )
-        XCTAssertEqual(match.calories, 200, accuracy: 0.01)
-        XCTAssertEqual(match.protein, 20, accuracy: 0.01)
-        XCTAssertEqual(match.carbs, 40, accuracy: 0.01)
-        XCTAssertEqual(match.fat, 10, accuracy: 0.01)
-        XCTAssertEqual(match.confidence, MatchConfidence.high)
     }
 
-    func testLowNameScoreFlagsLowConfidence() {
-        let match = USDANutritionLookupService.match(
-            for: FoodItemRequest(name: "dragonfruit smoothie", quantity: 100, unit: "g"),
-            food: food("Cheese, cheddar"),
-            nameScore: 0.1
-        )
-        XCTAssertEqual(match.confidence, MatchConfidence.low)
+    private var srTurkeyBacon: USDAFood {
+        food("Turkey bacon, microwaved", kcal: 368, protein: 29.5, carbs: 3.1, fat: 25.9)
     }
 
-    func testInexactUnitFlagsLowConfidence() {
-        let match = USDANutritionLookupService.match(
-            for: FoodItemRequest(name: "egg", quantity: 2, unit: "large"),
-            food: food("Egg, whole, cooked"),
-            nameScore: 1.0
+    private var brandedChobani: USDAFood {
+        food(
+            "CHOBANI NON-FAT GREEK YOGURT PLAIN", dataType: "Branded", brandOwner: "Chobani, LLC",
+            servingSize: 170, servingSizeUnit: "g", householdServing: "1 CONTAINER",
+            kcal: 57, protein: 10.2, carbs: 4.1, fat: 0.2
         )
-        XCTAssertEqual(match.confidence, MatchConfidence.low)
     }
+
+    private var srGreekYogurt: USDAFood {
+        food("Yogurt, Greek, plain, nonfat", kcal: 59, protein: 10.2, carbs: 3.6, fat: 0.4)
+    }
+
+    private var brandedEggs: USDAFood {
+        food(
+            "GRADE A LARGE EGGS", dataType: "Branded", brandOwner: "Kroger",
+            servingSize: 50, servingSizeUnit: "g", householdServing: "1 EGG",
+            kcal: 143, protein: 12.6, carbs: 0.7, fat: 9.5
+        )
+    }
+
+    private var srRawEgg: USDAFood {
+        food("Egg, whole, raw, fresh", kcal: 143, protein: 12.6, carbs: 0.7, fat: 9.5)
+    }
+
+    private var surveyCookedRice: USDAFood {
+        food(
+            "Rice, white, cooked, regular, no added fat", dataType: "Survey (FNDDS)",
+            kcal: 130, protein: 2.7, carbs: 28.2, fat: 0.28
+        )
+    }
+
+    private var brandedDryRice: USDAFood {
+        food(
+            "MAHATMA ENRICHED EXTRA LONG GRAIN WHITE RICE", dataType: "Branded",
+            brandOwner: "Riviana Foods",
+            servingSize: 45, servingSizeUnit: "g", householdServing: "1/4 cup",
+            kcal: 356, protein: 6.7, carbs: 80, fat: 0
+        )
+    }
+
+    private var srCookedRice: USDAFood {
+        food("Rice, white, long-grain, regular, cooked", kcal: 130, protein: 2.7, carbs: 28.2, fat: 0.28)
+    }
+
+    private let cookedRicePortions = [
+        USDAPortion(amount: 1, gramWeight: 158, modifier: nil, portionDescription: "1 cup, cooked", measureUnit: nil)
+    ]
+
+    // MARK: - Regression case 1: "one piece of turkey bacon"
+
+    func testTurkeyBaconPieceUsesBrandedSliceWeight() {
+        let request = FoodItemRequest(name: "turkey bacon", quantity: 1, unit: "piece")
+        let foods = [srTurkeyBacon, brandedTurkeyBacon]
+
+        let selection = USDANutritionLookupService.selectCandidate(for: request, in: foods)
+        XCTAssertEqual(selection?.food.description, "OSCAR MAYER TURKEY BACON")
+
+        let result = USDANutritionLookupService.evaluate(
+            for: request, food: selection!.food, nameScore: selection!.score
+        )
+        // 1 slice = 15 g → 15% of the per-100g values.
+        XCTAssertEqual(result.match.calories, 32.55, accuracy: 0.1)
+        XCTAssertEqual(result.match.protein, 2.58, accuracy: 0.01)
+        XCTAssertEqual(result.match.confidence, MatchConfidence.high)
+        XCTAssertTrue(result.flags.isEmpty)
+    }
+
+    func testTurkeyBaconOldBehaviorIsNowFlagged() {
+        // The reported bug: SR entry scaled at an assumed 100 g/piece → 368 kcal.
+        // If that path is ever hit again it must come out low-confidence.
+        let request = FoodItemRequest(name: "turkey bacon", quantity: 1, unit: "piece")
+        let result = USDANutritionLookupService.evaluate(
+            for: request, food: srTurkeyBacon, nameScore: 1.0
+        )
+        XCTAssertEqual(result.match.calories, 368, accuracy: 0.1)
+        XCTAssertEqual(result.match.confidence, MatchConfidence.low)
+        XCTAssertFalse(result.flags.isEmpty, "368 kcal for one piece must trip the sanity bound")
+    }
+
+    // MARK: - Regression case 2: "a Chobani greek yogurt"
+
+    func testChobaniYogurtUsesBrandServingSize() {
+        let request = FoodItemRequest(name: "Chobani greek yogurt", quantity: 1, unit: "container")
+        let foods = [srGreekYogurt, brandedChobani]
+
+        let selection = USDANutritionLookupService.selectCandidate(for: request, in: foods)
+        XCTAssertEqual(selection?.food.description, "CHOBANI NON-FAT GREEK YOGURT PLAIN")
+        XCTAssertTrue(USDANutritionLookupService.brandMentioned(query: request.name, food: brandedChobani))
+
+        let result = USDANutritionLookupService.evaluate(
+            for: request, food: selection!.food, nameScore: selection!.score
+        )
+        // 1 container = 170 g → 1.7 × per-100g values.
+        XCTAssertEqual(result.match.calories, 96.9, accuracy: 0.1)
+        XCTAssertEqual(result.match.protein, 17.34, accuracy: 0.01)
+        XCTAssertEqual(result.match.confidence, MatchConfidence.high)
+    }
+
+    // MARK: - Regression case 3: "two eggs"
+
+    func testTwoEggsUseDiscreteEggServing() {
+        let request = FoodItemRequest(name: "eggs", quantity: 2, unit: "large")
+        let foods = [srRawEgg, brandedEggs]
+
+        let selection = USDANutritionLookupService.selectCandidate(for: request, in: foods)
+        XCTAssertEqual(selection?.food.description, "GRADE A LARGE EGGS")
+
+        let result = USDANutritionLookupService.evaluate(
+            for: request, food: selection!.food, nameScore: selection!.score
+        )
+        // "1 EGG" = 50 g → 2 eggs = 100 g, not the old 2 × 100 g = 286 kcal.
+        XCTAssertEqual(result.match.calories, 143, accuracy: 0.1)
+        XCTAssertEqual(result.match.protein, 12.6, accuracy: 0.01)
+        XCTAssertEqual(result.match.confidence, MatchConfidence.high)
+    }
+
+    // MARK: - Regression case 4: "a cup of rice"
+
+    func testCupOfRicePrefersSurveyCookedOverBrandedDry() {
+        let request = FoodItemRequest(name: "rice", quantity: 1, unit: "cup")
+        let foods = [brandedDryRice, surveyCookedRice, srCookedRice]
+
+        let selection = USDANutritionLookupService.selectCandidate(for: request, in: foods)
+        XCTAssertEqual(selection?.food.dataType, "Survey (FNDDS)",
+                       "volume request must not match dry packaged rice")
+
+        let result = USDANutritionLookupService.evaluate(
+            for: request, food: selection!.food, nameScore: selection!.score,
+            portions: cookedRicePortions
+        )
+        // USDA portion "1 cup, cooked" = 158 g → 205 kcal, not 240 g water-density.
+        XCTAssertEqual(result.match.calories, 205.4, accuracy: 0.5)
+        XCTAssertEqual(result.match.carbs, 44.56, accuracy: 0.1)
+        XCTAssertEqual(result.match.confidence, MatchConfidence.high)
+    }
+
+    // MARK: - Plausibility checks
+
+    func testAtwaterMismatchIsFlagged() {
+        let flags = USDANutritionLookupService.plausibilityFlags(
+            calories: 500, protein: 10, carbs: 10, fat: 10, // expected ≈ 170
+            grams: 200, quantity: 1, unitKind: .weight(gramsPerUnit: 200)
+        )
+        XCTAssertTrue(flags.contains { $0.contains("inconsistent") })
+    }
+
+    func testImpossibleEnergyDensityIsFlagged() {
+        let flags = USDANutritionLookupService.plausibilityFlags(
+            calories: 950, protein: 10, carbs: 10, fat: 100,
+            grams: 100, quantity: 1, unitKind: .weight(gramsPerUnit: 100)
+        )
+        XCTAssertTrue(flags.contains { $0.contains("energy density") })
+    }
+
+    func testMacroMassExceedingWeightIsFlagged() {
+        let flags = USDANutritionLookupService.plausibilityFlags(
+            calories: 400, protein: 50, carbs: 50, fat: 10,
+            grams: 100, quantity: 1, unitKind: .weight(gramsPerUnit: 100)
+        )
+        XCTAssertTrue(flags.contains { $0.contains("exceed") })
+    }
+
+    func testDiscreteBoundUsesUnitCategoryNotFood() {
+        // 250 kcal is fine for a "large" item but not for a "slice".
+        let sliceFlags = USDANutritionLookupService.plausibilityFlags(
+            calories: 250, protein: 15, carbs: 2, fat: 21,
+            grams: 0, quantity: 1, unitKind: .discrete(word: "slice")
+        )
+        XCTAssertTrue(sliceFlags.contains { $0.contains("sanity bound") })
+
+        let largeFlags = USDANutritionLookupService.plausibilityFlags(
+            calories: 250, protein: 15, carbs: 2, fat: 21,
+            grams: 0, quantity: 1, unitKind: .discrete(word: "large")
+        )
+        XCTAssertFalse(largeFlags.contains { $0.contains("sanity bound") })
+    }
+
+    func testPlausibleMatchHasNoFlags() {
+        let flags = USDANutritionLookupService.plausibilityFlags(
+            calories: 143, protein: 12.6, carbs: 0.7, fat: 9.5,
+            grams: 100, quantity: 2, unitKind: .discrete(word: "large")
+        )
+        XCTAssertTrue(flags.isEmpty)
+    }
+
+    // MARK: - Unit classification & serving parsing
+
+    func testUnitClassification() {
+        XCTAssertEqual(USDANutritionLookupService.classifyUnit("oz"), .weight(gramsPerUnit: 28.35))
+        XCTAssertEqual(USDANutritionLookupService.classifyUnit("cups"), .volume(gramsPerUnit: 240))
+        XCTAssertEqual(USDANutritionLookupService.classifyUnit("Slices"), .discrete(word: "slice"))
+        XCTAssertEqual(USDANutritionLookupService.classifyUnit("containers"), .serving)
+        XCTAssertEqual(USDANutritionLookupService.classifyUnit("smidgen"), .unknown)
+    }
+
+    func testHouseholdTextParsing() {
+        let two = USDANutritionLookupService.parseHouseholdText("2 SLICES")
+        XCTAssertEqual(two.count, 2)
+        XCTAssertEqual(two.descriptor, "slice")
+
+        let quarter = USDANutritionLookupService.parseHouseholdText("1/4 cup")
+        XCTAssertEqual(quarter.count, 0.25, accuracy: 0.001)
+        XCTAssertEqual(quarter.descriptor, "cup")
+
+        let container = USDANutritionLookupService.parseHouseholdText("1 container")
+        XCTAssertEqual(container.count, 1)
+        XCTAssertEqual(container.descriptor, "container")
+    }
+
+    func testServingInfoPerHouseholdUnit() {
+        let bacon = food(
+            "TURKEY BACON", dataType: "Branded",
+            servingSize: 30, servingSizeUnit: "GRM", householdServing: "2 slices",
+            kcal: 217, protein: 17.2, carbs: 2.2, fat: 15.5
+        )
+        let info = USDANutritionLookupService.servingInfo(for: bacon)
+        XCTAssertEqual(info?.gramsPerHouseholdUnit ?? 0, 15, accuracy: 0.001)
+    }
+
+    // MARK: - Misc carried over
 
     func testAtwaterEnergyFallback() {
         let foundation = USDAFood(
@@ -104,6 +275,10 @@ final class NutritionLookupTests: XCTestCase {
             description: "Almonds, raw",
             dataType: "Foundation",
             brandOwner: nil,
+            brandName: nil,
+            servingSize: nil,
+            servingSizeUnit: nil,
+            householdServingFullText: nil,
             foodNutrients: [
                 .init(nutrientId: 2048, nutrientName: "Energy (Atwater Specific Factors)", unitName: "KCAL", value: 579),
                 .init(nutrientId: 1003, nutrientName: "Protein", unitName: "G", value: 21),
