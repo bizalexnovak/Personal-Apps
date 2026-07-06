@@ -50,8 +50,13 @@ struct MacroLogShortcuts: AppShortcutsProvider {
             phrases: [
                 "Log meal in \(.applicationName)",
                 "Log a meal in \(.applicationName)",
+                "Log meal to \(.applicationName)",
+                "Log a meal to \(.applicationName)",
                 "Log food in \(.applicationName)",
+                "Log food to \(.applicationName)",
+                "Log my meal in \(.applicationName)",
                 "Add a meal to \(.applicationName)",
+                "Track a meal in \(.applicationName)",
             ],
             shortTitle: "Log Meal",
             systemImageName: "fork.knife"
