@@ -56,6 +56,8 @@ enum KeychainService {
     /// USDA FoodData Central accepts the public "DEMO_KEY" with tight rate
     /// limits — good enough until the user registers a free key.
     static var usdaKeyOrDemo: String {
-        get(.usdaAPIKey) ?? "DEMO_KEY"
+        // Qualified with Self: an unqualified `get(...)` at the start of a
+        // computed-property body parses as the `get` accessor keyword.
+        Self.get(.usdaAPIKey) ?? "DEMO_KEY"
     }
 }
