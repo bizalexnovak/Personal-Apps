@@ -29,7 +29,11 @@ struct ContentView: View {
         }
         .environmentObject(coordinator)
         .fullScreenCover(isPresented: $showVoiceLog) {
+            // Presented covers don't reliably inherit environmentObject values
+            // from the presenting chain — inject explicitly or VoiceLogView
+            // crashes with "No ObservableObject of type MealCaptureCoordinator".
             VoiceLogView()
+                .environmentObject(coordinator)
         }
         .sheet(isPresented: $showOnboarding) {
             OnboardingView()
