@@ -27,16 +27,22 @@ On first launch the app asks for:
 
 Both keys are stored in the iOS Keychain, never in UserDefaults.
 
-## Siri
+## Siri & voice capture
 
-After the first app launch, say **"Log meal in MacroLog"** (or "…to MacroLog").
-Siri asks "What did you eat?", captures the raw text, and hands it straight to the
-app — no Siri-side disambiguation. The app parses it and, if anything is too vague
-to log ("a bag of popcorn", "a Chobani", "some rice"), shows a tap-only
-clarification card with 2-4 concrete interpretations, a "type it instead" fallback,
-and a "keep as I said it" escape hatch. Nothing is written to SwiftData until every
-item is resolved. `LogMealIntent` is also available as a building block in the
-Shortcuts app, where the meal text can be piped in from other actions.
+Say **"Log meal in MacroLog"** (or "…to MacroLog") and Siri simply opens the app
+onto the voice capture screen — all speech handling happens in-app. VoiceLogView
+starts an SFSpeechRecognizer + AVAudioEngine session immediately (requesting mic
+and speech permissions on first use), shows a pulsing mic with the live transcript
+as you speak, auto-stops after ~2 s of silence (or tap Done), and asks "Here's
+what I heard" for confirmation before parsing. Recognition is biased toward food
+vocabulary — brands like Chobani, proteins, units — via `contextualStrings`. The
+mic button on the Meals tab opens the same screen without Siri.
+
+After confirmation the transcript flows into the normal pipeline: if anything is
+too vague to log ("a bag of popcorn", "a Chobani", "some rice"), a tap-only
+clarification card appears with 2-4 concrete interpretations, a "type it instead"
+fallback, and a "keep as I said it" escape hatch. Nothing is written to SwiftData
+until every item is resolved.
 
 ## Architecture
 

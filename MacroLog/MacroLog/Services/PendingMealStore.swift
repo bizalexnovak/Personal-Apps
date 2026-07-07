@@ -1,21 +1,21 @@
 import Foundation
 
-/// Hand-off buffer between the Siri intent and the app UI. The intent writes
-/// the raw transcript here and opens the app; ContentView consumes it and
-/// starts the capture flow (including clarification cards).
+/// Hand-off flag between the Siri intent and the app UI. The intent no longer
+/// carries any text — it just asks the app to open the voice capture screen,
+/// where the app records and transcribes the meal itself.
 @MainActor
 final class PendingMealStore: ObservableObject {
     static let shared = PendingMealStore()
 
-    @Published var pendingText: String?
+    @Published var voiceCaptureRequested = false
 
-    func submit(_ text: String) {
-        pendingText = text
+    func requestVoiceCapture() {
+        voiceCaptureRequested = true
     }
 
-    /// Returns and clears the pending transcript, if any.
-    func consume() -> String? {
-        defer { pendingText = nil }
-        return pendingText
+    /// Returns whether a capture was requested, clearing the flag.
+    func consumeVoiceCaptureRequest() -> Bool {
+        defer { voiceCaptureRequested = false }
+        return voiceCaptureRequested
     }
 }

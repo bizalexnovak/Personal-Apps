@@ -17,6 +17,14 @@ struct MealListView: View {
             List {
                 Section {
                     HStack {
+                        Button {
+                            PendingMealStore.shared.requestVoiceCapture()
+                        } label: {
+                            Image(systemName: "mic.circle.fill")
+                                .font(.title2)
+                                .foregroundStyle(.orange)
+                        }
+                        .disabled(coordinator.isCapturing)
                         TextField("Describe what you ate…", text: $mealText, axis: .vertical)
                             .disabled(coordinator.isCapturing)
                         if coordinator.isWorking {

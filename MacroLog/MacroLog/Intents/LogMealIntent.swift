@@ -1,36 +1,25 @@
 import AppIntents
-import SwiftData
 
-/// "Log meal in MacroLog" — Siri's only job is capturing the raw text. The
-/// intent forwards it to the app and opens it; parsing, clarification cards,
-/// and saving all happen in the app UI (no Siri-side dialogs or confirmation).
+/// "Log meal in MacroLog" — Siri's only job is opening the app onto the voice
+/// capture screen. Speech recording, transcription, clarification, and saving
+/// all happen in the app (see VoiceLogView + MealCaptureCoordinator).
 struct LogMealIntent: AppIntent {
     static let title: LocalizedStringResource = "Log Meal"
     static let description = IntentDescription(
-        "Describe what you ate and MacroLog will parse it, ask any follow-up questions in the app, and save the meal.",
+        "Opens MacroLog listening for your meal description.",
         categoryName: "Logging"
     )
     static let openAppWhenRun: Bool = true
 
-    @Parameter(
-        title: "Meal Description",
-        requestValueDialog: IntentDialog("What did you eat?")
-    )
-    var mealDescription: String
-
-    static var parameterSummary: some ParameterSummary {
-        Summary("Log \(\.$mealDescription)")
-    }
-
     @MainActor
     func perform() async throws -> some IntentResult {
-        PendingMealStore.shared.submit(mealDescription)
+        PendingMealStore.shared.requestVoiceCapture()
         return .result()
     }
 }
 
-/// Registers the Siri phrases. Users can also add this as a custom Shortcut
-/// from the Shortcuts app, where the meal text can be piped in as input.
+/// Registers the Siri phrases. Also available as a building block in the
+/// Shortcuts app.
 struct MacroLogShortcuts: AppShortcutsProvider {
     static var appShortcuts: [AppShortcut] {
         AppShortcut(

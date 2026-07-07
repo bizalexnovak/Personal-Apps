@@ -16,6 +16,7 @@ struct ContentView: View {
     @StateObject private var coordinator = MealCaptureCoordinator()
     @ObservedObject private var pendingStore = PendingMealStore.shared
     @State private var showOnboarding = KeychainService.get(.claudeAPIKey) == nil
+    @State private var showVoiceLog = false
 
     var body: some View {
         TabView {
@@ -27,6 +28,9 @@ struct ContentView: View {
                 .tabItem { Label("Settings", systemImage: "gearshape") }
         }
         .environmentObject(coordinator)
+        .fullScreenCover(isPresented: $showVoiceLog) {
+            VoiceLogView()
+        }
         .sheet(isPresented: $showOnboarding) {
             OnboardingView()
         }
@@ -43,17 +47,17 @@ struct ContentView: View {
         } message: {
             Text(coordinator.errorMessage ?? "")
         }
-        .onAppear(perform: consumePendingSiriText)
-        .onChange(of: pendingStore.pendingText) { _, _ in
-            consumePendingSiriText()
+        .onAppear(perform: consumeVoiceCaptureRequest)
+        .onChange(of: pendingStore.voiceCaptureRequested) { _, _ in
+            consumeVoiceCaptureRequest()
         }
     }
 
-    /// Picks up a transcript forwarded by LogMealIntent — covers both warm
+    /// Picks up the Siri intent's open-to-voice request — covers both warm
     /// hand-offs (onChange) and cold launches (onAppear).
-    private func consumePendingSiriText() {
-        guard let text = pendingStore.consume() else { return }
-        Task { await coordinator.begin(text: text, in: modelContext) }
+    private func consumeVoiceCaptureRequest() {
+        guard pendingStore.consumeVoiceCaptureRequest() else { return }
+        showVoiceLog = true
     }
 }
 
