@@ -12,6 +12,9 @@ struct MacroLogApp: App {
 }
 
 struct ContentView: View {
+    @Environment(\.modelContext) private var modelContext
+    @StateObject private var coordinator = MealCaptureCoordinator()
+    @ObservedObject private var pendingStore = PendingMealStore.shared
     @State private var showOnboarding = KeychainService.get(.claudeAPIKey) == nil
 
     var body: some View {
@@ -23,9 +26,34 @@ struct ContentView: View {
             SettingsView()
                 .tabItem { Label("Settings", systemImage: "gearshape") }
         }
+        .environmentObject(coordinator)
         .sheet(isPresented: $showOnboarding) {
             OnboardingView()
         }
+        .sheet(item: $coordinator.pendingClarification) { pending in
+            ClarificationCardView(pending: pending, coordinator: coordinator)
+                .presentationDetents([.medium, .large])
+                .interactiveDismissDisabled()
+        }
+        .alert("Couldn't log meal", isPresented: .init(
+            get: { coordinator.errorMessage != nil },
+            set: { if !$0 { coordinator.errorMessage = nil } }
+        )) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(coordinator.errorMessage ?? "")
+        }
+        .onAppear(perform: consumePendingSiriText)
+        .onChange(of: pendingStore.pendingText) { _, _ in
+            consumePendingSiriText()
+        }
+    }
+
+    /// Picks up a transcript forwarded by LogMealIntent — covers both warm
+    /// hand-offs (onChange) and cold launches (onAppear).
+    private func consumePendingSiriText() {
+        guard let text = pendingStore.consume() else { return }
+        Task { await coordinator.begin(text: text, in: modelContext) }
     }
 }
 

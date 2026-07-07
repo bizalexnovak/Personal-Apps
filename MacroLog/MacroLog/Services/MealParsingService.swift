@@ -28,7 +28,15 @@ enum MealParsingError: LocalizedError {
 /// Sends raw meal text to Anthropic's Messages API and parses the JSON reply.
 struct ClaudeMealParsingService: MealParsing {
     static let systemPrompt = """
-    You are a nutrition parsing assistant. Given a description of a meal, extract each distinct food item with its estimated quantity and unit. Respond ONLY with valid JSON, no markdown formatting, no preamble. Format: {"items": [{"name": string, "quantity": number, "unit": string}]}. If quantity is unclear, estimate a reasonable single serving.
+    You are a nutrition parsing assistant. Given a description of a meal, extract each distinct food item with its estimated quantity and unit. Respond ONLY with valid JSON, no markdown formatting, no preamble.
+    Format: {"items": [{"name": string, "quantity": number, "unit": string, "needsClarification": boolean, "clarificationQuestion": string or null, "options": [{"label": string, "name": string, "quantity": number, "unit": string}] or null}]}
+    Set needsClarification to true when the description is too vague to estimate macros reliably:
+    - the amount is a vague container or quantity word (bag, bowl, handful, some, a bit of) rather than a countable or measurable unit (piece, slice, cup, oz, gram)
+    - the name is a brand with multiple product lines and no specific product (e.g. "a Chobani" without flavor or type)
+    - the words could plausibly refer to multiple distinct foods
+    When needsClarification is true, write one short clarificationQuestion and provide 2 to 4 options the user can tap. Each option needs a short human label plus a fully resolved name, quantity, and countable/measurable unit, favoring realistic single-serving interpretations over bulk or family sizes.
+    When needsClarification is false, set clarificationQuestion and options to null.
+    If the quantity is merely unstated but the food itself is unambiguous, estimate a reasonable single serving and set needsClarification to false.
     """
 
     var session: URLSession = .shared
@@ -46,7 +54,7 @@ struct ClaudeMealParsingService: MealParsing {
 
         let body = MessagesRequest(
             model: "claude-sonnet-4-6",
-            maxTokens: 1024,
+            maxTokens: 2000,
             system: Self.systemPrompt,
             messages: [.init(role: "user", content: mealText)]
         )

@@ -29,10 +29,14 @@ Both keys are stored in the iOS Keychain, never in UserDefaults.
 
 ## Siri
 
-After the first app launch, say **"Log meal in MacroLog"**. Siri asks "What did you
-eat?", runs the full pipeline in the background, and speaks back an item/calorie
-summary. `LogMealIntent` is also available as a building block in the Shortcuts app,
-where the meal text can be piped in from other actions.
+After the first app launch, say **"Log meal in MacroLog"** (or "…to MacroLog").
+Siri asks "What did you eat?", captures the raw text, and hands it straight to the
+app — no Siri-side disambiguation. The app parses it and, if anything is too vague
+to log ("a bag of popcorn", "a Chobani", "some rice"), shows a tap-only
+clarification card with 2-4 concrete interpretations, a "type it instead" fallback,
+and a "keep as I said it" escape hatch. Nothing is written to SwiftData until every
+item is resolved. `LogMealIntent` is also available as a building block in the
+Shortcuts app, where the meal text can be piped in from other actions.
 
 ## Architecture
 

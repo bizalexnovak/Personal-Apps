@@ -3,11 +3,10 @@ import SwiftData
 
 struct MealListView: View {
     @Environment(\.modelContext) private var modelContext
+    @EnvironmentObject private var coordinator: MealCaptureCoordinator
     @Query(sort: \Meal.timestamp, order: .reverse) private var meals: [Meal]
 
     @State private var mealText = ""
-    @State private var isLogging = false
-    @State private var errorMessage: String?
 
     private var todaysMeals: [Meal] {
         meals.filter { Calendar.current.isDateInToday($0.timestamp) }
@@ -19,17 +18,23 @@ struct MealListView: View {
                 Section {
                     HStack {
                         TextField("Describe what you ate…", text: $mealText, axis: .vertical)
-                            .disabled(isLogging)
-                        if isLogging {
+                            .disabled(coordinator.isCapturing)
+                        if coordinator.isWorking {
                             ProgressView()
                         } else {
                             Button {
-                                Task { await logMeal() }
+                                let text = mealText.trimmingCharacters(in: .whitespacesAndNewlines)
+                                guard !text.isEmpty else { return }
+                                mealText = ""
+                                Task { await coordinator.begin(text: text, in: modelContext) }
                             } label: {
                                 Image(systemName: "arrow.up.circle.fill")
                                     .font(.title2)
                             }
-                            .disabled(mealText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                            .disabled(
+                                mealText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                                    || coordinator.isCapturing
+                            )
                         }
                     }
                 }
@@ -50,27 +55,6 @@ struct MealListView: View {
                 }
             }
             .navigationTitle("Meals")
-            .alert("Couldn't log meal", isPresented: .init(
-                get: { errorMessage != nil },
-                set: { if !$0 { errorMessage = nil } }
-            )) {
-                Button("OK", role: .cancel) {}
-            } message: {
-                Text(errorMessage ?? "")
-            }
-        }
-    }
-
-    private func logMeal() async {
-        let text = mealText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty else { return }
-        isLogging = true
-        defer { isLogging = false }
-        do {
-            try await MealLoggingService().logMeal(from: text, in: modelContext)
-            mealText = ""
-        } catch {
-            errorMessage = error.localizedDescription
         }
     }
 }

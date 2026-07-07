@@ -34,4 +34,34 @@ final class MealParsingTests: XCTestCase {
     func testThrowsOnGarbage() {
         XCTAssertThrowsError(try ClaudeMealParsingService.decodeItems(from: "not json at all"))
     }
+
+    func testDecodesClarificationFields() throws {
+        let text = """
+        {"items": [{
+            "name": "Chobani yogurt", "quantity": 1, "unit": "container",
+            "needsClarification": true,
+            "clarificationQuestion": "Which Chobani product was it?",
+            "options": [
+                {"label": "Plain non-fat Greek (5.3 oz cup)", "name": "Chobani non-fat plain greek yogurt", "quantity": 1, "unit": "container"},
+                {"label": "Fruit on the bottom (5.3 oz cup)", "name": "Chobani fruit on the bottom greek yogurt", "quantity": 1, "unit": "container"},
+                {"label": "Chobani Flip (4.5 oz)", "name": "Chobani Flip greek yogurt", "quantity": 1, "unit": "container"}
+            ]
+        }]}
+        """
+        let items = try ClaudeMealParsingService.decodeItems(from: text)
+        XCTAssertEqual(items.count, 1)
+        XCTAssertEqual(items[0].needsClarification, true)
+        XCTAssertEqual(items[0].clarificationQuestion, "Which Chobani product was it?")
+        XCTAssertEqual(items[0].options?.count, 3)
+        XCTAssertEqual(items[0].options?.first?.name, "Chobani non-fat plain greek yogurt")
+    }
+
+    func testUnflaggedItemsDecodeWithNilClarification() throws {
+        let text = """
+        {"items": [{"name": "banana", "quantity": 1, "unit": "medium", "needsClarification": false, "clarificationQuestion": null, "options": null}]}
+        """
+        let items = try ClaudeMealParsingService.decodeItems(from: text)
+        XCTAssertEqual(items[0].needsClarification, false)
+        XCTAssertNil(items[0].options)
+    }
 }

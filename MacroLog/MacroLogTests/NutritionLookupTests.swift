@@ -243,6 +243,44 @@ final class NutritionLookupTests: XCTestCase {
         XCTAssertEqual(USDANutritionLookupService.classifyUnit("smidgen"), .unknown)
     }
 
+    func testVagueUnitsClassifyAsVague() {
+        for word in ["bag", "bags", "bowl", "handful", "some", "bit"] {
+            if case .vague = USDANutritionLookupService.classifyUnit(word) {
+                continue
+            }
+            XCTFail("'\(word)' should classify as vague")
+        }
+    }
+
+    func testVagueUnitNeverResolvesReliably() {
+        let request = FoodItemRequest(name: "popcorn", quantity: 1, unit: "bag")
+        let grams = USDANutritionLookupService.resolveGrams(
+            for: request,
+            food: food("Snacks, popcorn, oil-popped", kcal: 500, protein: 9, carbs: 57, fat: 28)
+        )
+        XCTAssertFalse(grams.isReliable)
+        XCTAssertLessThanOrEqual(grams.grams, 100, "unclarified 'bag' must use a conservative single-portion guess")
+    }
+
+    func testUnclarifiedVagueUnitIsAlwaysFlagged() {
+        // Even values that pass every numeric check get flagged when the
+        // vague amount was never clarified.
+        let flags = USDANutritionLookupService.plausibilityFlags(
+            calories: 250, protein: 4.5, carbs: 28.5, fat: 14,
+            grams: 50, quantity: 1, unitKind: .vague(word: "bag")
+        )
+        XCTAssertTrue(flags.contains { $0.contains("never clarified") })
+    }
+
+    func testVagueBulkAmountIsFlagged() {
+        // A family-size match (700 kcal for "a bag") must trip the bound.
+        let flags = USDANutritionLookupService.plausibilityFlags(
+            calories: 700, protein: 12.6, carbs: 79.8, fat: 39.2,
+            grams: 140, quantity: 1, unitKind: .vague(word: "bag")
+        )
+        XCTAssertTrue(flags.contains { $0.contains("bulk") })
+    }
+
     func testHouseholdTextParsing() {
         let two = USDANutritionLookupService.parseHouseholdText("2 SLICES")
         XCTAssertEqual(two.count, 2)

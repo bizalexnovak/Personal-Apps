@@ -117,7 +117,7 @@ struct USDANutritionLookupService: NutritionLookup {
             return false
         case .volume:
             return true // a real "1 cup" gram weight beats the water-density approximation
-        case .discrete, .serving, .unknown:
+        case .discrete, .serving, .vague, .unknown:
             return servingInfo(for: food) == nil
         }
     }
@@ -184,7 +184,7 @@ struct USDANutritionLookupService: NutritionLookup {
             case "Branded": return 1
             default: return 0
             }
-        case .discrete, .serving, .unknown:
+        case .discrete, .serving, .vague, .unknown:
             switch type {
             case "Branded": return 3
             case "Survey (FNDDS)": return 2
@@ -208,7 +208,7 @@ struct USDANutritionLookupService: NutritionLookup {
         switch unitKind {
         case .weight, .volume:
             return 0
-        case .discrete, .serving, .unknown:
+        case .discrete, .serving, .vague, .unknown:
             guard let info = servingInfo(for: food) else { return 0 }
             return isDiscreteWord(info.descriptor) ? 2 : 1
         }
@@ -221,6 +221,7 @@ struct USDANutritionLookupService: NutritionLookup {
         case volume(gramsPerUnit: Double) // water-density approximation
         case discrete(word: String)       // piece, slice, strip, large, ...
         case serving                      // serving, container, package, ...
+        case vague(word: String)          // bag, bowl, handful, some, bit, ...
         case unknown
     }
 
@@ -247,10 +248,19 @@ struct USDANutritionLookupService: NutritionLookup {
         "serving", "container", "package", "pouch", "bottle", "can", "carton", "packet",
     ]
 
+    /// Amount words too vague to scale against database entries — these must
+    /// go through the clarification flow, and if they somehow reach a lookup
+    /// unresolved they are never treated as reliable.
+    private static let vagueWords: Set<String> = [
+        "bag", "bowl", "handful", "some", "bit", "few", "couple", "little",
+        "splash", "dash",
+    ]
+
     static func classifyUnit(_ unit: String) -> UnitKind {
         let normalized = singular(unit.lowercased().trimmingCharacters(in: .whitespaces))
         if let grams = weightUnits[normalized] { return .weight(gramsPerUnit: grams) }
         if let grams = volumeUnits[normalized] { return .volume(gramsPerUnit: grams) }
+        if vagueWords.contains(normalized) { return .vague(word: normalized) }
         if discreteWords.contains(normalized) { return .discrete(word: normalized) }
         if servingWords.contains(normalized) { return .serving }
         return .unknown
@@ -396,6 +406,24 @@ struct USDANutritionLookupService: NutritionLookup {
                 basis: "no serving data; assumed 100 g per serving (needs review)"
             )
 
+        case .vague(let word):
+            // Vague amounts should have been resolved by a clarification card
+            // before ever reaching a lookup. If one slips through ("keep as I
+            // said it"), scale by a conservative single-portion guess — never
+            // a bulk/family-size amount — and stay low confidence.
+            let guess: Double
+            switch word {
+            case "bag": guess = 50
+            case "bowl": guess = 240
+            case "handful": guess = 40
+            case "splash", "dash": guess = 5
+            default: guess = 100 // some, bit, few, couple, little
+            }
+            return GramsResolution(
+                grams: quantity * guess, isReliable: false,
+                basis: "vague unit '\(word)' — unclarified; assumed \(Int(guess)) g (needs review)"
+            )
+
         case .unknown:
             return GramsResolution(
                 grams: quantity * 100, isReliable: false,
@@ -487,7 +515,30 @@ struct USDANutritionLookupService: NutritionLookup {
             }
         }
 
+        // 4. Vague units (bag, bowl, handful, some, ...) are single-portion
+        //    words — a match that looks like a bulk/family-size amount is
+        //    wrong regardless of which database entry produced it.
+        if case .vague(let word) = unitKind {
+            let perUnit = calories / max(quantity, 1)
+            let bound = vagueCalorieBound(for: word)
+            if perUnit > bound {
+                flags.append(String(format: "%.0f kcal per %@ looks like a bulk amount (bound %.0f)", perUnit, word, bound))
+            }
+            flags.append("vague amount '\(word)' was never clarified")
+        }
+
         return flags
+    }
+
+    /// Upper kcal bound for one vague-container portion.
+    static func vagueCalorieBound(for word: String) -> Double {
+        switch word {
+        case "bag": return 350        // single-serve snack bag, not family size
+        case "bowl": return 600
+        case "handful": return 200
+        case "splash", "dash": return 50
+        default: return 400           // some, bit, few, couple, little
+        }
     }
 
     /// Upper kcal bound for one unit, by rough physical size of the unit word.

@@ -1,16 +1,16 @@
 import AppIntents
 import SwiftData
 
-/// "Log meal in MacroLog" — Siri collects the meal description, the intent runs
-/// the full parse → lookup → save pipeline in the background (no app launch),
-/// and Siri speaks back a summary.
+/// "Log meal in MacroLog" — Siri's only job is capturing the raw text. The
+/// intent forwards it to the app and opens it; parsing, clarification cards,
+/// and saving all happen in the app UI (no Siri-side dialogs or confirmation).
 struct LogMealIntent: AppIntent {
     static let title: LocalizedStringResource = "Log Meal"
     static let description = IntentDescription(
-        "Describe what you ate and MacroLog will parse it, look up the macros, and save the meal.",
+        "Describe what you ate and MacroLog will parse it, ask any follow-up questions in the app, and save the meal.",
         categoryName: "Logging"
     )
-    static let openAppWhenRun: Bool = false
+    static let openAppWhenRun: Bool = true
 
     @Parameter(
         title: "Meal Description",
@@ -23,21 +23,9 @@ struct LogMealIntent: AppIntent {
     }
 
     @MainActor
-    func perform() async throws -> some IntentResult & ProvidesDialog {
-        let context = ModelContext(AppModelContainer.shared)
-        do {
-            let meal = try await MealLoggingService().logMeal(from: mealDescription, in: context)
-            let calories = Int(meal.totalCalories.rounded())
-            let needsReview = meal.items.contains { $0.matchConfidence == MatchConfidence.low }
-            let itemWord = meal.items.count == 1 ? "item" : "items"
-            var summary = "Logged \(meal.items.count) \(itemWord), about \(calories) calories."
-            if needsReview {
-                summary += " Some items need review in the app."
-            }
-            return .result(dialog: IntentDialog(stringLiteral: summary))
-        } catch let error as MealParsingError {
-            return .result(dialog: IntentDialog(stringLiteral: error.localizedDescription))
-        }
+    func perform() async throws -> some IntentResult {
+        PendingMealStore.shared.submit(mealDescription)
+        return .result()
     }
 }
 
