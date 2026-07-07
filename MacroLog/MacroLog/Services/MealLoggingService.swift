@@ -17,9 +17,39 @@ struct MealLoggingService {
         return try await save(requests: requests, rawText: text, in: context)
     }
 
+    /// Saves items whose macros are already known — the coordinator's path,
+    /// after each item was either looked up successfully or resolved manually.
+    /// This never writes zeroed placeholders.
+    @MainActor
+    @discardableResult
+    func saveResolved(
+        _ entries: [(request: FoodItemRequest, match: NutritionMatch)],
+        rawText: String,
+        in context: ModelContext
+    ) throws -> Meal {
+        let items = entries.map { request, match in
+            FoodItem(
+                name: request.name,
+                quantity: request.quantity,
+                unit: request.unit,
+                calories: match.calories,
+                protein: match.protein,
+                carbs: match.carbs,
+                fat: match.fat,
+                matchConfidence: match.confidence
+            )
+        }
+        let meal = Meal(rawText: rawText, items: items)
+        context.insert(meal)
+        try context.save()
+        return meal
+    }
+
     /// Looks up and saves resolved items. Nutrition lookups fail soft: an item
     /// whose lookup errors is still saved with zeroed macros and a "low"
     /// confidence flag so the user can fix it in the edit screen.
+    /// Headless path only (tests / no-UI callers) — the app flow goes through
+    /// MealCaptureCoordinator, which uses saveResolved and never zeroes.
     @MainActor
     @discardableResult
     func save(requests: [FoodItemRequest], rawText: String, in context: ModelContext) async throws -> Meal {

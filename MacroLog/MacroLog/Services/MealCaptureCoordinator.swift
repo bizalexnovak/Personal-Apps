@@ -14,7 +14,15 @@ final class MealCaptureCoordinator: ObservableObject {
         var options: [ClarificationOption]
     }
 
+    /// A parsed item that found no USDA match at all — the user must search
+    /// manually, enter macros, or skip it. Never silently saved as zero.
+    struct PendingResolution: Identifiable, Equatable {
+        let id = UUID()
+        var request: FoodItemRequest
+    }
+
     @Published var pendingClarification: PendingClarification?
+    @Published var pendingResolution: PendingResolution?
     @Published private(set) var isWorking = false
     @Published var errorMessage: String?
 
@@ -24,9 +32,13 @@ final class MealCaptureCoordinator: ObservableObject {
     private var rawText = ""
     private var queue: [FoodItemRequest] = []
     private var resolved: [FoodItemRequest] = []
+    private var lookupQueue: [FoodItemRequest] = []
+    private var lookedUp: [(request: FoodItemRequest, match: NutritionMatch)] = []
     private var context: ModelContext?
 
-    var isCapturing: Bool { isWorking || pendingClarification != nil }
+    var isCapturing: Bool {
+        isWorking || pendingClarification != nil || pendingResolution != nil
+    }
 
     // MARK: - Entry point
 
@@ -36,6 +48,8 @@ final class MealCaptureCoordinator: ObservableObject {
         rawText = text
         queue = []
         resolved = []
+        lookupQueue = []
+        lookedUp = []
         isWorking = true
         MatchDebugLog.shared.record(transcript: text)
         do {
@@ -87,17 +101,40 @@ final class MealCaptureCoordinator: ObservableObject {
         await advance()
     }
 
+    // MARK: - Manual-resolution card responses (no-match fallback)
+
+    /// User resolved the unmatched item via manual USDA search or manual
+    /// macro entry — `match` carries the chosen/entered values.
+    func resolveManually(_ match: NutritionMatch) async {
+        guard pendingResolution != nil, !lookupQueue.isEmpty else { return }
+        lookedUp.append((request: lookupQueue.removeFirst(), match: match))
+        pendingResolution = nil
+        await advanceLookups()
+    }
+
+    /// User chose to drop the unmatched item from the meal.
+    func skipUnmatchedItem() async {
+        guard pendingResolution != nil, !lookupQueue.isEmpty else { return }
+        lookupQueue.removeFirst()
+        pendingResolution = nil
+        await advanceLookups()
+    }
+
     /// Abandon the whole meal without saving anything.
     func cancelMeal() {
         queue = []
         resolved = []
+        lookupQueue = []
+        lookedUp = []
         rawText = ""
         pendingClarification = nil
+        pendingResolution = nil
         isWorking = false
     }
 
     // MARK: - Flow
 
+    /// Phase A: walk parsed items, pausing on any that need clarification.
     private func advance() async {
         while let next = queue.first {
             if let prompt = Self.clarificationPrompt(for: next) {
@@ -107,20 +144,40 @@ final class MealCaptureCoordinator: ObservableObject {
             }
             resolved.append(queue.removeFirst())
         }
+        lookupQueue = resolved
+        resolved = []
+        await advanceLookups()
+    }
+
+    /// Phase B: look up each resolved item. A lookup that finds nothing (or
+    /// errors) pauses on a manual-resolution card instead of saving zeros.
+    private func advanceLookups() async {
+        while let next = lookupQueue.first {
+            isWorking = true
+            do {
+                let match = try await logger.nutrition.lookup(next)
+                lookedUp.append((request: lookupQueue.removeFirst(), match: match))
+            } catch {
+                isWorking = false // idle while waiting for the user
+                pendingResolution = PendingResolution(request: next)
+                return
+            }
+        }
         await finish()
     }
 
     private func finish() async {
         defer { isWorking = false }
-        guard let context, !resolved.isEmpty else {
-            if resolved.isEmpty { errorMessage = "Nothing to log." }
+        guard let context else { return }
+        guard !lookedUp.isEmpty else {
+            errorMessage = "Nothing to log."
             return
         }
         isWorking = true
         do {
-            try await logger.save(requests: resolved, rawText: rawText, in: context)
+            try logger.saveResolved(lookedUp, rawText: rawText, in: context)
             rawText = ""
-            resolved = []
+            lookedUp = []
         } catch {
             errorMessage = error.localizedDescription
         }

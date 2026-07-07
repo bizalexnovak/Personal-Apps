@@ -42,7 +42,10 @@ After confirmation the transcript flows into the normal pipeline: if anything is
 too vague to log ("a bag of popcorn", "a Chobani", "some rice"), a tap-only
 clarification card appears with 2-4 concrete interpretations, a "type it instead"
 fallback, and a "keep as I said it" escape hatch. Nothing is written to SwiftData
-until every item is resolved.
+until every item is resolved. If USDA search finds nothing for an item — even
+after retrying progressively simpler queries (full phrase → brand + product →
+product → brand) — a fallback card offers a manual USDA search and manual macro
+entry; failed matches are never silently saved as zero-calorie entries.
 
 ## Architecture
 

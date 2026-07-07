@@ -43,6 +43,11 @@ struct ContentView: View {
                 .presentationDetents([.medium, .large])
                 .interactiveDismissDisabled()
         }
+        .sheet(item: $coordinator.pendingResolution) { resolution in
+            ManualMatchSheet(resolution: resolution, coordinator: coordinator)
+                .presentationDetents([.large])
+                .interactiveDismissDisabled()
+        }
         .alert("Couldn't log meal", isPresented: .init(
             get: { coordinator.errorMessage != nil },
             set: { if !$0 { coordinator.errorMessage = nil } }

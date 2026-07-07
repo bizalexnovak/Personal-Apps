@@ -2,9 +2,8 @@ import XCTest
 import SwiftData
 @testable import MacroLog
 
-/// Exercises the clarify-before-save flow with parser fixtures shaped like
-/// Claude's responses for: "a bag of popcorn", "some rice", "a Chobani
-/// yogurt", "a bowl of cereal".
+/// Exercises the clarify → lookup → resolve-or-fallback → save flow with
+/// parser fixtures shaped like Claude's responses.
 @MainActor
 final class MealCaptureCoordinatorTests: XCTestCase {
     private func makeContext() throws -> ModelContext {
@@ -16,18 +15,34 @@ final class MealCaptureCoordinatorTests: XCTestCase {
         return ModelContext(container)
     }
 
-    private func makeCoordinator(parsed: [FoodItemRequest]) -> MealCaptureCoordinator {
+    private func makeCoordinator(
+        parsed: [FoodItemRequest],
+        matches: [String: NutritionMatch] = [:]
+    ) -> MealCaptureCoordinator {
         let coordinator = MealCaptureCoordinator()
         coordinator.parser = MockMealParser(result: parsed)
         coordinator.logger = MealLoggingService(
             parser: MockMealParser(result: parsed),
-            nutrition: MockNutritionLookup(matches: [:]) // fail-soft zeros; macros aren't under test here
+            nutrition: MockNutritionLookup(matches: matches)
         )
         return coordinator
     }
 
     private func savedMeals(in context: ModelContext) throws -> [Meal] {
         try context.fetch(FetchDescriptor<Meal>())
+    }
+
+    private func match(
+        _ description: String,
+        kcal: Double,
+        protein: Double = 0,
+        confidence: String = MatchConfidence.high
+    ) -> NutritionMatch {
+        NutritionMatch(
+            matchedDescription: description,
+            calories: kcal, protein: protein, carbs: 0, fat: 0,
+            confidence: confidence
+        )
     }
 
     // MARK: - Fixtures (shaped like Claude's clarification output)
@@ -80,7 +95,15 @@ final class MealCaptureCoordinatorTests: XCTestCase {
         FoodItemRequest(name: "eggs", quantity: 2, unit: "large")
     }
 
-    // MARK: - Tests
+    private var celsiusDrink: FoodItemRequest {
+        FoodItemRequest(name: "Celsius energy drink", quantity: 1, unit: "can")
+    }
+
+    private var goldfishCrackers: FoodItemRequest {
+        FoodItemRequest(name: "Goldfish crackers", quantity: 1, unit: "serving")
+    }
+
+    // MARK: - Clarification phase
 
     func testFlaggedItemPausesBeforeAnythingIsSaved() async throws {
         let context = try makeContext()
@@ -96,7 +119,10 @@ final class MealCaptureCoordinatorTests: XCTestCase {
 
     func testChoosingOptionResolvesItemAndSaves() async throws {
         let context = try makeContext()
-        let coordinator = makeCoordinator(parsed: [flaggedChobani])
+        let coordinator = makeCoordinator(
+            parsed: [flaggedChobani],
+            matches: ["Chobani non-fat plain greek yogurt": match("CHOBANI NON-FAT GREEK YOGURT PLAIN", kcal: 97, protein: 17.3)]
+        )
 
         await coordinator.begin(text: "a Chobani yogurt", in: context)
         let pending = try XCTUnwrap(coordinator.pendingClarification)
@@ -108,7 +134,7 @@ final class MealCaptureCoordinatorTests: XCTestCase {
         XCTAssertEqual(meals.count, 1)
         let item = try XCTUnwrap(meals.first?.items.first)
         XCTAssertEqual(item.name, "Chobani non-fat plain greek yogurt")
-        XCTAssertEqual(item.quantity, 1)
+        XCTAssertEqual(item.calories, 97, accuracy: 0.01)
         XCTAssertEqual(item.unit, "container")
     }
 
@@ -130,7 +156,10 @@ final class MealCaptureCoordinatorTests: XCTestCase {
 
     func testKeepAsHeardSavesOriginalItem() async throws {
         let context = try makeContext()
-        let coordinator = makeCoordinator(parsed: [unflaggedSomeRice])
+        let coordinator = makeCoordinator(
+            parsed: [unflaggedSomeRice],
+            matches: ["rice": match("Rice, white, cooked", kcal: 130, confidence: MatchConfidence.low)]
+        )
 
         await coordinator.begin(text: "some rice", in: context)
         XCTAssertNotNil(coordinator.pendingClarification)
@@ -141,23 +170,32 @@ final class MealCaptureCoordinatorTests: XCTestCase {
         XCTAssertEqual(meals.count, 1)
         let item = try XCTUnwrap(meals.first?.items.first)
         XCTAssertEqual(item.unit, "some")
-        // Lookup failed (empty mock) → fail-soft zeros with the review flag.
         XCTAssertEqual(item.matchConfidence, MatchConfidence.low)
     }
 
     func testUnambiguousItemsSaveWithoutPrompt() async throws {
         let context = try makeContext()
-        let coordinator = makeCoordinator(parsed: [clearEggs])
+        let coordinator = makeCoordinator(
+            parsed: [clearEggs],
+            matches: ["eggs": match("GRADE A LARGE EGGS", kcal: 143, protein: 12.6)]
+        )
 
         await coordinator.begin(text: "two eggs", in: context)
 
         XCTAssertNil(coordinator.pendingClarification)
+        XCTAssertNil(coordinator.pendingResolution)
         XCTAssertEqual(try savedMeals(in: context).count, 1)
     }
 
     func testMixedMealOnlyPromptsForAmbiguousItem() async throws {
         let context = try makeContext()
-        let coordinator = makeCoordinator(parsed: [clearEggs, flaggedCerealBowl])
+        let coordinator = makeCoordinator(
+            parsed: [clearEggs, flaggedCerealBowl],
+            matches: [
+                "eggs": match("GRADE A LARGE EGGS", kcal: 143),
+                "Cheerios cereal": match("CHEERIOS", kcal: 210),
+            ]
+        )
 
         await coordinator.begin(text: "two eggs and a bowl of cereal", in: context)
         let pending = try XCTUnwrap(coordinator.pendingClarification)
@@ -191,5 +229,68 @@ final class MealCaptureCoordinatorTests: XCTestCase {
         let item = FoodItemRequest(name: "chips", quantity: 2, unit: "bag")
         let options = MealCaptureCoordinator.fallbackOptions(for: item, vagueWord: "bag")
         XCTAssertEqual(options.first?.quantity, 56, "2 bags × 28 g snack bag")
+    }
+
+    // MARK: - No-match fallback (lookup phase)
+
+    func testNoMatchPausesOnManualResolutionInsteadOfSavingZeros() async throws {
+        let context = try makeContext()
+        // Empty matches: every lookup throws noResults, like the FDC returning nothing.
+        let coordinator = makeCoordinator(parsed: [celsiusDrink])
+
+        await coordinator.begin(text: "a Celsius energy drink", in: context)
+
+        let resolution = try XCTUnwrap(coordinator.pendingResolution)
+        XCTAssertEqual(resolution.request.name, "Celsius energy drink")
+        XCTAssertTrue(try savedMeals(in: context).isEmpty, "a failed match must never save a zero-calorie entry")
+    }
+
+    func testResolveManuallySavesEnteredValues() async throws {
+        let context = try makeContext()
+        let coordinator = makeCoordinator(parsed: [celsiusDrink])
+
+        await coordinator.begin(text: "a Celsius energy drink", in: context)
+        XCTAssertNotNil(coordinator.pendingResolution)
+
+        await coordinator.resolveManually(match("Manual entry", kcal: 10))
+
+        XCTAssertNil(coordinator.pendingResolution)
+        let meals = try savedMeals(in: context)
+        XCTAssertEqual(meals.count, 1)
+        let item = try XCTUnwrap(meals.first?.items.first)
+        XCTAssertEqual(item.calories, 10, accuracy: 0.01, "the entered value must be saved, not zero")
+        XCTAssertEqual(item.name, "Celsius energy drink")
+    }
+
+    func testSkipUnmatchedItemKeepsRestOfMeal() async throws {
+        let context = try makeContext()
+        let coordinator = makeCoordinator(
+            parsed: [clearEggs, goldfishCrackers],
+            matches: ["eggs": match("GRADE A LARGE EGGS", kcal: 143)] // Goldfish finds nothing
+        )
+
+        await coordinator.begin(text: "two eggs and Goldfish crackers", in: context)
+        let resolution = try XCTUnwrap(coordinator.pendingResolution)
+        XCTAssertEqual(resolution.request.name, "Goldfish crackers")
+
+        await coordinator.skipUnmatchedItem()
+
+        let meals = try savedMeals(in: context)
+        XCTAssertEqual(meals.count, 1)
+        XCTAssertEqual(meals.first?.items.count, 1)
+        XCTAssertEqual(meals.first?.items.first?.name, "eggs")
+    }
+
+    func testSkippingOnlyItemSavesNoMeal() async throws {
+        let context = try makeContext()
+        let coordinator = makeCoordinator(parsed: [goldfishCrackers])
+
+        await coordinator.begin(text: "Goldfish", in: context)
+        XCTAssertNotNil(coordinator.pendingResolution)
+
+        await coordinator.skipUnmatchedItem()
+
+        XCTAssertTrue(try savedMeals(in: context).isEmpty)
+        XCTAssertNotNil(coordinator.errorMessage, "user should hear that nothing was logged")
     }
 }

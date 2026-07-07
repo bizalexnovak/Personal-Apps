@@ -15,6 +15,8 @@ struct MatchDiagnostics: Identifiable, Equatable {
     let id = UUID()
     var timestamp = Date()
     var request: FoodItemRequest
+    /// Every USDA query sent for this item and its result count, in order.
+    var queryAttempts: [String] = []
     var candidates: [CandidateSummary]
     var selectedDescription: String?
     var selectionReason: String
@@ -59,6 +61,7 @@ final class MatchDebugLog: ObservableObject {
             .joined(separator: "\n")
         logger.debug("""
         parsed: \(diagnostics.request.quantity, privacy: .public) \(diagnostics.request.unit, privacy: .public) '\(diagnostics.request.name, privacy: .public)'
+        queries: \(diagnostics.queryAttempts.joined(separator: " | "), privacy: .public)
         candidates:
         \(candidates, privacy: .public)
         selected: \(diagnostics.selectedDescription ?? "none", privacy: .public)

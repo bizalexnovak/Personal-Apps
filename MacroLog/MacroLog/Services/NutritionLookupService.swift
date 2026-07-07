@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 protocol NutritionLookup {
     /// Looks up macros for a parsed food item, scaled to its quantity/unit.
@@ -34,17 +35,50 @@ enum NutritionLookupError: LocalizedError {
 struct USDANutritionLookupService: NutritionLookup {
     var session: URLSession = .shared
 
+    private static let usdaLogger = Logger(subsystem: "com.alexnovak.macrolog", category: "usda")
+
     func lookup(_ request: FoodItemRequest) async throws -> NutritionMatch {
-        let foods = try await search(query: request.name)
+        // Full branded phrases ("Chobani mixed berry greek yogurt") often
+        // return zero results from FDC's search. Walk a ladder of simpler
+        // queries — full phrase, brand + product, product, brand — and rank
+        // whatever the first non-empty response returns against the ORIGINAL
+        // name. Every attempt is recorded in the diagnostics.
+        var attempts: [String] = []
+        var foods: [USDAFood] = []
+        do {
+            for query in Self.queryLadder(for: request.name) {
+                let results = try await search(query: query)
+                attempts.append("\"\(query)\" → \(results.count) results")
+                if !results.isEmpty {
+                    foods = results
+                    break
+                }
+            }
+        } catch {
+            attempts.append("→ request failed: \(error.localizedDescription)")
+            await Self.record(MatchDiagnostics(
+                request: request,
+                queryAttempts: attempts,
+                candidates: [],
+                selectedDescription: nil,
+                selectionReason: "search request failed",
+                gramsBasis: "-",
+                flags: [],
+                resultSummary: "failed — needs manual resolution"
+            ))
+            throw error
+        }
+
         guard let selection = Self.selectCandidate(for: request, in: foods) else {
             await Self.record(MatchDiagnostics(
                 request: request,
+                queryAttempts: attempts,
                 candidates: Self.candidateSummaries(for: request, in: foods),
                 selectedDescription: nil,
-                selectionReason: "no candidates",
+                selectionReason: "no candidates from any query",
                 gramsBasis: "-",
-                flags: ["no USDA results"],
-                resultSummary: "failed"
+                flags: [],
+                resultSummary: "no match — needs manual resolution"
             ))
             throw NutritionLookupError.noResults
         }
@@ -67,6 +101,7 @@ struct USDANutritionLookupService: NutritionLookup {
 
         await Self.record(MatchDiagnostics(
             request: request,
+            queryAttempts: attempts,
             candidates: Self.candidateSummaries(for: request, in: foods),
             selectedDescription: selection.food.description,
             selectionReason: selection.reason,
@@ -91,11 +126,42 @@ struct USDANutritionLookupService: NutritionLookup {
             URLQueryItem(name: "pageSize", value: "10"),
             URLQueryItem(name: "dataType", value: "Branded,Survey (FNDDS),SR Legacy,Foundation"),
         ]
+        // Never log the full URL — it carries the api_key.
+        Self.usdaLogger.debug("USDA search query: \(query, privacy: .public)")
         let (data, response) = try await session.data(from: components.url!)
         if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
+            let snippet = String(decoding: data.prefix(300), as: UTF8.self)
+            Self.usdaLogger.error("USDA HTTP \(http.statusCode, privacy: .public): \(snippet, privacy: .public)")
             throw NutritionLookupError.httpError(status: http.statusCode)
         }
-        return try JSONDecoder().decode(USDASearchResponse.self, from: data).foods
+        let foods = try JSONDecoder().decode(USDASearchResponse.self, from: data).foods
+        if foods.isEmpty {
+            let snippet = String(decoding: data.prefix(300), as: UTF8.self)
+            Self.usdaLogger.debug("USDA zero results for \"\(query, privacy: .public)\"; raw response starts: \(snippet, privacy: .public)")
+        } else {
+            Self.usdaLogger.debug("USDA \(foods.count, privacy: .public) results for \"\(query, privacy: .public)\"")
+        }
+        return foods
+    }
+
+    /// Progressively simpler queries for a food name, most-specific first:
+    /// full phrase → first word + last two ("Chobani greek yogurt") → last two
+    /// ("greek yogurt") → first word ("Chobani") → last word. Deduplicated.
+    static func queryLadder(for name: String) -> [String] {
+        let words = name.split(separator: " ").map(String.init).filter { !$0.isEmpty }
+        var ladder = [name]
+        if words.count >= 4 {
+            ladder.append(([words[0]] + words.suffix(2)).joined(separator: " "))
+        }
+        if words.count >= 3 {
+            ladder.append(words.suffix(2).joined(separator: " "))
+        }
+        if words.count >= 2 {
+            ladder.append(words[0])
+            ladder.append(words[words.count - 1])
+        }
+        var seen = Set<String>()
+        return ladder.filter { seen.insert($0.lowercased()).inserted }
     }
 
     /// Fetches the detail record's foodPortions ("1 cup" = 158 g, "1 slice" = 28 g, ...).

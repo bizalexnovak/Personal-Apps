@@ -233,6 +233,54 @@ final class NutritionLookupTests: XCTestCase {
         XCTAssertTrue(flags.isEmpty)
     }
 
+    // MARK: - Query ladder (branded multi-word searches)
+
+    func testQueryLadderForBrandedPhrases() {
+        XCTAssertEqual(
+            USDANutritionLookupService.queryLadder(for: "Chobani mixed berry greek yogurt"),
+            ["Chobani mixed berry greek yogurt", "Chobani greek yogurt", "greek yogurt", "Chobani", "yogurt"]
+        )
+        XCTAssertEqual(
+            USDANutritionLookupService.queryLadder(for: "Goldfish crackers"),
+            ["Goldfish crackers", "Goldfish", "crackers"]
+        )
+        XCTAssertEqual(
+            USDANutritionLookupService.queryLadder(for: "Celsius energy drink"),
+            ["Celsius energy drink", "energy drink", "Celsius", "drink"]
+        )
+    }
+
+    func testQueryLadderSingleWordHasNoFallbacks() {
+        XCTAssertEqual(USDANutritionLookupService.queryLadder(for: "banana"), ["banana"])
+    }
+
+    // MARK: - Low-calorie legitimacy (values are never zeroed or rejected)
+
+    func testLegitimatelyNearZeroCalorieDrinkKeepsValuesAndHighConfidence() {
+        // Celsius-style: ~3 kcal per 100 ml, 355 ml can.
+        let celsius = food(
+            "CELSIUS LIVE FIT SPARKLING ENERGY DRINK", dataType: "Branded",
+            brandOwner: "Celsius Inc.",
+            servingSize: 355, servingSizeUnit: "ml", householdServing: "1 can",
+            kcal: 2.8, protein: 0, carbs: 0.6, fat: 0
+        )
+        let request = FoodItemRequest(name: "Celsius energy drink", quantity: 1, unit: "can")
+        let result = USDANutritionLookupService.evaluate(for: request, food: celsius, nameScore: 1.0)
+
+        XCTAssertEqual(result.match.calories, 9.94, accuracy: 0.1, "low calories are legitimate, not a failure")
+        XCTAssertTrue(result.flags.isEmpty, "near-zero calories must not trip Atwater on tiny values")
+        XCTAssertEqual(result.match.confidence, MatchConfidence.high)
+    }
+
+    func testImplausibleMatchKeepsItsValuesAndFlagsLow() {
+        // Same scenario as the turkey-bacon regression: the values survive —
+        // flagged low for review, never zeroed or rejected.
+        let request = FoodItemRequest(name: "turkey bacon", quantity: 1, unit: "piece")
+        let result = USDANutritionLookupService.evaluate(for: request, food: srTurkeyBacon, nameScore: 1.0)
+        XCTAssertGreaterThan(result.match.calories, 0, "plausibility flags must never zero out a match")
+        XCTAssertEqual(result.match.confidence, MatchConfidence.low)
+    }
+
     // MARK: - Unit classification & serving parsing
 
     func testUnitClassification() {

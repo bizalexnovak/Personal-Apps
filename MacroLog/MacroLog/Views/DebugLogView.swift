@@ -51,6 +51,12 @@ private struct MatchDiagnosticsRow: View {
             Text("\(diagnostics.request.quantity.formatted()) \(diagnostics.request.unit) · \(diagnostics.request.name)")
                 .font(.subheadline.bold())
 
+            ForEach(diagnostics.queryAttempts, id: \.self) { attempt in
+                Label(attempt, systemImage: "magnifyingglass")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+
             if let selected = diagnostics.selectedDescription {
                 Text("→ \(selected)").font(.caption)
             }
