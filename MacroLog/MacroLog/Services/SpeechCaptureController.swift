@@ -11,7 +11,7 @@ final class SpeechCaptureController: ObservableObject {
         case idle
         case requestingPermission
         case listening
-        case confirming          // transcript captured, awaiting user confirmation
+        case captured            // transcript finalized — hand off to the pipeline
         case denied(String)      // permission problem — point at Settings
         case failed(String)      // transient problem — offer retry
     }
@@ -68,7 +68,7 @@ final class SpeechCaptureController: ObservableObject {
         if transcript.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             state = .failed("Didn't hear anything — try again.")
         } else {
-            state = .confirming
+            state = .captured
         }
     }
 

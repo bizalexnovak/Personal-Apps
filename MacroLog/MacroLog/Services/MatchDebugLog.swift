@@ -7,6 +7,9 @@ struct CandidateSummary: Identifiable, Equatable {
     var description: String
     var dataType: String
     var nameScore: Double
+    /// Energy as reported by the search result (per 100 g/100 ml) — makes
+    /// mislabeled or wrong-product-line entries visible at a glance.
+    var kcalPer100g: Double
     var serving: String?
 }
 
@@ -57,7 +60,7 @@ final class MatchDebugLog: ObservableObject {
     func record(_ diagnostics: MatchDiagnostics) {
         append(.match(diagnostics))
         let candidates = diagnostics.candidates
-            .map { String(format: "  [%.2f] %@ (%@)%@", $0.nameScore, $0.description, $0.dataType, $0.serving.map { " serving: \($0)" } ?? "") }
+            .map { String(format: "  [%.2f] %@ (%@) %.0f kcal/100g%@", $0.nameScore, $0.description, $0.dataType, $0.kcalPer100g, $0.serving.map { " serving: \($0)" } ?? "") }
             .joined(separator: "\n")
         logger.debug("""
         parsed: \(diagnostics.request.quantity, privacy: .public) \(diagnostics.request.unit, privacy: .public) '\(diagnostics.request.name, privacy: .public)'

@@ -1,43 +1,54 @@
 import Foundation
 import SwiftData
 
-/// State machine for the capture flow: parse the raw text, walk the parsed
-/// items, pause on any item that needs clarification (showing a tap-only
-/// card), and only after every item is resolved run lookups and save.
-/// Nothing touches SwiftData while a clarification is pending.
+/// Drives the capture flow: parse the transcript, look up every item in the
+/// background, then publish one ReviewSession that the Match Review Screen
+/// renders — transcript on top, one card per item. Nothing is written to
+/// SwiftData until the user confirms/edits every card and taps Save All.
 @MainActor
 final class MealCaptureCoordinator: ObservableObject {
-    struct PendingClarification: Identifiable, Equatable {
-        let id = UUID()
-        var item: FoodItemRequest
-        var question: String
-        var options: [ClarificationOption]
+    enum ReviewStatus: Equatable {
+        case needsReview
+        case confirmed
+        case edited
     }
 
-    /// A parsed item that found no USDA match at all — the user must search
-    /// manually, enter macros, or skip it. Never silently saved as zero.
-    struct PendingResolution: Identifiable, Equatable {
+    struct ReviewItem: Identifiable {
         let id = UUID()
         var request: FoodItemRequest
+        /// nil = USDA found nothing; the card blocks Save All until resolved.
+        var match: NutritionMatch?
+        /// Quick-pick interpretations (Claude's clarification options, or the
+        /// local vague-unit fallbacks) shown as chips on the card.
+        var clarificationQuestion: String?
+        var options: [ClarificationOption]
+        var status: ReviewStatus
+
+        var needsAttention: Bool {
+            match == nil || match?.confidence == MatchConfidence.low
+        }
     }
 
-    @Published var pendingClarification: PendingClarification?
-    @Published var pendingResolution: PendingResolution?
+    struct ReviewSession: Identifiable {
+        let id = UUID()
+        var rawText: String
+        var items: [ReviewItem]
+    }
+
+    @Published var review: ReviewSession?
     @Published private(set) var isWorking = false
     @Published var errorMessage: String?
 
     var parser: MealParsing = ClaudeMealParsingService()
     var logger = MealLoggingService()
 
-    private var rawText = ""
-    private var queue: [FoodItemRequest] = []
-    private var resolved: [FoodItemRequest] = []
-    private var lookupQueue: [FoodItemRequest] = []
-    private var lookedUp: [(request: FoodItemRequest, match: NutritionMatch)] = []
     private var context: ModelContext?
 
-    var isCapturing: Bool {
-        isWorking || pendingClarification != nil || pendingResolution != nil
+    var isCapturing: Bool { isWorking || review != nil }
+
+    var canSaveAll: Bool {
+        guard let review, !review.items.isEmpty else { return false }
+        return review.items.allSatisfy { $0.status != .needsReview && $0.match != nil }
     }
 
     // MARK: - Entry point
@@ -45,163 +56,144 @@ final class MealCaptureCoordinator: ObservableObject {
     func begin(text: String, in context: ModelContext) async {
         guard !isCapturing else { return }
         self.context = context
-        rawText = text
-        queue = []
-        resolved = []
-        lookupQueue = []
-        lookedUp = []
         isWorking = true
         MatchDebugLog.shared.record(transcript: text)
+
+        let requests: [FoodItemRequest]
         do {
-            queue = try await parser.parse(text)
+            requests = try await parser.parse(text)
         } catch {
             errorMessage = error.localizedDescription
             isWorking = false
             return
         }
-        await advance()
-    }
 
-    // MARK: - Card responses
-
-    /// User tapped one of the suggested options — it replaces the vague item.
-    func choose(_ option: ClarificationOption) async {
-        guard pendingClarification != nil, !queue.isEmpty else { return }
-        queue.removeFirst()
-        resolved.append(FoodItemRequest(name: option.name, quantity: option.quantity, unit: option.unit))
-        pendingClarification = nil
-        await advance()
-    }
-
-    /// User typed a custom description instead — re-parse it. The result goes
-    /// to the front of the queue, so if it's still vague we ask again.
-    func chooseCustom(_ text: String) async {
-        guard pendingClarification != nil, !queue.isEmpty else { return }
-        let original = queue.removeFirst()
-        pendingClarification = nil
-        isWorking = true
-        do {
-            let reparsed = try await parser.parse(text)
-            queue.insert(contentsOf: reparsed, at: 0)
-        } catch {
-            // Couldn't parse the custom text — keep the original item; the
-            // lookup layer will flag it low confidence.
-            errorMessage = error.localizedDescription
-            resolved.append(original)
+        var items: [ReviewItem] = []
+        for request in requests {
+            let hints = Self.clarificationHints(for: request)
+            // A failed lookup is represented as match == nil — the card opens
+            // in search mode and blocks Save All; zeros are never fabricated.
+            let match = try? await logger.nutrition.lookup(request)
+            items.append(ReviewItem(
+                request: request,
+                match: match,
+                clarificationQuestion: hints?.question,
+                options: hints?.options ?? [],
+                status: .needsReview
+            ))
         }
-        await advance()
+        isWorking = false
+
+        guard !items.isEmpty else {
+            errorMessage = "Couldn't find any food items in that."
+            return
+        }
+        review = ReviewSession(rawText: text, items: items)
     }
 
-    /// User declined to clarify — log the item as heard. The vague unit will
-    /// come out low-confidence from the lookup layer and show the ⚠️ badge.
-    func keepAsHeard() async {
-        guard pendingClarification != nil, !queue.isEmpty else { return }
-        resolved.append(queue.removeFirst())
-        pendingClarification = nil
-        await advance()
+    // MARK: - Card actions
+
+    /// ✅ Confirm — accept the matched values as-is. No-op while unmatched.
+    func confirm(_ itemID: UUID) {
+        updateItem(itemID) { item in
+            if item.match != nil {
+                item.status = .confirmed
+            }
+        }
     }
 
-    // MARK: - Manual-resolution card responses (no-match fallback)
-
-    /// User resolved the unmatched item via manual USDA search or manual
-    /// macro entry — `match` carries the chosen/entered values.
-    func resolveManually(_ match: NutritionMatch) async {
-        guard pendingResolution != nil, !lookupQueue.isEmpty else { return }
-        lookedUp.append((request: lookupQueue.removeFirst(), match: match))
-        pendingResolution = nil
-        await advanceLookups()
+    /// ✏️ Edit — user-entered macros replace the match (verified values).
+    func applyEdit(_ itemID: UUID, calories: Double, protein: Double, carbs: Double, fat: Double) {
+        updateItem(itemID) { item in
+            item.match = NutritionMatch(
+                matchedDescription: item.match?.matchedDescription ?? "Manual entry",
+                calories: calories, protein: protein, carbs: carbs, fat: fat,
+                confidence: MatchConfidence.high
+            )
+            item.status = .edited
+        }
     }
 
-    /// User chose to drop the unmatched item from the meal.
-    func skipUnmatchedItem() async {
-        guard pendingResolution != nil, !lookupQueue.isEmpty else { return }
-        lookupQueue.removeFirst()
-        pendingResolution = nil
-        await advanceLookups()
+    /// 🔍 Search — user explicitly picked a different USDA food; recompute
+    /// macros for the item's quantity/unit and mark it confirmed.
+    func applyPickedFood(_ itemID: UUID, food: USDAFood) {
+        guard let item = review?.items.first(where: { $0.id == itemID }) else { return }
+        let match = USDANutritionLookupService.evaluate(for: item.request, food: food, nameScore: 1.0).match
+        updateItem(itemID) { item in
+            item.match = match
+            item.status = .confirmed
+        }
     }
 
-    /// Abandon the whole meal without saving anything.
-    func cancelMeal() {
-        queue = []
-        resolved = []
-        lookupQueue = []
-        lookedUp = []
-        rawText = ""
-        pendingClarification = nil
-        pendingResolution = nil
+    /// Option chip tapped — swap in the resolved interpretation and re-run
+    /// the lookup for it. The card returns to needs-review with new macros.
+    func chooseOption(_ itemID: UUID, option: ClarificationOption) async {
+        guard review != nil else { return }
+        isWorking = true
+        let newRequest = FoodItemRequest(name: option.name, quantity: option.quantity, unit: option.unit)
+        let match = try? await logger.nutrition.lookup(newRequest)
+        isWorking = false
+        updateItem(itemID) { item in
+            item.request = newRequest
+            item.match = match
+            item.clarificationQuestion = nil
+            item.options = []
+            item.status = .needsReview
+        }
+    }
+
+    /// Drop an item from the meal (e.g. a hallucinated parse or an unmatched
+    /// extra) so it doesn't block Save All.
+    func removeItem(_ itemID: UUID) {
+        review?.items.removeAll { $0.id == itemID }
+    }
+
+    func cancelReview() {
+        review = nil
         isWorking = false
     }
 
-    // MARK: - Flow
-
-    /// Phase A: walk parsed items, pausing on any that need clarification.
-    private func advance() async {
-        while let next = queue.first {
-            if let prompt = Self.clarificationPrompt(for: next) {
-                isWorking = false // idle while waiting for the user's tap
-                pendingClarification = prompt
-                return
-            }
-            resolved.append(queue.removeFirst())
-        }
-        lookupQueue = resolved
-        resolved = []
-        await advanceLookups()
+    /// Search passthrough for the card's inline USDA search pane.
+    func searchFoods(query: String) async -> [USDAFood] {
+        (try? await logger.nutrition.search(query: query)) ?? []
     }
 
-    /// Phase B: look up each resolved item. A lookup that finds nothing (or
-    /// errors) pauses on a manual-resolution card instead of saving zeros.
-    private func advanceLookups() async {
-        while let next = lookupQueue.first {
-            isWorking = true
-            do {
-                let match = try await logger.nutrition.lookup(next)
-                lookedUp.append((request: lookupQueue.removeFirst(), match: match))
-            } catch {
-                isWorking = false // idle while waiting for the user
-                pendingResolution = PendingResolution(request: next)
-                return
-            }
-        }
-        await finish()
-    }
+    // MARK: - Save
 
-    private func finish() async {
-        defer { isWorking = false }
-        guard let context else { return }
-        guard !lookedUp.isEmpty else {
-            errorMessage = "Nothing to log."
-            return
-        }
+    func saveAll() async {
+        guard canSaveAll, let context, let session = review else { return }
         isWorking = true
+        defer { isWorking = false }
+        let entries = session.items.compactMap { item in
+            item.match.map { (request: item.request, match: $0) }
+        }
         do {
-            try logger.saveResolved(lookedUp, rawText: rawText, in: context)
-            rawText = ""
-            lookedUp = []
+            try logger.saveResolved(entries, rawText: session.rawText, in: context)
+            review = nil
         } catch {
             errorMessage = error.localizedDescription
         }
     }
 
-    // MARK: - Prompt construction
+    // MARK: - Helpers
 
-    /// Claude's flag is the primary source; a locally detected vague unit is
-    /// the safety net so "a bowl of X" can never slip through unclarified
-    /// even if the parser forgot to flag it.
-    static func clarificationPrompt(for item: FoodItemRequest) -> PendingClarification? {
+    private func updateItem(_ itemID: UUID, _ transform: (inout ReviewItem) -> Void) {
+        guard var session = review,
+              let index = session.items.firstIndex(where: { $0.id == itemID })
+        else { return }
+        transform(&session.items[index])
+        review = session
+    }
+
+    /// Claude's clarification flag is the primary source; a locally detected
+    /// vague unit is the safety net. Either way the interpretations become
+    /// tap-to-resolve chips on the review card.
+    static func clarificationHints(for item: FoodItemRequest) -> (question: String, options: [ClarificationOption])? {
         if item.needsClarification == true, let options = item.options, !options.isEmpty {
-            return PendingClarification(
-                item: item,
-                question: item.clarificationQuestion ?? "Can you be more specific?",
-                options: options
-            )
+            return (item.clarificationQuestion ?? "Can you be more specific?", options)
         }
         if case .vague(let word) = USDANutritionLookupService.classifyUnit(item.unit) {
-            return PendingClarification(
-                item: item,
-                question: "How much \(item.name) was it?",
-                options: fallbackOptions(for: item, vagueWord: word)
-            )
+            return ("How much \(item.name) was it?", fallbackOptions(for: item, vagueWord: word))
         }
         return nil
     }

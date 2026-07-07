@@ -657,6 +657,7 @@ struct USDANutritionLookupService: NutritionLookup {
                 description: food.description,
                 dataType: food.dataType ?? "?",
                 nameScore: nameMatchScore(query: request.name, candidate: food.description),
+                kcalPer100g: food.macrosPer100g.calories,
                 serving: servingInfo(for: food).map { "\($0.rawText) = \(Int($0.gramsPerServing.rounded())) g" }
             )
         }

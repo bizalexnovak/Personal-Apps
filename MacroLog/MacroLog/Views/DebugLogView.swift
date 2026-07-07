@@ -80,7 +80,7 @@ private struct MatchDiagnosticsRow: View {
                 ForEach(diagnostics.candidates) { candidate in
                     VStack(alignment: .leading, spacing: 1) {
                         Text(candidate.description).font(.caption2)
-                        Text("\(candidate.dataType) · score \(candidate.nameScore, format: .number.precision(.fractionLength(2)))\(candidate.serving.map { " · \($0)" } ?? "")")
+                        Text("\(candidate.dataType) · score \(candidate.nameScore, format: .number.precision(.fractionLength(2))) · \(Int(candidate.kcalPer100g.rounded())) kcal/100g\(candidate.serving.map { " · \($0)" } ?? "")")
                             .font(.caption2)
                             .foregroundStyle(.secondary)
                     }

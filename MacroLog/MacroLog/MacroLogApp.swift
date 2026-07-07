@@ -28,6 +28,20 @@ struct ContentView: View {
                 .tabItem { Label("Settings", systemImage: "gearshape") }
         }
         .environmentObject(coordinator)
+        // Brief loading state between transcript hand-off and the review
+        // screen appearing (parse + lookups run in the background).
+        .overlay {
+            if coordinator.isWorking, coordinator.review == nil {
+                VStack(spacing: 12) {
+                    ProgressView()
+                    Text("Analyzing your meal…")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(24)
+                .background(RoundedRectangle(cornerRadius: 16).fill(.regularMaterial))
+            }
+        }
         .fullScreenCover(isPresented: $showVoiceLog) {
             // Presented covers don't reliably inherit environmentObject values
             // from the presenting chain — inject explicitly or VoiceLogView
@@ -35,18 +49,11 @@ struct ContentView: View {
             VoiceLogView()
                 .environmentObject(coordinator)
         }
+        .fullScreenCover(item: $coordinator.review) { _ in
+            MatchReviewView(coordinator: coordinator)
+        }
         .sheet(isPresented: $showOnboarding) {
             OnboardingView()
-        }
-        .sheet(item: $coordinator.pendingClarification) { pending in
-            ClarificationCardView(pending: pending, coordinator: coordinator)
-                .presentationDetents([.medium, .large])
-                .interactiveDismissDisabled()
-        }
-        .sheet(item: $coordinator.pendingResolution) { resolution in
-            ManualMatchSheet(resolution: resolution, coordinator: coordinator)
-                .presentationDetents([.large])
-                .interactiveDismissDisabled()
         }
         .alert("Couldn't log meal", isPresented: .init(
             get: { coordinator.errorMessage != nil },

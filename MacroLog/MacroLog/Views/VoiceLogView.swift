@@ -2,8 +2,9 @@ import SwiftUI
 import UIKit
 
 /// Full-screen voice capture: starts listening on appear, shows a pulsing mic
-/// and the live transcript, auto-stops on silence (or Done), then asks for
-/// confirmation before handing the text to the parsing pipeline.
+/// and the live transcript, auto-stops on silence (or Done). The finalized
+/// transcript hands off straight to the parsing/lookup pipeline — review
+/// happens on the Match Review Screen, not here.
 struct VoiceLogView: View {
     @EnvironmentObject private var coordinator: MealCaptureCoordinator
     @Environment(\.modelContext) private var modelContext
@@ -20,8 +21,10 @@ struct VoiceLogView: View {
                 case .listening:
                     listeningView
 
-                case .confirming:
-                    confirmView
+                case .captured:
+                    // Momentary — the onChange handler below dismisses and
+                    // starts the pipeline; the loading HUD lives in ContentView.
+                    ProgressView("Got it — analyzing…")
 
                 case .denied(let message):
                     problemView(message: message, systemImage: "mic.slash.fill") {
@@ -56,6 +59,12 @@ struct VoiceLogView: View {
         }
         .task {
             await speech.start()
+        }
+        .onChange(of: speech.state) { _, newState in
+            guard case .captured = newState else { return }
+            let text = speech.transcript
+            dismiss()
+            Task { await coordinator.begin(text: text, in: modelContext) }
         }
         .onDisappear {
             speech.cancel()
@@ -98,49 +107,6 @@ struct VoiceLogView: View {
             }
             .buttonStyle(.borderedProminent)
             .controlSize(.large)
-            .padding(.bottom, 24)
-        }
-    }
-
-    // MARK: - Confirm
-
-    private var confirmView: some View {
-        VStack(spacing: 24) {
-            Spacer()
-
-            Text("Here's what I heard:")
-                .font(.headline)
-                .foregroundStyle(.secondary)
-
-            Text("\u{201C}\(speech.transcript)\u{201D}")
-                .font(.title3.weight(.medium))
-                .multilineTextAlignment(.center)
-                .padding(.horizontal)
-
-            Spacer()
-
-            VStack(spacing: 12) {
-                Button {
-                    let text = speech.transcript
-                    dismiss()
-                    Task { await coordinator.begin(text: text, in: modelContext) }
-                } label: {
-                    Text("Looks good")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
-
-                Button {
-                    Task { await speech.restart() }
-                } label: {
-                    Text("Try again")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.large)
-            }
-            .padding(.horizontal)
             .padding(.bottom, 24)
         }
     }
