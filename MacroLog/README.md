@@ -33,19 +33,22 @@ Say **"Log meal in MacroLog"** (or "…to MacroLog") and Siri simply opens the a
 onto the voice capture screen — all speech handling happens in-app. VoiceLogView
 starts an SFSpeechRecognizer + AVAudioEngine session immediately (requesting mic
 and speech permissions on first use), shows a pulsing mic with the live transcript
-as you speak, auto-stops after ~2 s of silence (or tap Done), and asks "Here's
-what I heard" for confirmation before parsing. Recognition is biased toward food
-vocabulary — brands like Chobani, proteins, units — via `contextualStrings`. The
-mic button on the Meals tab opens the same screen without Siri.
+as you speak, and auto-stops after ~2 s of silence (or tap Done). Recognition is
+biased toward food vocabulary — brands like Chobani, proteins, units — via
+`contextualStrings`. The mic button on the Meals tab opens the same screen
+without Siri.
 
-After confirmation the transcript flows into the normal pipeline: if anything is
-too vague to log ("a bag of popcorn", "a Chobani", "some rice"), a tap-only
-clarification card appears with 2-4 concrete interpretations, a "type it instead"
-fallback, and a "keep as I said it" escape hatch. Nothing is written to SwiftData
-until every item is resolved. If USDA search finds nothing for an item — even
-after retrying progressively simpler queries (full phrase → brand + product →
-product → brand) — a fallback card offers a manual USDA search and manual macro
-entry; failed matches are never silently saved as zero-calorie entries.
+The finalized transcript goes straight through Claude parsing and USDA lookups
+(brief loading state, no confirm step), landing on the **Match Review Screen**:
+your transcript as reference text on top, one card per parsed item showing the
+matched database food and its macros, with ✅ Confirm / ✏️ Edit (pre-filled,
+fully editable) / 🔍 Search-a-different-match actions. Vague items ("a bag of
+popcorn", "some rice") carry tap-to-resolve interpretation chips on their card;
+low-confidence cards auto-open in Edit and unmatched cards in Search. **Save
+All** unlocks only once every item is confirmed or edited — nothing is written
+to SwiftData before that, and failed matches are never silently saved as
+zero-calorie entries. USDA lookups retry progressively simpler queries under
+the hood (full phrase → brand + product → product → brand).
 
 ## Architecture
 

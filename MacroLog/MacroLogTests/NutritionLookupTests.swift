@@ -254,6 +254,36 @@ final class NutritionLookupTests: XCTestCase {
         XCTAssertEqual(USDANutritionLookupService.queryLadder(for: "banana"), ["banana"])
     }
 
+    // MARK: - Celsius product-line ranking
+
+    func testCelsiusSelectionPrefersProductLineNamedInQuery() {
+        // Two same-brand candidates: the actual energy drink (~3 kcal/100 ml)
+        // and a caloric product line the brand also sells. The query names
+        // "energy drink", so the drink must win on name score.
+        let correct = food(
+            "CELSIUS LIVE FIT SPARKLING ORANGE ENERGY DRINK", dataType: "Branded",
+            brandOwner: "Celsius Inc.",
+            servingSize: 355, servingSizeUnit: "ml", householdServing: "1 can",
+            kcal: 2.8, protein: 0, carbs: 0.6, fat: 0
+        )
+        let decoy = food(
+            "CELSIUS PROTEIN SHAKE, MIXED BERRY", dataType: "Branded",
+            brandOwner: "Celsius Inc.",
+            servingSize: 355, servingSizeUnit: "ml", householdServing: "1 bottle",
+            kcal: 43, protein: 8.5, carbs: 1.5, fat: 0.5
+        )
+        let request = FoodItemRequest(name: "Celsius energy drink", quantity: 1, unit: "can")
+
+        let selection = USDANutritionLookupService.selectCandidate(for: request, in: [decoy, correct])
+        XCTAssertEqual(selection?.food.description, correct.description,
+                       "a 43 kcal/100ml decoy (≈153 kcal/can) must not outrank the product line the user named")
+
+        let result = USDANutritionLookupService.evaluate(
+            for: request, food: selection!.food, nameScore: selection!.score
+        )
+        XCTAssertEqual(result.match.calories, 9.94, accuracy: 0.1)
+    }
+
     // MARK: - Low-calorie legitimacy (values are never zeroed or rejected)
 
     func testLegitimatelyNearZeroCalorieDrinkKeepsValuesAndHighConfidence() {
