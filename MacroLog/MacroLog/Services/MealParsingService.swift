@@ -30,6 +30,11 @@ struct ClaudeMealParsingService: MealParsing {
     static let systemPrompt = """
     You are a nutrition parsing assistant. Given a description of a meal, extract each distinct food item with its estimated quantity and unit. Respond ONLY with valid JSON, no markdown formatting, no preamble.
     Format: {"items": [{"name": string, "quantity": number, "unit": string, "needsClarification": boolean, "clarificationQuestion": string or null, "options": [{"label": string, "name": string, "quantity": number, "unit": string}] or null}]}
+    CRITICAL — the "name" field must contain ONLY the clean food or product name, never the user's sentence. Strip out first-person phrasing ("I ate", "I drank", "I had"), verbs, articles, quantities, and container words — those belong in "quantity" and "unit", not "name". The name should read like a label on a shelf: a few words at most.
+    Examples:
+    - "I drank one can of celsius" -> {"name": "Celsius energy drink", "quantity": 1, "unit": "can"}
+    - "had two scrambled eggs and a slice of sourdough toast" -> two items: {"name": "scrambled eggs", "quantity": 2, "unit": "large"} and {"name": "sourdough toast", "quantity": 1, "unit": "slice"}
+    - "a bowl of Cheerios with milk" -> {"name": "Cheerios cereal", ...} and {"name": "milk", ...}
     Set needsClarification to true when the description is too vague to estimate macros reliably:
     - the amount is a vague container or quantity word (bag, bowl, handful, some, a bit of) rather than a countable or measurable unit (piece, slice, cup, oz, gram)
     - the name is a brand with multiple product lines and no specific product (e.g. "a Chobani" without flavor or type)
@@ -94,10 +99,53 @@ struct ClaudeMealParsingService: MealParsing {
             throw MealParsingError.emptyResponse
         }
         do {
-            return try JSONDecoder().decode(ParsedMealResponse.self, from: data).items
+            var items = try JSONDecoder().decode(ParsedMealResponse.self, from: data).items
+            // Defensive second line of defense: even with the prompt above, a
+            // leaked sentence fragment in `name` gets scrubbed here so the raw
+            // transcript can never become the item's display name.
+            for i in items.indices {
+                items[i].name = cleanName(items[i].name)
+            }
+            return items
         } catch {
             throw MealParsingError.invalidJSON(underlying: error)
         }
+    }
+
+    /// Strips first-person/verb/quantity/container lead-ins that occasionally
+    /// leak into `name` ("I drank one can of celsius" → "celsius") and collapses
+    /// whitespace. Order matters: filler verbs first, then a leading
+    /// "<amount> <container> of" phrase.
+    static func cleanName(_ raw: String) -> String {
+        var name = raw
+            .replacingOccurrences(of: "\n", with: " ")
+            .trimmingCharacters(in: .whitespaces)
+
+        // Leading first-person verbs: "I ate/drank/had/have/got a ..."
+        let verbPattern = #"^(?:i\s+)?(?:ate|drank|had|have|got|grabbed|made|ordered|consumed)\s+"#
+        name = replacingFirstMatch(in: name, pattern: verbPattern, with: "")
+
+        // Leading "<amount> <container> of": "one can of", "a glass of",
+        // "2 slices of", "a bowl of". Leaves "greek yogurt", "Celsius energy
+        // drink", etc. untouched (no "of" after a container word).
+        let amountWord = #"(?:a|an|one|two|three|four|five|six|\d+(?:\.\d+)?)"#
+        let containerWord = #"(?:can|cans|glass|glasses|bottle|bottles|cup|cups|bowl|bowls|slice|slices|piece|pieces|bag|bags|serving|servings|scoop|scoops|handful|handfuls|packet|packets|container|containers|plate|plates)"#
+        let containerPattern = "^\(amountWord)\\s+\(containerWord)\\s+of\\s+"
+        name = replacingFirstMatch(in: name, pattern: containerPattern, with: "")
+
+        // Collapse internal whitespace.
+        name = name.split(whereSeparator: { $0 == " " || $0 == "\t" }).joined(separator: " ")
+        let trimmed = name.trimmingCharacters(in: .whitespaces)
+        // Never return empty — fall back to the original if we over-stripped.
+        return trimmed.isEmpty ? raw.trimmingCharacters(in: .whitespaces) : trimmed
+    }
+
+    private static func replacingFirstMatch(in text: String, pattern: String, with replacement: String) -> String {
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else {
+            return text
+        }
+        let range = NSRange(text.startIndex..., in: text)
+        return regex.stringByReplacingMatches(in: text, options: [], range: range, withTemplate: replacement)
     }
 }
 

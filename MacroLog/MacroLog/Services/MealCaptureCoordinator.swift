@@ -73,7 +73,7 @@ final class MealCaptureCoordinator: ObservableObject {
             let hints = Self.clarificationHints(for: request)
             // A failed lookup is represented as match == nil — the card opens
             // in search mode and blocks Save All; zeros are never fabricated.
-            let match = try? await logger.nutrition.lookup(request)
+            let match = await resolveMatch(for: request, in: context)
             items.append(ReviewItem(
                 request: request,
                 match: match,
@@ -115,10 +115,14 @@ final class MealCaptureCoordinator: ObservableObject {
     }
 
     /// 🔍 Search — user explicitly picked a different USDA food; recompute
-    /// macros for the item's quantity/unit and mark it confirmed.
+    /// macros for the item's quantity/unit, mark it confirmed, and REMEMBER the
+    /// correction so future logs of this phrase reuse this food automatically.
     func applyPickedFood(_ itemID: UUID, food: USDAFood) {
         guard let item = review?.items.first(where: { $0.id == itemID }) else { return }
         let match = USDANutritionLookupService.evaluate(for: item.request, food: food, nameScore: 1.0).match
+        if let context {
+            RememberedMatchStore.remember(phrase: item.request.name, food: food, in: context)
+        }
         updateItem(itemID) { item in
             item.match = match
             item.status = .confirmed
@@ -128,10 +132,10 @@ final class MealCaptureCoordinator: ObservableObject {
     /// Option chip tapped — swap in the resolved interpretation and re-run
     /// the lookup for it. The card returns to needs-review with new macros.
     func chooseOption(_ itemID: UUID, option: ClarificationOption) async {
-        guard review != nil else { return }
+        guard let context, review != nil else { return }
         isWorking = true
         let newRequest = FoodItemRequest(name: option.name, quantity: option.quantity, unit: option.unit)
-        let match = try? await logger.nutrition.lookup(newRequest)
+        let match = await resolveMatch(for: newRequest, in: context)
         isWorking = false
         updateItem(itemID) { item in
             item.request = newRequest
@@ -140,6 +144,15 @@ final class MealCaptureCoordinator: ObservableObject {
             item.options = []
             item.status = .needsReview
         }
+    }
+
+    /// A remembered correction wins over a fresh search; otherwise fall through
+    /// to the normal USDA lookup. A nil result means no match (never zeros).
+    private func resolveMatch(for request: FoodItemRequest, in context: ModelContext) async -> NutritionMatch? {
+        if let remembered = RememberedMatchStore.lookup(phrase: request.name, in: context) {
+            return USDANutritionLookupService.evaluate(for: request, food: remembered, nameScore: 1.0).match
+        }
+        return try? await logger.nutrition.lookup(request)
     }
 
     /// Drop an item from the meal (e.g. a hallucinated parse or an unmatched

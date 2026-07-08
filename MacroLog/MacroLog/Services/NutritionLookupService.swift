@@ -675,8 +675,8 @@ struct USDASearchResponse: Decodable {
     let foods: [USDAFood]
 }
 
-struct USDAFood: Decodable, Identifiable, Equatable {
-    struct Nutrient: Decodable, Equatable {
+struct USDAFood: Codable, Identifiable, Equatable {
+    struct Nutrient: Codable, Equatable {
         let nutrientId: Int
         let nutrientName: String?
         let unitName: String?
