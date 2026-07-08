@@ -2,7 +2,7 @@ import AppIntents
 
 /// "Log meal in MacroLog" — Siri's only job is opening the app onto the voice
 /// capture screen. Speech recording, transcription, clarification, and saving
-/// all happen in the app (see VoiceLogView + MealCaptureCoordinator).
+/// all happen in the app (see CaptureView + MealCaptureCoordinator).
 struct LogMealIntent: AppIntent {
     static let title: LocalizedStringResource = "Log Meal"
     static let description = IntentDescription(
@@ -13,7 +13,7 @@ struct LogMealIntent: AppIntent {
 
     @MainActor
     func perform() async throws -> some IntentResult {
-        PendingMealStore.shared.requestVoiceCapture()
+        PendingMealStore.shared.requestVoice()
         return .result()
     }
 }

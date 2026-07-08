@@ -5,13 +5,18 @@ import XCTest
 /// and the recognition-biasing vocabulary are plain logic worth pinning down.
 @MainActor
 final class VoiceCaptureSupportTests: XCTestCase {
-    func testVoiceCaptureRequestConsumesOnce() {
+    func testCaptureRequestsCarryTheRightMode() {
         let store = PendingMealStore()
-        XCTAssertFalse(store.consumeVoiceCaptureRequest())
+        XCTAssertNil(store.request)
 
-        store.requestVoiceCapture()
-        XCTAssertTrue(store.consumeVoiceCaptureRequest())
-        XCTAssertFalse(store.consumeVoiceCaptureRequest(), "flag must clear after consumption")
+        store.requestVoice()
+        XCTAssertEqual(store.request?.mode, .voice)
+
+        store.requestScan()
+        XCTAssertEqual(store.request?.mode, .scan)
+
+        store.requestText("two eggs")
+        XCTAssertEqual(store.request?.mode, .text("two eggs"))
     }
 
     func testFoodVocabularyCoversBrandsProteinsAndUnits() {

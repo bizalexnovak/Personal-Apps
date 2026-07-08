@@ -1,74 +1,9 @@
 import SwiftUI
 
-/// The single review screen after voice/typed capture: transcript on top as
-/// reference, one card per parsed item with Confirm / Edit / Search actions.
-/// Save All unlocks only when every card is confirmed or edited.
-struct MatchReviewView: View {
-    @ObservedObject var coordinator: MealCaptureCoordinator
-
-    private var items: [MealCaptureCoordinator.ReviewItem] {
-        coordinator.review?.items ?? []
-    }
-
-    var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 12) {
-                    if let raw = coordinator.review?.rawText {
-                        Text("You said: \u{201C}\(raw)\u{201D}")
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-
-                    ForEach(items) { item in
-                        ReviewItemCard(item: item, coordinator: coordinator)
-                    }
-
-                    if items.isEmpty {
-                        ContentUnavailableView(
-                            "Nothing left to review",
-                            systemImage: "tray",
-                            description: Text("All items were removed. Cancel to start over.")
-                        )
-                    }
-                }
-                .padding()
-            }
-            .navigationTitle("Review Meal")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { coordinator.cancelReview() }
-                }
-            }
-            .safeAreaInset(edge: .bottom) {
-                VStack(spacing: 4) {
-                    if !coordinator.canSaveAll, !items.isEmpty {
-                        Text("Confirm or edit every item to save")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                    }
-                    Button {
-                        Task { await coordinator.saveAll() }
-                    } label: {
-                        Text("Save All")
-                            .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.large)
-                    .disabled(!coordinator.canSaveAll)
-                }
-                .padding()
-                .background(.bar)
-            }
-        }
-    }
-}
-
-// MARK: - One item card
-
-private struct ReviewItemCard: View {
+/// One reviewable food item: matched name, macros, and Confirm / Edit / Search
+/// actions. Low-confidence items auto-open in Edit, unmatched ones in Search.
+/// Rendered inline inside CaptureView after capture + matching complete.
+struct ReviewItemCard: View {
     let item: MealCaptureCoordinator.ReviewItem
     @ObservedObject var coordinator: MealCaptureCoordinator
 

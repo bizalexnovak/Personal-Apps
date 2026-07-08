@@ -2,7 +2,7 @@ import AVFoundation
 import Foundation
 import Speech
 
-/// Owns the mic + speech-recognition session for VoiceLogView: requests
+/// Owns the mic + speech-recognition session for CaptureView: requests
 /// permissions, streams live partial transcripts, exposes an audio level for
 /// the pulsing indicator, and auto-stops after ~2 s of silence.
 @MainActor

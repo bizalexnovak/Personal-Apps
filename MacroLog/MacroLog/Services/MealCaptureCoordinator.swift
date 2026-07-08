@@ -40,6 +40,7 @@ final class MealCaptureCoordinator: ObservableObject {
     @Published var errorMessage: String?
 
     var parser: MealParsing = ClaudeMealParsingService()
+    var labelScanner: LabelScanning = ClaudeLabelScanningService()
     var logger = MealLoggingService()
 
     private var context: ModelContext?
@@ -89,6 +90,44 @@ final class MealCaptureCoordinator: ObservableObject {
             return
         }
         review = ReviewSession(rawText: text, items: items)
+    }
+
+    /// Scan Label path: extract macros straight from a photographed nutrition
+    /// label (authoritative — no USDA lookup) and build a one-item review with
+    /// the values already filled in for confirmation.
+    func beginFromLabel(imageData: Data, in context: ModelContext) async {
+        guard !isCapturing else { return }
+        self.context = context
+        isWorking = true
+
+        let label: LabelNutrition
+        do {
+            label = try await labelScanner.scan(imageData: imageData)
+        } catch {
+            errorMessage = error.localizedDescription
+            isWorking = false
+            return
+        }
+        isWorking = false
+
+        let description = label.servingSize.isEmpty
+            ? label.name
+            : "\(label.name) · \(label.servingSize)"
+        let match = NutritionMatch(
+            matchedDescription: description,
+            calories: label.calories, protein: label.protein,
+            carbs: label.carbs, fat: label.fat,
+            confidence: MatchConfidence.high // label values are authoritative
+        )
+        let item = ReviewItem(
+            request: FoodItemRequest(name: label.name, quantity: 1, unit: "serving"),
+            match: match,
+            clarificationQuestion: nil,
+            options: [],
+            status: .needsReview
+        )
+        MatchDebugLog.shared.record(transcript: "Scanned label: \(label.name)")
+        review = ReviewSession(rawText: "Scanned label: \(label.name)", items: [item])
     }
 
     // MARK: - Card actions

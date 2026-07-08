@@ -29,26 +29,35 @@ Both keys are stored in the iOS Keychain, never in UserDefaults.
 
 ## Siri & voice capture
 
-Say **"Log meal in MacroLog"** (or "…to MacroLog") and Siri simply opens the app
-onto the voice capture screen — all speech handling happens in-app. VoiceLogView
-starts an SFSpeechRecognizer + AVAudioEngine session immediately (requesting mic
-and speech permissions on first use), shows a pulsing mic with the live transcript
-as you speak, and auto-stops after ~2 s of silence (or tap Done). Recognition is
-biased toward food vocabulary — brands like Chobani, proteins, units — via
-`contextualStrings`. The mic button on the Meals tab opens the same screen
-without Siri.
+Three ways in, one screen. Say **"Log meal in MacroLog"** (Siri opens straight
+to voice capture), or use the **mic** / **camera** buttons on the Meals tab, or
+just type. `CaptureView` handles all of it and shows the review inline — there
+is no separate review screen and no "here's what I heard" confirm step.
 
-The finalized transcript goes straight through Claude parsing and USDA lookups
-(brief loading state, no confirm step), landing on the **Match Review Screen**:
-your transcript as reference text on top, one card per parsed item showing the
-matched database food and its macros, with ✅ Confirm / ✏️ Edit (pre-filled,
-fully editable) / 🔍 Search-a-different-match actions. Vague items ("a bag of
-popcorn", "some rice") carry tap-to-resolve interpretation chips on their card;
-low-confidence cards auto-open in Edit and unmatched cards in Search. **Save
-All** unlocks only once every item is confirmed or edited — nothing is written
-to SwiftData before that, and failed matches are never silently saved as
-zero-calorie entries. USDA lookups retry progressively simpler queries under
-the hood (full phrase → brand + product → product → brand).
+- **Voice**: SFSpeechRecognizer + AVAudioEngine start immediately (mic + speech
+  permissions on first use), a pulsing mic shows the live transcript, and it
+  auto-stops after ~2 s of silence (or tap Done). Recognition is biased toward
+  food vocabulary — brands like Chobani, proteins, units — via `contextualStrings`.
+- **Scan Label**: photograph a nutrition facts label; the image goes to Claude
+  (vision) which reads calories/protein/carbs/fat and serving size straight off
+  the label. Label data is authoritative, so USDA lookup is skipped.
+- **Type**: the text field routes through the same flow.
+
+The captured transcript (or label) runs through Claude parsing and USDA lookups
+in place (brief loading state), then the **same screen** transitions to review:
+the transcript collapses to a small reference line and one card animates in per
+item, each showing the matched food and macros with ✅ Confirm / ✏️ Edit
+(pre-filled) / 🔍 Search-a-different-match actions. Vague items carry
+tap-to-resolve chips; low-confidence cards auto-open in Edit and unmatched cards
+in Search. **Save All** unlocks only once every item is confirmed or edited —
+nothing is written to SwiftData before that, and failed matches are never
+silently saved as zero-calorie entries.
+
+Item names are cleaned to the product name only ("I drank one can of celsius" →
+"celsius"), never the raw sentence. USDA lookups retry progressively simpler
+queries (full phrase → brand + product → product → brand). When you correct a
+match via Search, the mapping (phrase → USDA food) is **remembered** so the next
+log of that phrase reuses your correction instead of re-running the same search.
 
 ## Architecture
 

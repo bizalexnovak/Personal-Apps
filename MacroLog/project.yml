@@ -30,6 +30,7 @@ targets:
         ITSAppUsesNonExemptEncryption: false
         NSMicrophoneUsageDescription: MacroLog uses the microphone to hear you describe your meal.
         NSSpeechRecognitionUsageDescription: MacroLog transcribes your meal description so it can be parsed and logged.
+        NSCameraUsageDescription: MacroLog uses the camera to read nutrition facts labels you photograph.
 
   MacroLogTests:
     type: bundle.unit-test

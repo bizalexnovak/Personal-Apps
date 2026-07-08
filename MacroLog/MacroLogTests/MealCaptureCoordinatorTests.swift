@@ -7,7 +7,7 @@ import SwiftData
 @MainActor
 final class MealCaptureCoordinatorTests: XCTestCase {
     private func makeContext() throws -> ModelContext {
-        let schema = Schema([Meal.self, FoodItem.self])
+        let schema = Schema(AppModelContainer.models)
         let container = try ModelContainer(
             for: schema,
             configurations: [ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)]

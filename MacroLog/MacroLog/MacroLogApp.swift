@@ -12,11 +12,9 @@ struct MacroLogApp: App {
 }
 
 struct ContentView: View {
-    @Environment(\.modelContext) private var modelContext
     @StateObject private var coordinator = MealCaptureCoordinator()
     @ObservedObject private var pendingStore = PendingMealStore.shared
     @State private var showOnboarding = KeychainService.get(.claudeAPIKey) == nil
-    @State private var showVoiceLog = false
 
     var body: some View {
         TabView {
@@ -28,29 +26,11 @@ struct ContentView: View {
                 .tabItem { Label("Settings", systemImage: "gearshape") }
         }
         .environmentObject(coordinator)
-        // Brief loading state between transcript hand-off and the review
-        // screen appearing (parse + lookups run in the background).
-        .overlay {
-            if coordinator.isWorking, coordinator.review == nil {
-                VStack(spacing: 12) {
-                    ProgressView()
-                    Text("Analyzing your meal…")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
-                .padding(24)
-                .background(RoundedRectangle(cornerRadius: 16).fill(.regularMaterial))
-            }
-        }
-        .fullScreenCover(isPresented: $showVoiceLog) {
-            // Presented covers don't reliably inherit environmentObject values
-            // from the presenting chain — inject explicitly or VoiceLogView
-            // crashes with "No ObservableObject of type MealCaptureCoordinator".
-            VoiceLogView()
+        // The capture screen handles voice/scan/text AND renders the review
+        // inline — there's no separate review cover anymore.
+        .fullScreenCover(item: $pendingStore.request) { request in
+            CaptureView(mode: request.mode)
                 .environmentObject(coordinator)
-        }
-        .fullScreenCover(item: $coordinator.review) { _ in
-            MatchReviewView(coordinator: coordinator)
         }
         .sheet(isPresented: $showOnboarding) {
             OnboardingView()
@@ -63,17 +43,6 @@ struct ContentView: View {
         } message: {
             Text(coordinator.errorMessage ?? "")
         }
-        .onAppear(perform: consumeVoiceCaptureRequest)
-        .onChange(of: pendingStore.voiceCaptureRequested) { _, _ in
-            consumeVoiceCaptureRequest()
-        }
-    }
-
-    /// Picks up the Siri intent's open-to-voice request — covers both warm
-    /// hand-offs (onChange) and cold launches (onAppear).
-    private func consumeVoiceCaptureRequest() {
-        guard pendingStore.consumeVoiceCaptureRequest() else { return }
-        showVoiceLog = true
     }
 }
 

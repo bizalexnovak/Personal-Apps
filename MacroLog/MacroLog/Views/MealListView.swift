@@ -3,7 +3,6 @@ import SwiftData
 
 struct MealListView: View {
     @Environment(\.modelContext) private var modelContext
-    @EnvironmentObject private var coordinator: MealCaptureCoordinator
     @Query(sort: \Meal.timestamp, order: .reverse) private var meals: [Meal]
 
     @State private var mealText = ""
@@ -16,35 +15,36 @@ struct MealListView: View {
         NavigationStack {
             List {
                 Section {
-                    HStack {
+                    HStack(spacing: 12) {
                         Button {
-                            PendingMealStore.shared.requestVoiceCapture()
+                            PendingMealStore.shared.requestVoice()
                         } label: {
                             Image(systemName: "mic.circle.fill")
                                 .font(.title2)
                                 .foregroundStyle(.orange)
                         }
-                        .disabled(coordinator.isCapturing)
-                        TextField("Describe what you ate…", text: $mealText, axis: .vertical)
-                            .disabled(coordinator.isCapturing)
-                        if coordinator.isWorking {
-                            ProgressView()
-                        } else {
-                            Button {
-                                let text = mealText.trimmingCharacters(in: .whitespacesAndNewlines)
-                                guard !text.isEmpty else { return }
-                                mealText = ""
-                                Task { await coordinator.begin(text: text, in: modelContext) }
-                            } label: {
-                                Image(systemName: "arrow.up.circle.fill")
-                                    .font(.title2)
-                            }
-                            .disabled(
-                                mealText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                                    || coordinator.isCapturing
-                            )
+                        .accessibilityLabel("Log by voice")
+                        Button {
+                            PendingMealStore.shared.requestScan()
+                        } label: {
+                            Image(systemName: "camera.circle.fill")
+                                .font(.title2)
+                                .foregroundStyle(.orange)
                         }
+                        .accessibilityLabel("Scan a nutrition label")
+                        TextField("Describe what you ate…", text: $mealText, axis: .vertical)
+                        Button {
+                            let text = mealText.trimmingCharacters(in: .whitespacesAndNewlines)
+                            guard !text.isEmpty else { return }
+                            mealText = ""
+                            PendingMealStore.shared.requestText(text)
+                        } label: {
+                            Image(systemName: "arrow.up.circle.fill")
+                                .font(.title2)
+                        }
+                        .disabled(mealText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                     }
+                    .buttonStyle(.plain)
                 }
 
                 Section("Today") {
