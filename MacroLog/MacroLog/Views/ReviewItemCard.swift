@@ -140,17 +140,31 @@ struct ReviewItemCard: View {
 
     // MARK: Macros
 
+    private var isWater: Bool { WaterConversion.isWater(item.request.name) }
+
+    @ViewBuilder
     private var macrosRow: some View {
-        HStack(spacing: 16) {
-            macroValue("kcal", item.match?.calories)
-            macroValue("P", item.match?.protein)
-            macroValue("C", item.match?.carbs)
-            macroValue("F", item.match?.fat)
-            Spacer()
-            if item.match?.confidence == MatchConfidence.low {
-                Label("Check", systemImage: "exclamationmark.triangle.fill")
-                    .font(.caption2)
-                    .foregroundStyle(.yellow)
+        if isWater {
+            // Water is tracked in ounces, not macros.
+            let oz = WaterConversion.ounces(quantity: item.request.quantity, unit: item.request.unit)
+            HStack(spacing: 6) {
+                Image(systemName: "drop.fill").foregroundStyle(.cyan)
+                Text("\(Int(oz.rounded())) oz water")
+                    .font(.subheadline.weight(.medium))
+                Spacer()
+            }
+        } else {
+            HStack(spacing: 16) {
+                macroValue("kcal", item.match?.calories)
+                macroValue("P", item.match?.protein)
+                macroValue("C", item.match?.carbs)
+                macroValue("F", item.match?.fat)
+                Spacer()
+                if item.match?.confidence == MatchConfidence.low {
+                    Label("Check", systemImage: "exclamationmark.triangle.fill")
+                        .font(.caption2)
+                        .foregroundStyle(.yellow)
+                }
             }
         }
     }

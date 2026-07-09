@@ -71,6 +71,23 @@ final class MealCaptureCoordinator: ObservableObject {
 
         var items: [ReviewItem] = []
         for request in requests {
+            // Water is tracked in ounces, not macros — skip USDA entirely and
+            // give it a 0-calorie confirmed-able match.
+            if WaterConversion.isWater(request.name) {
+                let oz = WaterConversion.ounces(quantity: request.quantity, unit: request.unit)
+                items.append(ReviewItem(
+                    request: request,
+                    match: NutritionMatch(
+                        matchedDescription: "Water · \(Int(oz.rounded())) oz",
+                        calories: 0, protein: 0, carbs: 0, fat: 0,
+                        confidence: MatchConfidence.high
+                    ),
+                    clarificationQuestion: nil,
+                    options: [],
+                    status: .needsReview
+                ))
+                continue
+            }
             let hints = Self.clarificationHints(for: request)
             // A failed lookup is represented as match == nil — the card opens
             // in search mode and blocks Save All; zeros are never fabricated.

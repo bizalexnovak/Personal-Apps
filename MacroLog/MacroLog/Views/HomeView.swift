@@ -8,6 +8,7 @@ struct HomeView: View {
     @AppStorage(TargetKeys.protein) private var proteinTarget = 150.0
     @AppStorage(TargetKeys.carbs) private var carbTarget = 250.0
     @AppStorage(TargetKeys.fat) private var fatTarget = 70.0
+    @AppStorage(TargetKeys.water) private var waterTarget = 64.0
 
     private var todaysMeals: [Meal] {
         meals.filter { Calendar.current.isDateInToday($0.timestamp) }
@@ -39,6 +40,14 @@ struct HomeView: View {
                     )
                 } header: {
                     Text(Date.now, format: .dateTime.weekday(.wide).month().day())
+                }
+
+                Section {
+                    MacroProgressRow(
+                        label: "Water", unit: "oz", color: .cyan,
+                        value: todaysMeals.reduce(0) { $0 + $1.waterOunces },
+                        target: waterTarget
+                    )
                 }
 
                 if todaysMeals.isEmpty {

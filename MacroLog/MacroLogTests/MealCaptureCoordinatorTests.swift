@@ -294,4 +294,23 @@ final class MealCaptureCoordinatorTests: XCTestCase {
         let options = MealCaptureCoordinator.fallbackOptions(for: item, vagueWord: "bag")
         XCTAssertEqual(options.first?.quantity, 56, "2 bags × 28 g snack bag")
     }
+
+    func testWaterItemSkipsLookupAndTalliesOunces() async throws {
+        let context = try makeContext()
+        // Empty nutrition matches — water must not need USDA at all.
+        let coordinator = makeCoordinator(parsed: [FoodItemRequest(name: "water", quantity: 1, unit: "bottle")])
+
+        await coordinator.begin(text: "a bottle of water", in: context)
+        let item = try XCTUnwrap(coordinator.review?.items.first)
+        XCTAssertNotNil(item.match, "water gets a 0-calorie match without a USDA lookup")
+        XCTAssertEqual(item.match?.calories, 0)
+
+        coordinator.confirm(item.id)
+        XCTAssertTrue(coordinator.canSaveAll)
+        await coordinator.saveAll()
+
+        let meal = try XCTUnwrap(try savedMeals(in: context).first)
+        XCTAssertEqual(meal.waterOunces, 16.9, accuracy: 0.01)
+        XCTAssertEqual(meal.totalCalories, 0, accuracy: 0.001)
+    }
 }

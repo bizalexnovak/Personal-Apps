@@ -76,6 +76,17 @@ raw text ─▶ ClaudeMealParsingService ─▶ [FoodItemRequest] ─▶ USDANut
 - **Views/** — Home (daily totals vs. targets), Meals (log + expandable list),
   Edit Meal (adjust quantity, swap USDA match, manual macro override), Settings, Onboarding.
 
+### Water & history
+
+Water is tracked separately, in fluid ounces, with its own goal (Settings →
+Daily targets → Water). Say "a bottle of water" / "16 oz of water" / "two
+glasses of water" and it's converted to ounces (`WaterConversion`: bottle =
+16.9 oz, glass/cup = 8 oz, can = 12 oz, plus ml/L/pint/quart/gallon; unknown
+units default to a glass) and added to the Today water ring — water items skip
+USDA and never count calories. The **History** tab lists every day you've
+logged, newest first, with that day's calorie/protein/carb/fat/water totals;
+tap a day to see its meals.
+
 ### Matching heuristics
 
 Search-result nutrients from FoodData Central are per 100 g; the matcher's job is

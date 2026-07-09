@@ -5,6 +5,7 @@ struct SettingsView: View {
     @AppStorage(TargetKeys.protein) private var proteinTarget = 150.0
     @AppStorage(TargetKeys.carbs) private var carbTarget = 250.0
     @AppStorage(TargetKeys.fat) private var fatTarget = 70.0
+    @AppStorage(TargetKeys.water) private var waterTarget = 64.0
 
     @State private var claudeKey = ""
     @State private var usdaKey = ""
@@ -19,6 +20,7 @@ struct SettingsView: View {
                     targetField("Protein (g)", value: $proteinTarget)
                     targetField("Carbs (g)", value: $carbTarget)
                     targetField("Fat (g)", value: $fatTarget)
+                    targetField("Water (oz)", value: $waterTarget)
                 }
 
                 Section {

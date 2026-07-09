@@ -20,6 +20,8 @@ final class Meal {
     var totalProtein: Double { items.reduce(0) { $0 + $1.protein } }
     var totalCarbs: Double { items.reduce(0) { $0 + $1.carbs } }
     var totalFat: Double { items.reduce(0) { $0 + $1.fat } }
+    /// Fluid ounces of water in this meal (water items only).
+    var waterOunces: Double { items.reduce(0) { $0 + WaterConversion.ounces(for: $1) } }
 
     /// Food-only summary for the meal lists: the item names joined naturally
     /// ("chicken and green beans", "eggs, toast and bacon") — not the raw

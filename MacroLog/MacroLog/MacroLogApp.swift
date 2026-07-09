@@ -22,6 +22,8 @@ struct ContentView: View {
                 .tabItem { Label("Today", systemImage: "chart.bar.fill") }
             MealListView()
                 .tabItem { Label("Meals", systemImage: "fork.knife") }
+            HistoryView()
+                .tabItem { Label("History", systemImage: "calendar") }
             SettingsView()
                 .tabItem { Label("Settings", systemImage: "gearshape") }
         }
@@ -53,4 +55,5 @@ enum TargetKeys {
     static let protein = "target_protein"
     static let carbs = "target_carbs"
     static let fat = "target_fat"
+    static let water = "target_water"
 }
