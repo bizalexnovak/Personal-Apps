@@ -29,10 +29,13 @@ Both keys are stored in the iOS Keychain, never in UserDefaults.
 
 ## Siri & voice capture
 
-Three ways in, one screen. Say **"Log meal in MacroLog"** or **"Log drink in
-MacroLog"** (Siri opens straight to voice capture — both commands do the same
-thing; the parser handles food, water, and other drinks), or use the **mic** /
-**camera** buttons on the Meals tab, or just type. `CaptureView` handles all of it and shows the review inline — there
+Three ways in, one screen. Say **"Log meal in MacroLog"**, **"Log drink in
+MacroLog"** (both open voice capture; the parser handles food, water, and other
+drinks), or **"Scan a label in MacroLog"** (opens the camera), or use the
+**mic** / **camera** buttons on the Meals tab, or just type. Items can be
+renamed and portion-scaled (½× / ⅔× / 1½× / 2× / 3×) on the review card and in
+the meal editor — handy for repeat meals where the portion differs (half a
+pepper, two scoops). `CaptureView` handles all of it and shows the review inline — there
 is no separate review screen and no "here's what I heard" confirm step.
 
 - **Voice**: SFSpeechRecognizer + AVAudioEngine start immediately (mic + speech

@@ -181,6 +181,29 @@ final class MealCaptureCoordinator: ObservableObject {
         )
     }
 
+    /// Rename an item on the review card.
+    func rename(_ itemID: UUID, to name: String) {
+        let trimmed = name.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return }
+        updateItem(itemID) { $0.request.name = trimmed }
+    }
+
+    /// Scale quantity and all macros by a factor (½, 2×, …) for a repeat meal
+    /// where the portion differs from what's populated.
+    func scale(_ itemID: UUID, by factor: Double) {
+        updateItem(itemID) { item in
+            item.request.quantity *= factor
+            if var m = item.match {
+                m.calories *= factor
+                m.protein *= factor
+                m.carbs *= factor
+                m.fat *= factor
+                item.match = m
+            }
+            if item.status == .confirmed { item.status = .edited }
+        }
+    }
+
     /// ✏️ Edit water — set the amount directly in ounces.
     func applyWaterEdit(_ itemID: UUID, ounces: Double) {
         updateItem(itemID) { item in

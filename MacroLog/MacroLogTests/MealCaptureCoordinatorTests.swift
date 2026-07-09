@@ -349,4 +349,39 @@ final class MealCaptureCoordinatorTests: XCTestCase {
         let meal = try XCTUnwrap(try savedMeals(in: context).first)
         XCTAssertEqual(meal.waterOunces, 24, accuracy: 0.01)
     }
+
+    func testScaleMultipliesQuantityAndMacros() async throws {
+        let context = try makeContext()
+        let coordinator = makeCoordinator(
+            parsed: [FoodItemRequest(name: "protein shake", quantity: 1, unit: "serving")],
+            matches: ["protein shake": match("Protein shake", kcal: 160, protein: 30)]
+        )
+        await coordinator.begin(text: "protein shake", in: context)
+        let id = try XCTUnwrap(coordinator.review?.items.first?.id)
+
+        coordinator.scale(id, by: 2)
+        let item = try XCTUnwrap(coordinator.review?.items.first)
+        XCTAssertEqual(item.request.quantity, 2, accuracy: 0.001)
+        XCTAssertEqual(item.match?.calories ?? 0, 320, accuracy: 0.001)
+        XCTAssertEqual(item.match?.protein ?? 0, 60, accuracy: 0.001)
+
+        coordinator.scale(id, by: 0.5) // back down
+        XCTAssertEqual(coordinator.review?.items.first?.match?.calories ?? 0, 160, accuracy: 0.001)
+    }
+
+    func testRenameUpdatesItemName() async throws {
+        let context = try makeContext()
+        let coordinator = makeCoordinator(
+            parsed: [FoodItemRequest(name: "chicken", quantity: 1, unit: "serving")],
+            matches: ["chicken": match("Chicken", kcal: 200)]
+        )
+        await coordinator.begin(text: "chicken", in: context)
+        let id = try XCTUnwrap(coordinator.review?.items.first?.id)
+
+        coordinator.rename(id, to: "chicken thigh")
+        XCTAssertEqual(coordinator.review?.items.first?.request.name, "chicken thigh")
+
+        coordinator.rename(id, to: "   ") // blank ignored
+        XCTAssertEqual(coordinator.review?.items.first?.request.name, "chicken thigh")
+    }
 }

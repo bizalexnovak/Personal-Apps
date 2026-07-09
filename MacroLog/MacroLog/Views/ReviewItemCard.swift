@@ -15,11 +15,16 @@ struct ReviewItemCard: View {
     @State private var didAutoOpen = false
 
     // Edit pane
+    @State private var editedName = ""
     @State private var calories = 0.0
     @State private var protein = 0.0
     @State private var carbs = 0.0
     @State private var fat = 0.0
     @State private var waterOz = 0.0
+
+    private static let scaleOptions: [(label: String, factor: Double)] = [
+        ("½×", 0.5), ("⅔×", 2.0 / 3.0), ("1½×", 1.5), ("2×", 2), ("3×", 3),
+    ]
 
     // Search pane
     @State private var query = ""
@@ -36,6 +41,10 @@ struct ReviewItemCard: View {
             }
 
             macrosRow
+
+            if !isWater, item.match != nil {
+                scaleRow
+            }
 
             actionsRow
 
@@ -180,6 +189,21 @@ struct ReviewItemCard: View {
         }
     }
 
+    // MARK: Scale
+
+    private var scaleRow: some View {
+        HStack(spacing: 6) {
+            Text("Scale").font(.caption2).foregroundStyle(.secondary)
+            ForEach(Self.scaleOptions, id: \.label) { option in
+                Button(option.label) {
+                    coordinator.scale(item.id, by: option.factor)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.mini)
+            }
+        }
+    }
+
     // MARK: Actions
 
     private var actionsRow: some View {
@@ -235,11 +259,17 @@ struct ReviewItemCard: View {
             .padding(.top, 4)
         } else {
             VStack(spacing: 8) {
+                HStack {
+                    Text("Name").font(.caption).foregroundStyle(.secondary)
+                    TextField("Name", text: $editedName)
+                        .textFieldStyle(.roundedBorder)
+                }
                 editField("Calories (kcal)", value: $calories)
                 editField("Protein (g)", value: $protein)
                 editField("Carbs (g)", value: $carbs)
                 editField("Fat (g)", value: $fat)
                 Button("Apply") {
+                    coordinator.rename(item.id, to: editedName)
                     coordinator.applyEdit(item.id, calories: calories, protein: protein, carbs: carbs, fat: fat)
                     pane = .none
                 }
@@ -325,6 +355,7 @@ struct ReviewItemCard: View {
     // MARK: Defaults
 
     private func syncEditFields() {
+        editedName = item.request.name
         calories = item.match?.calories ?? 0
         protein = item.match?.protein ?? 0
         carbs = item.match?.carbs ?? 0

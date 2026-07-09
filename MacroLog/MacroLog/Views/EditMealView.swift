@@ -30,6 +30,11 @@ private struct FoodItemEditor: View {
     @State private var showSwapSheet = false
     @State private var showOverrideSheet = false
 
+    /// Scale factors for the quick-adjust row (relative to current values).
+    private static let scaleOptions: [(label: String, factor: Double)] = [
+        ("½×", 0.5), ("⅔×", 2.0 / 3.0), ("1½×", 1.5), ("2×", 2), ("3×", 3),
+    ]
+
     /// Rescales macros linearly when the quantity changes — valid because the
     /// stored macros were computed as (per-gram values × quantity).
     private var quantityBinding: Binding<Double> {
@@ -48,8 +53,21 @@ private struct FoodItemEditor: View {
         }
     }
 
+    /// Scales quantity and every macro by the same factor — for repeat meals
+    /// where you ate more or less than last time (½ a pepper, 2 scoops, …).
+    private func scale(_ factor: Double) {
+        item.quantity *= factor
+        item.calories *= factor
+        item.protein *= factor
+        item.carbs *= factor
+        item.fat *= factor
+    }
+
     var body: some View {
         Section {
+            TextField("Name", text: $item.name)
+                .textFieldStyle(.roundedBorder)
+
             HStack {
                 TextField("Quantity", value: quantityBinding, format: .number)
                     .keyboardType(.decimalPad)
@@ -57,6 +75,17 @@ private struct FoodItemEditor: View {
                     .textFieldStyle(.roundedBorder)
                 TextField("Unit", text: $item.unit)
                     .textFieldStyle(.roundedBorder)
+            }
+
+            HStack(spacing: 6) {
+                Text("Scale")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                ForEach(Self.scaleOptions, id: \.label) { option in
+                    Button(option.label) { scale(option.factor) }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                }
             }
 
             Button {
@@ -80,7 +109,7 @@ private struct FoodItemEditor: View {
             .font(.subheadline)
         } header: {
             HStack {
-                Text(item.name)
+                Text(item.name.isEmpty ? "Item" : item.name)
                 if item.matchConfidence == MatchConfidence.low {
                     Image(systemName: "exclamationmark.triangle.fill")
                         .foregroundStyle(.yellow)

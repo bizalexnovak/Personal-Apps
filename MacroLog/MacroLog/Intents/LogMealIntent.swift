@@ -36,6 +36,23 @@ struct LogDrinkIntent: AppIntent {
     }
 }
 
+/// "Scan a label in MacroLog" — opens the app straight to the camera to
+/// photograph a nutrition facts label.
+struct ScanLabelIntent: AppIntent {
+    static let title: LocalizedStringResource = "Scan Label"
+    static let description = IntentDescription(
+        "Opens MacroLog's camera to scan a nutrition label.",
+        categoryName: "Logging"
+    )
+    static let openAppWhenRun: Bool = true
+
+    @MainActor
+    func perform() async throws -> some IntentResult {
+        PendingMealStore.shared.requestScan()
+        return .result()
+    }
+}
+
 /// Registers the Siri phrases. Also available as building blocks in the
 /// Shortcuts app.
 struct MacroLogShortcuts: AppShortcutsProvider {
@@ -69,6 +86,18 @@ struct MacroLogShortcuts: AppShortcutsProvider {
             ],
             shortTitle: "Log Drink",
             systemImageName: "cup.and.saucer.fill"
+        )
+        AppShortcut(
+            intent: ScanLabelIntent(),
+            phrases: [
+                "Scan a label in \(.applicationName)",
+                "Scan label in \(.applicationName)",
+                "Scan an item in \(.applicationName)",
+                "Scan food in \(.applicationName)",
+                "Scan a nutrition label in \(.applicationName)",
+            ],
+            shortTitle: "Scan Label",
+            systemImageName: "camera.viewfinder"
         )
     }
 }
