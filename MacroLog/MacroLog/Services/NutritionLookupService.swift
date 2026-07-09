@@ -144,20 +144,31 @@ struct USDANutritionLookupService: NutritionLookup {
         return foods
     }
 
-    /// Progressively simpler queries for a food name, most-specific first:
-    /// full phrase → first word + last two ("Chobani greek yogurt") → last two
-    /// ("greek yogurt") → first word ("Chobani") → last word. Deduplicated.
+    /// Progressively simpler queries for a food name, BRAND-FIRST. The first
+    /// word is treated as the most identifying token (usually the brand), so
+    /// brand-specific queries are exhausted before generic category terms —
+    /// otherwise "energy drink" matches a wrong product before "Celsius" is
+    /// ever tried, since the ladder stops at the first non-empty result.
+    /// For "Celsius energy drink":
+    ///   full → "Celsius drink" → "Celsius" → "energy drink" → "drink"
     static func queryLadder(for name: String) -> [String] {
         let words = name.split(separator: " ").map(String.init).filter { !$0.isEmpty }
         var ladder = [name]
-        if words.count >= 4 {
-            ladder.append(([words[0]] + words.suffix(2)).joined(separator: " "))
+        if words.count >= 3 {
+            // Brand + head noun, e.g. "Celsius drink" / "Chobani yogurt".
+            ladder.append("\(words[0]) \(words[words.count - 1])")
+        }
+        if words.count >= 2 {
+            // Brand alone, e.g. "Celsius" / "Chobani".
+            ladder.append(words[0])
         }
         if words.count >= 3 {
+            // Generic category (drops the brand) — tried only after the
+            // brand-specific queries above, since it's the likeliest mismatch.
             ladder.append(words.suffix(2).joined(separator: " "))
         }
         if words.count >= 2 {
-            ladder.append(words[0])
+            // Last word as a final fallback.
             ladder.append(words[words.count - 1])
         }
         var seen = Set<String>()
@@ -191,17 +202,22 @@ struct USDANutritionLookupService: NutritionLookup {
     // MARK: - Candidate selection
 
     /// Picks the search result to use, ranking by:
-    ///  1. brand mention — the user naming a brand ("Chobani…") outranks everything
-    ///  2. unit compatibility — for discrete/serving units, prefer entries whose
+    ///  1. brand-in-description — the candidate's description contains the
+    ///     query's first word (usually the brand). A generic "energy drink"
+    ///     entry won't contain "Celsius", so a real Celsius entry wins even if
+    ///     it came from a later ladder rung.
+    ///  2. brand mention — the food's brand metadata matches a query token
+    ///  3. unit compatibility — for discrete/serving units, prefer entries whose
     ///     package serving actually describes such a unit ("1 slice" = 15 g)
-    ///  3. data-type priority — unit-aware (see `dataTypePriority`)
-    ///  4. name-overlap score
+    ///  4. data-type priority — unit-aware (see `dataTypePriority`)
+    ///  5. name-overlap score
     static func selectCandidate(
         for request: FoodItemRequest,
         in foods: [USDAFood]
     ) -> (food: USDAFood, score: Double, reason: String)? {
         guard !foods.isEmpty else { return nil }
         let unitKind = classifyUnit(request.unit)
+        let brandWord = request.name.split(separator: " ").first.map(String.init)
 
         let scored = foods.map { (food: $0, score: nameMatchScore(query: request.name, candidate: $0.description)) }
         let topScore = scored.map(\.score).max() ?? 0
@@ -212,21 +228,30 @@ struct USDANutritionLookupService: NutritionLookup {
         }
 
         let ranked = contenders.map { candidate -> (food: USDAFood, score: Double, key: [Double], reason: String) in
+            let brandDesc = descriptionContainsBrand(brandWord: brandWord, food: candidate.food) ? 1.0 : 0.0
             let brand = brandMentioned(query: request.name, food: candidate.food) ? 1.0 : 0.0
             let compat = Double(unitCompatibility(unitKind: unitKind, food: candidate.food, requestUnit: request.unit))
             let priority = Double(dataTypePriority(candidate.food.dataType, unitKind: unitKind))
             var reasons: [String] = []
+            if brandDesc > 0, let brandWord { reasons.append("description contains '\(brandWord)'") }
             if brand > 0 { reasons.append("brand mentioned in query") }
             if compat > 0, let info = servingInfo(for: candidate.food) {
                 reasons.append("package serving '\(info.rawText)' = \(Int(info.gramsPerServing.rounded())) g")
             }
             reasons.append("\(candidate.food.dataType ?? "?") priority for unit '\(request.unit)'")
             reasons.append(String(format: "name score %.2f", candidate.score))
-            return (candidate.food, candidate.score, [brand, compat, priority, candidate.score], reasons.joined(separator: "; "))
+            return (candidate.food, candidate.score, [brandDesc, brand, compat, priority, candidate.score], reasons.joined(separator: "; "))
         }
 
         let best = ranked.max { lexicographicallyLess($0.key, $1.key) }
         return best.map { (food: $0.food, score: $0.score, reason: $0.reason) }
+    }
+
+    /// True when the candidate's description contains the query's first word
+    /// (typically the brand), case-insensitive. Skips 1-character words.
+    static func descriptionContainsBrand(brandWord: String?, food: USDAFood) -> Bool {
+        guard let brandWord, brandWord.count > 1 else { return false }
+        return food.description.range(of: brandWord, options: .caseInsensitive) != nil
     }
 
     private static func lexicographicallyLess(_ a: [Double], _ b: [Double]) -> Bool {

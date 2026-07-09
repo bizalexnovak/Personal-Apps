@@ -67,10 +67,21 @@ struct ReviewItemCard: View {
         HStack(alignment: .top, spacing: 8) {
             statusIcon
             VStack(alignment: .leading, spacing: 2) {
-                Text(item.match?.matchedDescription ?? "No match found")
+                // Prominent title = the cleanly parsed name the user said, so a
+                // wrong USDA match is obvious (parsed vs. matched visibly differ).
+                Text(item.request.name)
                     .font(.subheadline.weight(.semibold))
-                Text("You said: \(item.request.quantity.formatted()) \(item.request.unit) · \(item.request.name)")
-                    .font(.caption)
+                if let matched = item.match?.matchedDescription {
+                    Text("Matched to: \(matched)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else {
+                    Text("No match found")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                }
+                Text("\(item.request.quantity.formatted()) \(item.request.unit)")
+                    .font(.caption2)
                     .foregroundStyle(.secondary)
             }
             Spacer()

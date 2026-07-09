@@ -235,19 +235,58 @@ final class NutritionLookupTests: XCTestCase {
 
     // MARK: - Query ladder (branded multi-word searches)
 
-    func testQueryLadderForBrandedPhrases() {
+    func testQueryLadderIsBrandFirst() {
+        // Brand-specific rungs come before the generic category term.
+        XCTAssertEqual(
+            USDANutritionLookupService.queryLadder(for: "Celsius energy drink"),
+            ["Celsius energy drink", "Celsius drink", "Celsius", "energy drink", "drink"]
+        )
         XCTAssertEqual(
             USDANutritionLookupService.queryLadder(for: "Chobani mixed berry greek yogurt"),
-            ["Chobani mixed berry greek yogurt", "Chobani greek yogurt", "greek yogurt", "Chobani", "yogurt"]
+            ["Chobani mixed berry greek yogurt", "Chobani yogurt", "Chobani", "greek yogurt", "yogurt"]
         )
         XCTAssertEqual(
             USDANutritionLookupService.queryLadder(for: "Goldfish crackers"),
             ["Goldfish crackers", "Goldfish", "crackers"]
         )
-        XCTAssertEqual(
-            USDANutritionLookupService.queryLadder(for: "Celsius energy drink"),
-            ["Celsius energy drink", "energy drink", "Celsius", "drink"]
+    }
+
+    func testCelsiusIsTriedBeforeGenericEnergyDrink() {
+        // "Celsius" must appear earlier in the ladder than "energy drink" so a
+        // brand match is exhausted before the generic term can win.
+        let ladder = USDANutritionLookupService.queryLadder(for: "Celsius energy drink")
+        let celsiusIndex = try? XCTUnwrap(ladder.firstIndex(of: "Celsius"))
+        let genericIndex = try? XCTUnwrap(ladder.firstIndex(of: "energy drink"))
+        XCTAssertNotNil(celsiusIndex)
+        XCTAssertNotNil(genericIndex)
+        if let c = celsiusIndex, let g = genericIndex {
+            XCTAssertLessThan(c, g)
+        }
+    }
+
+    func testBrandInDescriptionOutranksGenericCandidate() {
+        // If a single query returns both a real Celsius entry (~3 kcal/100ml)
+        // and a generic energy drink (~43 kcal/100ml, Branded), the one whose
+        // description contains "Celsius" must win.
+        let celsius = food(
+            "CELSIUS SPARKLING ORANGE ENERGY DRINK", dataType: "Branded",
+            brandOwner: "Celsius Inc.",
+            servingSize: 355, servingSizeUnit: "ml", householdServing: "1 can",
+            kcal: 2.8, protein: 0, carbs: 0.6, fat: 0
         )
+        let genericBrandedDrink = food(
+            "MONSTER ENERGY DRINK", dataType: "Branded",
+            brandOwner: "Monster Energy Co.",
+            servingSize: 355, servingSizeUnit: "ml", householdServing: "1 can",
+            kcal: 47, protein: 0, carbs: 12, fat: 0
+        )
+        let request = FoodItemRequest(name: "Celsius energy drink", quantity: 1, unit: "can")
+
+        let selection = USDANutritionLookupService.selectCandidate(for: request, in: [genericBrandedDrink, celsius])
+        XCTAssertEqual(selection?.food.description, "CELSIUS SPARKLING ORANGE ENERGY DRINK")
+
+        let result = USDANutritionLookupService.evaluate(for: request, food: selection!.food, nameScore: selection!.score)
+        XCTAssertEqual(result.match.calories, 9.94, accuracy: 0.1, "355 ml can × 2.8 kcal/100ml ≈ 10 kcal")
     }
 
     func testQueryLadderSingleWordHasNoFallbacks() {
