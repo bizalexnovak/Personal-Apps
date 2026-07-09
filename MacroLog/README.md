@@ -29,9 +29,10 @@ Both keys are stored in the iOS Keychain, never in UserDefaults.
 
 ## Siri & voice capture
 
-Three ways in, one screen. Say **"Log meal in MacroLog"** (Siri opens straight
-to voice capture), or use the **mic** / **camera** buttons on the Meals tab, or
-just type. `CaptureView` handles all of it and shows the review inline — there
+Three ways in, one screen. Say **"Log meal in MacroLog"** or **"Log drink in
+MacroLog"** (Siri opens straight to voice capture — both commands do the same
+thing; the parser handles food, water, and other drinks), or use the **mic** /
+**camera** buttons on the Meals tab, or just type. `CaptureView` handles all of it and shows the review inline — there
 is no separate review screen and no "here's what I heard" confirm step.
 
 - **Voice**: SFSpeechRecognizer + AVAudioEngine start immediately (mic + speech
@@ -93,8 +94,9 @@ tappable legend below that doubles as the per-nutrient **average per day** and a
 five differently-scaled lines on one comparable axis (no dual axes). Colours are
 chart-tuned shades of the app's macro palette, CVD-validated, with distinct
 point symbols per line so the series are distinguishable without relying on
-colour. Below the chart, each logged day in range is listed; tap a day to see
-and **edit or delete** its meals (same editor as Today).
+colour. Below the chart, each logged day in range is listed; tap a day to see a
+**"When you ate" timeline** (calories by the hour you logged them) plus that
+day's meals, which you can **edit or delete** (same editor as Today).
 
 **Spoken macros override the lookup.** If you state numbers — "chicken, 64
 grams of protein, 60 grams of carbs, 25 grams of fat" — those are used directly

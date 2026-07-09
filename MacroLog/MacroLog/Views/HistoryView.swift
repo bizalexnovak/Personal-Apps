@@ -387,8 +387,31 @@ private struct DayDetailView: View {
         meals.sorted { $0.timestamp > $1.timestamp }
     }
 
+    /// Calories binned to the hour they were logged, for the timeline chart.
+    private var hourlyCalories: [HourBin] {
+        let cal = Calendar.current
+        let startOfDay = cal.startOfDay(for: date)
+        let grouped = Dictionary(grouping: meals) { cal.component(.hour, from: $0.timestamp) }
+        return grouped.map { hour, hourMeals in
+            HourBin(
+                time: cal.date(byAdding: .hour, value: hour, to: startOfDay) ?? startOfDay,
+                calories: hourMeals.reduce(0) { $0 + $1.totalCalories }
+            )
+        }
+        .sorted { $0.time < $1.time }
+    }
+
     var body: some View {
         List {
+            if !hourlyCalories.isEmpty {
+                Section {
+                    timelineChart
+                } header: {
+                    Text("When you ate")
+                } footer: {
+                    Text("Calories by the hour you logged them.")
+                }
+            }
             Section("Totals") {
                 totalRow("Calories", meals.reduce(0) { $0 + $1.totalCalories }, "kcal")
                 totalRow("Protein", meals.reduce(0) { $0 + $1.totalProtein }, "g")
@@ -421,10 +444,38 @@ private struct DayDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
     }
 
+    private var timelineChart: some View {
+        let startOfDay = Calendar.current.startOfDay(for: date)
+        let endOfDay = startOfDay.addingTimeInterval(24 * 3600)
+        return Chart(hourlyCalories) { bin in
+            BarMark(
+                x: .value("Time", bin.time, unit: .hour),
+                y: .value("Calories", bin.calories)
+            )
+            .foregroundStyle(.orange)
+            .cornerRadius(3)
+        }
+        .chartXScale(domain: startOfDay ... endOfDay)
+        .chartXAxis {
+            AxisMarks(values: .stride(by: .hour, count: 6)) { value in
+                AxisGridLine()
+                AxisValueLabel(format: .dateTime.hour())
+            }
+        }
+        .frame(height: 180)
+        .padding(.vertical, 4)
+    }
+
     private func totalRow(_ label: String, _ value: Double, _ unit: String) -> some View {
         LabeledContent(label) {
             Text("\(Int(value.rounded())) \(unit)")
                 .monospacedDigit()
         }
     }
+}
+
+struct HourBin: Identifiable {
+    var time: Date
+    var calories: Double
+    var id: Date { time }
 }
