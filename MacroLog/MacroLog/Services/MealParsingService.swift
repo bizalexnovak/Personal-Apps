@@ -29,7 +29,8 @@ enum MealParsingError: LocalizedError {
 struct ClaudeMealParsingService: MealParsing {
     static let systemPrompt = """
     You are a nutrition parsing assistant. Given a description of a meal, extract each distinct food item with its estimated quantity and unit. Respond ONLY with valid JSON, no markdown formatting, no preamble.
-    Format: {"items": [{"name": string, "quantity": number, "unit": string, "needsClarification": boolean, "clarificationQuestion": string or null, "options": [{"label": string, "name": string, "quantity": number, "unit": string}] or null}]}
+    Format: {"items": [{"name": string, "quantity": number, "unit": string, "calories": number or null, "protein": number or null, "carbs": number or null, "fat": number or null, "needsClarification": boolean, "clarificationQuestion": string or null, "options": [{"label": string, "name": string, "quantity": number, "unit": string}] or null}]}
+    If the user states specific nutrition numbers for an item — calories (kcal) or protein/carbs/fat (grams) — put them in the matching field for THAT item and set needsClarification false (you already have the numbers). Example: "chicken, 64 grams of protein, 60 grams of carbs, 25 grams of fat" -> {"name": "chicken", "quantity": 1, "unit": "serving", "calories": null, "protein": 64, "carbs": 60, "fat": 25}. If the user gives no numbers for an item, set calories/protein/carbs/fat to null.
     CRITICAL — the "name" field must contain ONLY the clean food or product name, never the user's sentence. Strip out first-person phrasing ("I ate", "I drank", "I had"), verbs, articles, quantities, and container words — those belong in "quantity" and "unit", not "name". The name should read like a label on a shelf: a few words at most.
     Examples:
     - "I drank one can of celsius" -> {"name": "Celsius energy drink", "quantity": 1, "unit": "can"}

@@ -14,8 +14,9 @@ final class WaterConversionTests: XCTestCase {
     }
 
     func testVolumeUnitsConvertToOunces() {
-        XCTAssertEqual(WaterConversion.ounces(quantity: 16, unit: "oz"), 16, accuracy: 0.001)
-        XCTAssertEqual(WaterConversion.ounces(quantity: 1, unit: "bottle"), 16.9, accuracy: 0.001)
+        XCTAssertEqual(WaterConversion.ounces(quantity: 24, unit: "ounces"), 24, accuracy: 0.001)
+        XCTAssertEqual(WaterConversion.ounces(quantity: 1, unit: "bottle"), 16, accuracy: 0.001)
+        XCTAssertEqual(WaterConversion.ounces(quantity: 1, unit: "glass"), 8, accuracy: 0.001)
         XCTAssertEqual(WaterConversion.ounces(quantity: 2, unit: "glasses"), 16, accuracy: 0.001)
         XCTAssertEqual(WaterConversion.ounces(quantity: 1, unit: "cup"), 8, accuracy: 0.001)
         XCTAssertEqual(WaterConversion.ounces(quantity: 1, unit: "L"), 33.814, accuracy: 0.001)
@@ -29,7 +30,7 @@ final class WaterConversionTests: XCTestCase {
     func testOuncesForItemOnlyCountsWater() {
         let water = FoodItem(name: "water", quantity: 1, unit: "bottle")
         let chicken = FoodItem(name: "chicken", quantity: 6, unit: "oz")
-        XCTAssertEqual(WaterConversion.ounces(for: water), 16.9, accuracy: 0.001)
+        XCTAssertEqual(WaterConversion.ounces(for: water), 16, accuracy: 0.001)
         XCTAssertEqual(WaterConversion.ounces(for: chicken), 0, accuracy: 0.001)
     }
 

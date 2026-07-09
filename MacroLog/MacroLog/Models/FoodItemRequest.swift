@@ -18,6 +18,13 @@ struct FoodItemRequest: Codable, Equatable {
     var quantity: Double
     var unit: String
 
+    /// Explicit macros the user spoke ("64 grams of protein…"). When present,
+    /// these override the USDA lookup for the item. Any subset may be given.
+    var calories: Double? = nil
+    var protein: Double? = nil
+    var carbs: Double? = nil
+    var fat: Double? = nil
+
     /// Set by the parser when the description is too vague to estimate macros
     /// reliably (vague container words, ambiguous brand, multiple possible
     /// foods). The app must resolve these via a clarification card before
@@ -25,6 +32,11 @@ struct FoodItemRequest: Codable, Equatable {
     var needsClarification: Bool? = nil
     var clarificationQuestion: String? = nil
     var options: [ClarificationOption]? = nil
+
+    /// True when the user stated any macro directly.
+    var hasExplicitMacros: Bool {
+        calories != nil || protein != nil || carbs != nil || fat != nil
+    }
 }
 
 /// Wire format of the JSON object the parsing prompt asks Claude to return.

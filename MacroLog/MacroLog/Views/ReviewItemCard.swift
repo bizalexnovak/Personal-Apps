@@ -19,6 +19,7 @@ struct ReviewItemCard: View {
     @State private var protein = 0.0
     @State private var carbs = 0.0
     @State private var fat = 0.0
+    @State private var waterOz = 0.0
 
     // Search pane
     @State private var query = ""
@@ -203,13 +204,15 @@ struct ReviewItemCard: View {
             }
             .buttonStyle(.bordered)
 
-            Button {
-                pane = pane == .search ? .none : .search
-            } label: {
-                Label("Search", systemImage: "magnifyingglass")
-                    .frame(maxWidth: .infinity)
+            if !isWater {
+                Button {
+                    pane = pane == .search ? .none : .search
+                } label: {
+                    Label("Search", systemImage: "magnifyingglass")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
             }
-            .buttonStyle(.bordered)
         }
         .font(.caption)
         .controlSize(.small)
@@ -217,20 +220,34 @@ struct ReviewItemCard: View {
 
     // MARK: Edit pane
 
+    @ViewBuilder
     private var editPane: some View {
-        VStack(spacing: 8) {
-            editField("Calories (kcal)", value: $calories)
-            editField("Protein (g)", value: $protein)
-            editField("Carbs (g)", value: $carbs)
-            editField("Fat (g)", value: $fat)
-            Button("Apply") {
-                coordinator.applyEdit(item.id, calories: calories, protein: protein, carbs: carbs, fat: fat)
-                pane = .none
+        if isWater {
+            VStack(spacing: 8) {
+                editField("Water (oz)", value: $waterOz)
+                Button("Apply") {
+                    coordinator.applyWaterEdit(item.id, ounces: waterOz)
+                    pane = .none
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
             }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.small)
+            .padding(.top, 4)
+        } else {
+            VStack(spacing: 8) {
+                editField("Calories (kcal)", value: $calories)
+                editField("Protein (g)", value: $protein)
+                editField("Carbs (g)", value: $carbs)
+                editField("Fat (g)", value: $fat)
+                Button("Apply") {
+                    coordinator.applyEdit(item.id, calories: calories, protein: protein, carbs: carbs, fat: fat)
+                    pane = .none
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
+            }
+            .padding(.top, 4)
         }
-        .padding(.top, 4)
     }
 
     private func editField(_ label: String, value: Binding<Double>) -> some View {
@@ -312,6 +329,7 @@ struct ReviewItemCard: View {
         protein = item.match?.protein ?? 0
         carbs = item.match?.carbs ?? 0
         fat = item.match?.fat ?? 0
+        waterOz = WaterConversion.ounces(quantity: item.request.quantity, unit: item.request.unit)
     }
 
     /// Low-confidence and unmatched items open straight into Edit/Search.

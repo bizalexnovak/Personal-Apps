@@ -26,7 +26,7 @@ enum WaterConversion {
             "l": 33.814, "liter": 33.814, "liters": 33.814, "litre": 33.814, "litres": 33.814,
             "cup": 8, "cups": 8,
             "glass": 8, "glasses": 8,
-            "bottle": 16.9, "bottles": 16.9,          // standard 500 ml bottle
+            "bottle": 16, "bottles": 16,              // default bottle size
             "can": 12, "cans": 12,
             "pint": 16, "pints": 16,
             "quart": 32, "quarts": 32,

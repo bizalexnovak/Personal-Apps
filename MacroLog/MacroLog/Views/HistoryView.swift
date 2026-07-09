@@ -60,8 +60,10 @@ private struct DayRow: View {
     }
 }
 
-/// One day's meals with a totals header.
+/// One day's meals with a totals header. Meals are editable and deletable,
+/// same as Today's list.
 private struct DayDetailView: View {
+    @Environment(\.modelContext) private var modelContext
     let date: Date
     let meals: [Meal]
 
@@ -80,12 +82,21 @@ private struct DayDetailView: View {
             }
             Section("Meals") {
                 ForEach(sortedMeals) { meal in
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(meal.displayName)
-                            .lineLimit(2)
-                        Text("\(Int(meal.totalCalories.rounded())) kcal · \(meal.timestamp, format: .dateTime.hour().minute())")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                    NavigationLink {
+                        EditMealView(meal: meal)
+                    } label: {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(meal.displayName)
+                                .lineLimit(2)
+                            Text("\(Int(meal.totalCalories.rounded())) kcal · \(meal.timestamp, format: .dateTime.hour().minute())")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+                .onDelete { offsets in
+                    for index in offsets {
+                        modelContext.delete(sortedMeals[index])
                     }
                 }
             }

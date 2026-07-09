@@ -79,13 +79,20 @@ raw text ─▶ ClaudeMealParsingService ─▶ [FoodItemRequest] ─▶ USDANut
 ### Water & history
 
 Water is tracked separately, in fluid ounces, with its own goal (Settings →
-Daily targets → Water). Say "a bottle of water" / "16 oz of water" / "two
+Daily targets → Water). Say "a bottle of water" / "24 oz of water" / "two
 glasses of water" and it's converted to ounces (`WaterConversion`: bottle =
-16.9 oz, glass/cup = 8 oz, can = 12 oz, plus ml/L/pint/quart/gallon; unknown
+16 oz, glass/cup = 8 oz, can = 12 oz, plus ml/L/pint/quart/gallon; unknown
 units default to a glass) and added to the Today water ring — water items skip
-USDA and never count calories. The **History** tab lists every day you've
-logged, newest first, with that day's calorie/protein/carb/fat/water totals;
-tap a day to see its meals.
+USDA and never count calories. On the review card a water item shows its
+ounces and can be edited directly (Edit → Water (oz)). The **History** tab
+lists every day you've logged, newest first, with that day's
+calorie/protein/carb/fat/water totals; tap a day to see and **edit or delete**
+its meals (same editor as Today).
+
+**Spoken macros override the lookup.** If you state numbers — "chicken, 64
+grams of protein, 60 grams of carbs, 25 grams of fat" — those are used directly
+instead of a USDA match (calories derived from the macros if you don't say a
+calorie number).
 
 ### Matching heuristics
 

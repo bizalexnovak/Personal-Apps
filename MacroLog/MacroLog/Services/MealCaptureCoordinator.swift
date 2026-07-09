@@ -88,6 +88,14 @@ final class MealCaptureCoordinator: ObservableObject {
                 ))
                 continue
             }
+            // Explicit macros spoken by the user win over any USDA lookup.
+            if let spoken = Self.explicitMacroMatch(for: request) {
+                items.append(ReviewItem(
+                    request: request, match: spoken,
+                    clarificationQuestion: nil, options: [], status: .needsReview
+                ))
+                continue
+            }
             let hints = Self.clarificationHints(for: request)
             // A failed lookup is represented as match == nil — the card opens
             // in search mode and blocks Save All; zeros are never fabricated.
@@ -155,6 +163,35 @@ final class MealCaptureCoordinator: ObservableObject {
             if item.match != nil {
                 item.status = .confirmed
             }
+        }
+    }
+
+    /// A match built from macros the user spoke; missing calories are derived
+    /// from protein/carbs/fat (4/4/9). Returns nil if no macro was given.
+    static func explicitMacroMatch(for request: FoodItemRequest) -> NutritionMatch? {
+        guard request.hasExplicitMacros else { return nil }
+        let p = request.protein ?? 0
+        let c = request.carbs ?? 0
+        let f = request.fat ?? 0
+        let calories = request.calories ?? (p * 4 + c * 4 + f * 9)
+        return NutritionMatch(
+            matchedDescription: "\(request.name) (your numbers)",
+            calories: calories, protein: p, carbs: c, fat: f,
+            confidence: MatchConfidence.high
+        )
+    }
+
+    /// ✏️ Edit water — set the amount directly in ounces.
+    func applyWaterEdit(_ itemID: UUID, ounces: Double) {
+        updateItem(itemID) { item in
+            item.request.quantity = ounces
+            item.request.unit = "oz"
+            item.match = NutritionMatch(
+                matchedDescription: "Water · \(Int(ounces.rounded())) oz",
+                calories: 0, protein: 0, carbs: 0, fat: 0,
+                confidence: MatchConfidence.high
+            )
+            item.status = .edited
         }
     }
 

@@ -310,7 +310,43 @@ final class MealCaptureCoordinatorTests: XCTestCase {
         await coordinator.saveAll()
 
         let meal = try XCTUnwrap(try savedMeals(in: context).first)
-        XCTAssertEqual(meal.waterOunces, 16.9, accuracy: 0.01)
+        XCTAssertEqual(meal.waterOunces, 16, accuracy: 0.01)
         XCTAssertEqual(meal.totalCalories, 0, accuracy: 0.001)
+    }
+
+    func testSpokenMacrosOverrideUsdaLookup() async throws {
+        let context = try makeContext()
+        // Even though a USDA match is available, the spoken numbers win.
+        let request = FoodItemRequest(
+            name: "chicken", quantity: 1, unit: "serving",
+            calories: nil, protein: 64, carbs: 60, fat: 25
+        )
+        let coordinator = makeCoordinator(
+            parsed: [request],
+            matches: ["chicken": match("Chicken, cooked", kcal: 999)]
+        )
+
+        await coordinator.begin(text: "chicken, 64g protein, 60g carbs, 25g fat", in: context)
+        let item = try XCTUnwrap(coordinator.review?.items.first)
+        XCTAssertEqual(item.match?.protein, 64)
+        XCTAssertEqual(item.match?.carbs, 60)
+        XCTAssertEqual(item.match?.fat, 25)
+        // Calories derived from macros: 64*4 + 60*4 + 25*9 = 721.
+        XCTAssertEqual(item.match?.calories ?? 0, 721, accuracy: 0.5)
+        XCTAssertNotEqual(item.match?.calories, 999, "spoken numbers must override the USDA match")
+    }
+
+    func testWaterEditSetsOunces() async throws {
+        let context = try makeContext()
+        let coordinator = makeCoordinator(parsed: [FoodItemRequest(name: "water", quantity: 1, unit: "glass")])
+
+        await coordinator.begin(text: "a glass of water", in: context)
+        let itemID = try XCTUnwrap(coordinator.review?.items.first?.id)
+
+        coordinator.applyWaterEdit(itemID, ounces: 24)
+        await coordinator.saveAll()
+
+        let meal = try XCTUnwrap(try savedMeals(in: context).first)
+        XCTAssertEqual(meal.waterOunces, 24, accuracy: 0.01)
     }
 }
