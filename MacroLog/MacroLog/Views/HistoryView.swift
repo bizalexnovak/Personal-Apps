@@ -14,6 +14,12 @@ struct HistoryView: View {
     @AppStorage(TargetKeys.water) private var waterTarget = 64.0
 
     @State private var range: TrendRange = .week
+    @State private var selectedMetrics: Set<Metric> = Set(Metric.allCases)
+
+    /// Metrics currently shown, in the canonical order.
+    private var visibleMetrics: [Metric] {
+        Metric.allCases.filter { selectedMetrics.contains($0) }
+    }
 
     // MARK: Derived data
 
@@ -62,7 +68,7 @@ struct HistoryView: View {
     private var chartPoints: [MetricPoint] {
         let buckets = Dictionary(grouping: daysInRange) { bucketStart($0.date) }
         return buckets.flatMap { start, days -> [MetricPoint] in
-            Metric.allCases.map { metric in
+            visibleMetrics.map { metric in
                 let avg = days.reduce(0) { $0 + $1.value(metric) } / Double(days.count)
                 let t = target(metric)
                 return MetricPoint(metric: metric, date: start, percent: t > 0 ? avg / t * 100 : 0)
@@ -96,14 +102,23 @@ struct HistoryView: View {
                             description: Text("Log some meals and your trends will show here.")
                         )
                     } else {
-                        trendChart
-                        averagesGrid
+                        if visibleMetrics.isEmpty {
+                            ContentUnavailableView(
+                                "No nutrients selected",
+                                systemImage: "chart.xyaxis.line",
+                                description: Text("Tap a nutrient below to show it.")
+                            )
+                            .frame(height: 240)
+                        } else {
+                            trendChart
+                        }
+                        metricSelector
                     }
                 } header: {
                     Text("Trends")
                 } footer: {
                     if !daysInRange.isEmpty {
-                        Text("Each line is that nutrient as a percent of your daily goal. The dashed line is 100% (goal).")
+                        Text("Each line is that nutrient as a percent of your daily goal (dashed line = 100%). Tap a nutrient to show or hide it; the number is its average per day.")
                     }
                 }
 
@@ -155,7 +170,7 @@ struct HistoryView: View {
                 .interpolationMethod(.catmullRom)
             }
         }
-        .chartForegroundStyleScale(domain: Metric.allCases.map(\.title), range: Metric.allCases.map(\.color))
+        .chartForegroundStyleScale(domain: visibleMetrics.map(\.title), range: visibleMetrics.map(\.color))
         .chartYAxis {
             AxisMarks { value in
                 AxisGridLine()
@@ -164,37 +179,63 @@ struct HistoryView: View {
                 }
             }
         }
-        .chartLegend(position: .bottom, spacing: 8)
+        .chartLegend(.hidden)   // the tappable selector below is the legend
         .frame(height: 240)
         .padding(.vertical, 4)
     }
 
-    // MARK: Averages
+    // MARK: Metric selector (also the legend + averages)
 
-    private var averagesGrid: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("Average per day")
-                .font(.subheadline.weight(.semibold))
-            Text("\(range.averageCaption) · \(loggedDayCount) logged day\(loggedDayCount == 1 ? "" : "s")")
+    private var metricSelector: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Average per day · \(range.averageCaption) · \(loggedDayCount) logged day\(loggedDayCount == 1 ? "" : "s")")
                 .font(.caption2)
                 .foregroundStyle(.secondary)
-            ViewThatFits(in: .horizontal) {
-                HStack(spacing: 14) { averageChips }
-                VStack(alignment: .leading, spacing: 6) { averageChips }
+            LazyVGrid(
+                columns: [GridItem(.adaptive(minimum: 108), spacing: 8)],
+                alignment: .leading,
+                spacing: 8
+            ) {
+                ForEach(Metric.allCases) { metric in
+                    metricChip(metric)
+                }
             }
         }
         .padding(.vertical, 4)
     }
 
-    @ViewBuilder
-    private var averageChips: some View {
-        ForEach(Metric.allCases) { metric in
-            HStack(spacing: 5) {
-                Circle().fill(metric.color).frame(width: 8, height: 8)
-                Text("\(Int(average(metric).rounded())) \(metric.unit)")
-                    .font(.caption.monospacedDigit())
+    private func metricChip(_ metric: Metric) -> some View {
+        let on = selectedMetrics.contains(metric)
+        return Button {
+            if on { selectedMetrics.remove(metric) } else { selectedMetrics.insert(metric) }
+        } label: {
+            HStack(spacing: 6) {
+                Circle()
+                    .fill(metric.color)
+                    .frame(width: 9, height: 9)
+                    .opacity(on ? 1 : 0.35)
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(metric.title)
+                        .font(.caption2)
+                        .foregroundStyle(on ? .primary : .secondary)
+                    Text("\(Int(average(metric).rounded())) \(metric.unit)")
+                        .font(.caption.monospacedDigit().weight(.medium))
+                        .foregroundStyle(on ? .primary : .secondary)
+                }
+                Spacer(minLength: 0)
             }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
+            .background(
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(on ? metric.color.opacity(0.12) : Color.clear)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .strokeBorder(on ? metric.color.opacity(0.4) : Color.secondary.opacity(0.25), lineWidth: 1)
+            )
         }
+        .buttonStyle(.plain)
     }
 }
 

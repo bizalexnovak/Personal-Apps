@@ -87,8 +87,9 @@ USDA and never count calories. On the review card a water item shows its
 ounces and can be edited directly (Edit → Water (oz)). The **History** tab
 opens on a **trends chart** (Swift Charts): one line per nutrient —
 calories/protein/carbs/fat/water — plotted as a percent of its daily goal per
-day, with a Week/Month toggle, a dashed 100%-goal reference line, and the
-weekly/monthly **average** of each nutrient below. Plotting % of goal keeps all
+day, with 1W/1M/3M/6M/1Y/All range toggles, a dashed 100%-goal reference line, and a
+tappable legend below that doubles as the per-nutrient **average per day** and a
+**show/hide toggle** for each line. Plotting % of goal keeps all
 five differently-scaled lines on one comparable axis (no dual axes). Colours are
 chart-tuned shades of the app's macro palette, CVD-validated, with distinct
 point symbols per line so the series are distinguishable without relying on
