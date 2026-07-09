@@ -106,6 +106,18 @@ grams of protein, 60 grams of carbs, 25 grams of fat" — those are used directl
 instead of a USDA match (calories derived from the macros if you don't say a
 calorie number).
 
+### Recommended goals from body metrics
+
+Settings → **Body & goal** takes your height, weight, age, sex, and activity
+level and estimates the calories to hit your goal using the Mifflin-St Jeor
+equation (BMR × activity multiplier). **Maintain** is the default (keeps your
+current weight); **Lose** trims ~500 kcal/day and **Gain** adds ~300. The
+**Recommended daily goals** section shows the resulting calories, a 30% protein
+/ 40% carbs / 30% fat macro split, and a water target of about half your body
+weight in ounces (`GoalCalculator`). Tap **Apply to my targets** to copy those
+into the Daily targets used by the Today rings and History chart — or ignore
+them and set targets by hand.
+
 ### Matching heuristics
 
 Search-result nutrients from FoodData Central are per 100 g; the matcher's job is

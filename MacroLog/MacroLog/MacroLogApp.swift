@@ -57,3 +57,15 @@ enum TargetKeys {
     static let fat = "target_fat"
     static let water = "target_water"
 }
+
+/// Body metrics used to derive recommended daily goals (Mifflin-St Jeor).
+/// Not secrets — plain AppStorage. Height is stored as total inches so the
+/// ft/in fields in Settings compute against a single source of truth.
+enum BodyKeys {
+    static let heightInches = "body_height_inches"
+    static let weightPounds = "body_weight_pounds"
+    static let age = "body_age"
+    static let sex = "body_sex"          // BiologicalSex.rawValue
+    static let activity = "body_activity" // ActivityLevel.rawValue
+    static let goal = "body_goal"         // GoalType.rawValue
+}
