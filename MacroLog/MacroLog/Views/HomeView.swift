@@ -51,7 +51,7 @@ struct HomeView: View {
                     Section("Today's meals") {
                         ForEach(todaysMeals.sorted { $0.timestamp > $1.timestamp }) { meal in
                             VStack(alignment: .leading, spacing: 2) {
-                                Text(meal.rawText)
+                                Text(meal.displayName)
                                     .lineLimit(1)
                                 Text("\(Int(meal.totalCalories.rounded())) kcal · \(meal.timestamp, format: .dateTime.hour().minute())")
                                     .font(.caption)

@@ -99,7 +99,7 @@ private struct MealRow: View {
             .font(.subheadline)
         } label: {
             VStack(alignment: .leading, spacing: 2) {
-                Text(meal.rawText)
+                Text(meal.displayName)
                     .lineLimit(2)
                 HStack(spacing: 8) {
                     Text(meal.timestamp, format: .dateTime.hour().minute())

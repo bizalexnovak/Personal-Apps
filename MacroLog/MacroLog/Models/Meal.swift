@@ -20,6 +20,19 @@ final class Meal {
     var totalProtein: Double { items.reduce(0) { $0 + $1.protein } }
     var totalCarbs: Double { items.reduce(0) { $0 + $1.carbs } }
     var totalFat: Double { items.reduce(0) { $0 + $1.fat } }
+
+    /// Food-only summary for the meal lists: the item names joined naturally
+    /// ("chicken and green beans", "eggs, toast and bacon") — not the raw
+    /// transcript or a "Scanned label: …" prefix. Falls back to rawText only
+    /// if there are somehow no items.
+    var displayName: String {
+        let names = items
+            .map { $0.name.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+        guard let last = names.last else { return rawText }
+        if names.count == 1 { return last }
+        return names.dropLast().joined(separator: ", ") + " and " + last
+    }
 }
 
 @Model
