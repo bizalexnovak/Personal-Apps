@@ -118,7 +118,32 @@ struct USDANutritionLookupService: NutritionLookup {
         return evaluation.match
     }
 
+    /// api.data.gov (which hosts the USDA key, including the shared DEMO_KEY)
+    /// throttles rapid bursts and intermittently rejects requests with HTTP
+    /// 429/5xx — and, in practice, transient 400s. Logging a whole meal fires
+    /// several searches in quick succession, so a single bounce shouldn't mean
+    /// "no match". Retry a few times with a short, growing pause before giving
+    /// up. A genuine empty result set (HTTP 200, no foods) is NOT retried.
     func search(query: String) async throws -> [USDAFood] {
+        let maxAttempts = 3
+        var lastError: Error = NutritionLookupError.noResults
+        for attempt in 0..<maxAttempts {
+            if attempt > 0 {
+                // 0.5s, then 1.0s — enough to clear a short burst throttle.
+                try? await Task.sleep(nanoseconds: UInt64(attempt) * 500_000_000)
+                Self.usdaLogger.debug("USDA retry \(attempt, privacy: .public) for \"\(query, privacy: .public)\"")
+            }
+            do {
+                return try await performSearch(query: query)
+            } catch {
+                lastError = error
+            }
+        }
+        throw lastError
+    }
+
+    /// One search attempt (no retry).
+    private func performSearch(query: String) async throws -> [USDAFood] {
         var components = URLComponents(string: "https://api.nal.usda.gov/fdc/v1/foods/search")!
         components.queryItems = [
             URLQueryItem(name: "api_key", value: KeychainService.usdaKeyOrDemo),
