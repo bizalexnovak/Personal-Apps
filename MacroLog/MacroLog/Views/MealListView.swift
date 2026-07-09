@@ -6,9 +6,18 @@ struct MealListView: View {
     @Query(sort: \Meal.timestamp, order: .reverse) private var meals: [Meal]
 
     @State private var mealText = ""
+    @FocusState private var inputFocused: Bool
 
     private var todaysMeals: [Meal] {
         meals.filter { Calendar.current.isDateInToday($0.timestamp) }
+    }
+
+    private func submit() {
+        let text = mealText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return }
+        mealText = ""
+        inputFocused = false
+        PendingMealStore.shared.requestText(text)
     }
 
     var body: some View {
@@ -33,18 +42,17 @@ struct MealListView: View {
                         }
                         .accessibilityLabel("Scan a nutrition label")
                         TextField("Describe what you ate…", text: $mealText, axis: .vertical)
-                        Button {
-                            let text = mealText.trimmingCharacters(in: .whitespacesAndNewlines)
-                            guard !text.isEmpty else { return }
-                            mealText = ""
-                            PendingMealStore.shared.requestText(text)
-                        } label: {
+                            .focused($inputFocused)
+                            .submitLabel(.done)
+                        Button(action: submit) {
                             Image(systemName: "arrow.up.circle.fill")
                                 .font(.title2)
                         }
                         .disabled(mealText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                     }
-                    .buttonStyle(.plain)
+                    // .borderless isolates each button's tap target so a single
+                    // tap registers (a List row otherwise shares one tap area).
+                    .buttonStyle(.borderless)
                 }
 
                 Section("Today") {
@@ -60,6 +68,13 @@ struct MealListView: View {
                             modelContext.delete(todaysMeals[index])
                         }
                     }
+                }
+            }
+            .scrollDismissesKeyboard(.interactively)
+            .toolbar {
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button("Done") { inputFocused = false }
                 }
             }
             .navigationTitle("Meals")

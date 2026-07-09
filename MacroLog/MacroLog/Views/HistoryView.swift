@@ -17,12 +17,14 @@ struct HistoryView: View {
 
     // MARK: Derived data
 
-    private var startDate: Date {
-        Calendar.current.startOfDay(for: Date().addingTimeInterval(-Double(range.days - 1) * 86_400))
-    }
-
     private var daysInRange: [DayTotals] {
-        let inRange = meals.filter { $0.timestamp >= startDate }
+        let inRange: [Meal]
+        if let days = range.days {
+            let start = Calendar.current.startOfDay(for: Date().addingTimeInterval(-Double(days - 1) * 86_400))
+            inRange = meals.filter { $0.timestamp >= start }
+        } else {
+            inRange = meals
+        }
         let grouped = Dictionary(grouping: inRange) { Calendar.current.startOfDay(for: $0.timestamp) }
         return grouped
             .map { date, dayMeals in
@@ -48,18 +50,25 @@ struct HistoryView: View {
         }
     }
 
-    /// One (metric, day, percent-of-goal) point for the chart.
+    private func bucketStart(_ date: Date) -> Date {
+        let cal = Calendar.current
+        if range.bucket == .day { return cal.startOfDay(for: date) }
+        return cal.dateInterval(of: range.bucket, for: date)?.start ?? cal.startOfDay(for: date)
+    }
+
+    /// One (metric, bucket, percent-of-goal) point. For ranges longer than a
+    /// month, days are averaged into weekly/monthly buckets so the line stays
+    /// readable — the percent is the average day in that bucket vs. its goal.
     private var chartPoints: [MetricPoint] {
-        daysInRange.flatMap { day in
+        let buckets = Dictionary(grouping: daysInRange) { bucketStart($0.date) }
+        return buckets.flatMap { start, days -> [MetricPoint] in
             Metric.allCases.map { metric in
+                let avg = days.reduce(0) { $0 + $1.value(metric) } / Double(days.count)
                 let t = target(metric)
-                return MetricPoint(
-                    metric: metric,
-                    date: day.date,
-                    percent: t > 0 ? day.value(metric) / t * 100 : 0
-                )
+                return MetricPoint(metric: metric, date: start, percent: t > 0 ? avg / t * 100 : 0)
             }
         }
+        .sorted { $0.date < $1.date }
     }
 
     private var loggedDayCount: Int { daysInRange.count }
@@ -99,7 +108,7 @@ struct HistoryView: View {
                 }
 
                 if !daysInRange.isEmpty {
-                    Section(range == .week ? "Last 7 days" : "Last 30 days") {
+                    Section("Logged days") {
                         ForEach(daysInRange.sorted { $0.date > $1.date }) { day in
                             NavigationLink {
                                 DayDetailView(date: day.date, meals: mealsOn(day.date))
@@ -164,9 +173,9 @@ struct HistoryView: View {
 
     private var averagesGrid: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(range == .week ? "Weekly average" : "Monthly average")
+            Text("Average per day")
                 .font(.subheadline.weight(.semibold))
-            Text("over \(loggedDayCount) logged day\(loggedDayCount == 1 ? "" : "s")")
+            Text("\(range.averageCaption) · \(loggedDayCount) logged day\(loggedDayCount == 1 ? "" : "s")")
                 .font(.caption2)
                 .foregroundStyle(.secondary)
             ViewThatFits(in: .horizontal) {
@@ -192,10 +201,52 @@ struct HistoryView: View {
 // MARK: - Supporting types
 
 enum TrendRange: String, CaseIterable, Identifiable {
-    case week, month
+    case week, month, threeMonths, sixMonths, year, all
     var id: String { rawValue }
-    var title: String { self == .week ? "Week" : "Month" }
-    var days: Int { self == .week ? 7 : 30 }
+
+    var title: String {
+        switch self {
+        case .week: return "1W"
+        case .month: return "1M"
+        case .threeMonths: return "3M"
+        case .sixMonths: return "6M"
+        case .year: return "1Y"
+        case .all: return "All"
+        }
+    }
+
+    /// Number of days back, or nil for all-time.
+    var days: Int? {
+        switch self {
+        case .week: return 7
+        case .month: return 30
+        case .threeMonths: return 90
+        case .sixMonths: return 180
+        case .year: return 365
+        case .all: return nil
+        }
+    }
+
+    /// How chart points are bucketed so long spans stay legible: daily for
+    /// short ranges, weekly for a few months, monthly for a year+.
+    var bucket: Calendar.Component {
+        switch self {
+        case .week, .month: return .day
+        case .threeMonths, .sixMonths: return .weekOfYear
+        case .year, .all: return .month
+        }
+    }
+
+    var averageCaption: String {
+        switch self {
+        case .week: return "past week"
+        case .month: return "past month"
+        case .threeMonths: return "past 3 months"
+        case .sixMonths: return "past 6 months"
+        case .year: return "past year"
+        case .all: return "all time"
+        }
+    }
 }
 
 enum Metric: String, CaseIterable, Identifiable {
@@ -251,10 +302,12 @@ struct DayTotals: Identifiable {
 }
 
 struct MetricPoint: Identifiable {
-    let id = UUID()
     var metric: Metric
     var date: Date
     var percent: Double
+    // Stable identity (metric + bucket date) so the chart doesn't rebuild and
+    // re-animate every time the view body re-evaluates.
+    var id: String { "\(metric.rawValue)-\(date.timeIntervalSince1970)" }
 }
 
 // MARK: - Day list rows
