@@ -85,9 +85,15 @@ glasses of water" and it's converted to ounces (`WaterConversion`: bottle =
 units default to a glass) and added to the Today water ring — water items skip
 USDA and never count calories. On the review card a water item shows its
 ounces and can be edited directly (Edit → Water (oz)). The **History** tab
-lists every day you've logged, newest first, with that day's
-calorie/protein/carb/fat/water totals; tap a day to see and **edit or delete**
-its meals (same editor as Today).
+opens on a **trends chart** (Swift Charts): one line per nutrient —
+calories/protein/carbs/fat/water — plotted as a percent of its daily goal per
+day, with a Week/Month toggle, a dashed 100%-goal reference line, and the
+weekly/monthly **average** of each nutrient below. Plotting % of goal keeps all
+five differently-scaled lines on one comparable axis (no dual axes). Colours are
+chart-tuned shades of the app's macro palette, CVD-validated, with distinct
+point symbols per line so the series are distinguishable without relying on
+colour. Below the chart, each logged day in range is listed; tap a day to see
+and **edit or delete** its meals (same editor as Today).
 
 **Spoken macros override the lookup.** If you state numbers — "chicken, 64
 grams of protein, 60 grams of carbs, 25 grams of fat" — those are used directly
