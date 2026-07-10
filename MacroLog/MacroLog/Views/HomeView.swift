@@ -16,6 +16,7 @@ struct HomeView: View {
     @AppStorage(TargetKeys.water) private var waterTarget = 64.0
 
     @State private var selectedDate = Calendar.current.startOfDay(for: .now)
+    @State private var showDatePicker = false
 
     private var dayMeals: [Meal] {
         meals.filter { Calendar.current.isDate($0.timestamp, inSameDayAs: selectedDate) }
@@ -93,7 +94,6 @@ struct HomeView: View {
                     }
                 }
             }
-            .navigationTitle(smartDateTitle)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
@@ -101,6 +101,19 @@ struct HomeView: View {
                         Image(systemName: "chevron.left")
                     }
                     .accessibilityLabel("Previous day")
+                }
+                ToolbarItem(placement: .principal) {
+                    // Tap the date to pop open a calendar and jump anywhere.
+                    Button {
+                        showDatePicker = true
+                    } label: {
+                        HStack(spacing: 4) {
+                            Text(smartDateTitle).font(.headline)
+                            Image(systemName: "chevron.down").font(.caption2)
+                        }
+                        .foregroundStyle(.primary)
+                    }
+                    .accessibilityLabel("Choose date")
                 }
                 ToolbarItemGroup(placement: .topBarTrailing) {
                     if !isToday {
@@ -115,7 +128,39 @@ struct HomeView: View {
                     .accessibilityLabel("Next day")
                 }
             }
+            .sheet(isPresented: $showDatePicker) {
+                datePickerSheet
+            }
         }
+    }
+
+    private var datePickerSheet: some View {
+        NavigationStack {
+            VStack {
+                DatePicker(
+                    "Jump to date",
+                    selection: $selectedDate,
+                    in: ...Calendar.current.startOfDay(for: .now),
+                    displayedComponents: .date
+                )
+                .datePickerStyle(.graphical)
+                .padding(.horizontal)
+                .onChange(of: selectedDate) { _, newValue in
+                    let normalized = Calendar.current.startOfDay(for: newValue)
+                    if normalized != selectedDate { selectedDate = normalized }
+                    showDatePicker = false // tapping a day jumps and closes
+                }
+                Spacer()
+            }
+            .navigationTitle("Jump to date")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { showDatePicker = false }
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
     }
 
     // MARK: Day navigation

@@ -58,6 +58,11 @@ enum TargetKeys {
     static let water = "target_water"
 }
 
+/// Personal profile fields (non-secret) shown under Settings → Profile.
+enum ProfileKeys {
+    static let name = "profile_name"
+}
+
 /// Body metrics used to derive recommended daily goals (Mifflin-St Jeor).
 /// Not secrets — plain AppStorage. Height is stored as total inches so the
 /// ft/in fields in Settings compute against a single source of truth.

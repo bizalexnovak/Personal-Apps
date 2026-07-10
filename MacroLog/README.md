@@ -82,14 +82,17 @@ raw text ─▶ ClaudeMealParsingService ─▶ [FoodItemRequest] ─▶ USDANut
   which orchestrates the pipeline for both Siri and the in-app UI. Parsing and
   lookup are behind protocols (`MealParsing`, `NutritionLookup`) so tests inject mocks.
 - **Intents/** — `LogMealIntent` + `MacroLogShortcuts` (App Intents / Siri phrases).
-- **Views/** — Home (daily totals vs. targets), Meals (log + expandable list),
-  Edit Meal (adjust quantity, swap USDA match, manual macro override), Settings, Onboarding.
+- **Views/** — Today (day-by-day diary), Meals (log + expandable list),
+  Edit Meal (adjust quantity, swap USDA match, manual macro override), Trends
+  (multi-day chart), Settings (Profile / Daily goals / API keys / Developer
+  sub-screens), Onboarding.
 
 ### The Today diary
 
 The **Today** tab is a day-by-day diary (MyFitnessPal-style). Chevrons in the
 nav bar step **back and forward through days** (never into the future; a
-**Today** button jumps back to the current day). For the selected day it shows
+**Today** button jumps back to the current day), and **tapping the date opens a
+calendar** to jump straight to any past day. For the selected day it shows
 **calories vs. goal as a bar**, then **protein / carbs / fat / water as
 circular progress rings** (consumed in the centre, goal underneath), a **"When
 you ate" hourly chart** (calories by the clock hour you logged them), and that

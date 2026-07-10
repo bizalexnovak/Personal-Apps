@@ -1,38 +1,49 @@
 import SwiftUI
 
+/// Settings root: a short menu that drills into focused sub-screens instead of
+/// one long scroll. Profile (you + body metrics), Daily goals (targets and the
+/// recommended values), API keys, and Developer tools.
 struct SettingsView: View {
-    @AppStorage(TargetKeys.calories) private var calorieTarget = 2000.0
-    @AppStorage(TargetKeys.protein) private var proteinTarget = 150.0
-    @AppStorage(TargetKeys.carbs) private var carbTarget = 250.0
-    @AppStorage(TargetKeys.fat) private var fatTarget = 70.0
-    @AppStorage(TargetKeys.water) private var waterTarget = 64.0
+    var body: some View {
+        NavigationStack {
+            List {
+                NavigationLink {
+                    ProfileSettingsView()
+                } label: {
+                    Label("Profile", systemImage: "person.crop.circle")
+                }
+                NavigationLink {
+                    GoalsSettingsView()
+                } label: {
+                    Label("Daily goals", systemImage: "target")
+                }
+                NavigationLink {
+                    APIKeysSettingsView()
+                } label: {
+                    Label("API keys", systemImage: "key.fill")
+                }
+                NavigationLink {
+                    DeveloperSettingsView()
+                } label: {
+                    Label("Developer", systemImage: "wrench.and.screwdriver")
+                }
+            }
+            .navigationTitle("Settings")
+        }
+    }
+}
 
-    // Body metrics. Height stored as total inches; the ft/in fields below are
-    // derived from it. Defaults to 0 so recommendations stay hidden until the
-    // user actually enters something.
+// MARK: - Profile
+
+/// Your name and the body metrics that feed the recommended-goal formula.
+struct ProfileSettingsView: View {
+    @AppStorage(ProfileKeys.name) private var name = ""
+
     @AppStorage(BodyKeys.heightInches) private var heightInches = 0.0
     @AppStorage(BodyKeys.weightPounds) private var weightPounds = 0.0
     @AppStorage(BodyKeys.age) private var age = 0.0
     @AppStorage(BodyKeys.sex) private var sexRaw = BiologicalSex.male.rawValue
     @AppStorage(BodyKeys.activity) private var activityRaw = ActivityLevel.moderate.rawValue
-    @AppStorage(BodyKeys.goal) private var goalRaw = GoalType.maintain.rawValue
-
-    @State private var claudeKey = ""
-    @State private var usdaKey = ""
-    @State private var hasSavedClaudeKey = false
-    @State private var savedMessageVisible = false
-    @State private var appliedMessageVisible = false
-
-    private var sex: BiologicalSex { BiologicalSex(rawValue: sexRaw) ?? .male }
-    private var activity: ActivityLevel { ActivityLevel(rawValue: activityRaw) ?? .moderate }
-    private var goal: GoalType { GoalType(rawValue: goalRaw) ?? .maintain }
-
-    private var recommended: RecommendedGoals? {
-        GoalCalculator.recommended(
-            sex: sex, heightInches: heightInches, weightPounds: weightPounds,
-            ageYears: age, activity: activity, goal: goal
-        )
-    }
 
     // Height split into feet + inches, both writing back to heightInches.
     private var feet: Binding<Double> {
@@ -50,129 +61,47 @@ struct SettingsView: View {
     private var inchesRemainder: Double { heightInches - (heightInches / 12).rounded(.down) * 12 }
 
     var body: some View {
-        NavigationStack {
-            Form {
-                Section {
-                    HStack {
-                        Text("Height")
-                        Spacer()
-                        numberField("ft", value: feet, width: 52)
-                        Text("ft").foregroundStyle(.secondary)
-                        numberField("in", value: inches, width: 52)
-                        Text("in").foregroundStyle(.secondary)
-                    }
-                    LabeledContent("Weight") {
-                        HStack(spacing: 4) {
-                            numberField("lb", value: $weightPounds, width: 72)
-                            Text("lb").foregroundStyle(.secondary)
-                        }
-                    }
-                    LabeledContent("Age") {
-                        HStack(spacing: 4) {
-                            numberField("yr", value: $age, width: 72)
-                            Text("yr").foregroundStyle(.secondary)
-                        }
-                    }
-                    Picker("Sex", selection: $sexRaw) {
-                        ForEach(BiologicalSex.allCases) { Text($0.title).tag($0.rawValue) }
-                    }
-                    Picker("Activity", selection: $activityRaw) {
-                        ForEach(ActivityLevel.allCases) { Text($0.title).tag($0.rawValue) }
-                    }
-                    Picker("Goal", selection: $goalRaw) {
-                        ForEach(GoalType.allCases) { Text($0.title).tag($0.rawValue) }
-                    }
-                } header: {
-                    Text("Body & goal")
-                } footer: {
-                    Text("Used to estimate the calories to reach your goal (Mifflin-St Jeor). Maintain keeps your current weight; Lose trims ~500 kcal/day, Gain adds ~300.")
-                }
-
-                Section {
-                    if let rec = recommended {
-                        recommendedRow("Calories", "\(Int(rec.calories)) kcal")
-                        recommendedRow("Protein", "\(Int(rec.protein)) g")
-                        recommendedRow("Carbs", "\(Int(rec.carbs)) g")
-                        recommendedRow("Fat", "\(Int(rec.fat)) g")
-                        recommendedRow("Water", "\(Int(rec.waterOunces)) oz")
-
-                        Button("Apply to my targets") {
-                            applyRecommended(rec)
-                        }
-
-                        if appliedMessageVisible {
-                            Label("Targets updated", systemImage: "checkmark.circle.fill")
-                                .foregroundStyle(.green)
-                                .font(.subheadline)
-                        }
-                    } else {
-                        Text("Enter your height, weight, and age above to see recommended goals.")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                    }
-                } header: {
-                    Text("Recommended daily goals")
-                } footer: {
-                    Text("A 30% protein / 40% carbs / 30% fat split of your goal calories, and about half your body weight in ounces of water.")
-                }
-
-                Section("Daily targets") {
-                    targetField("Calories (kcal)", value: $calorieTarget)
-                    targetField("Protein (g)", value: $proteinTarget)
-                    targetField("Carbs (g)", value: $carbTarget)
-                    targetField("Fat (g)", value: $fatTarget)
-                    targetField("Water (oz)", value: $waterTarget)
-                }
-
-                Section {
-                    SecureField(
-                        hasSavedClaudeKey ? "Claude API key (saved)" : "Claude API key",
-                        text: $claudeKey
-                    )
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-
-                    SecureField("USDA API key (optional)", text: $usdaKey)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-
-                    Button("Save keys") {
-                        saveKeys()
-                    }
-                    .disabled(claudeKey.isEmpty && usdaKey.isEmpty)
-
-                    if savedMessageVisible {
-                        Label("Saved to Keychain", systemImage: "checkmark.circle.fill")
-                            .foregroundStyle(.green)
-                            .font(.subheadline)
-                    }
-                } header: {
-                    Text("API keys")
-                } footer: {
-                    Text("Keys are stored in the iOS Keychain, never in UserDefaults. Without a USDA key the app uses the free public DEMO_KEY, which is rate-limited — get a free key at api.data.gov.")
-                }
-
-                Section {
-                    NavigationLink("Match diagnostics") {
-                        DebugLogView()
-                    }
-                } header: {
-                    Text("Developer")
-                } footer: {
-                    Text("Trace of how each logged item was matched: candidates considered, selection reason, and plausibility flags.")
-                }
+        Form {
+            Section("You") {
+                TextField("Name", text: $name)
+                    .textContentType(.givenName)
             }
-            .navigationTitle("Settings")
-            .onAppear {
-                hasSavedClaudeKey = KeychainService.get(.claudeAPIKey) != nil
+
+            Section {
+                HStack {
+                    Text("Height")
+                    Spacer()
+                    numberField("ft", value: feet, width: 52)
+                    Text("ft").foregroundStyle(.secondary)
+                    numberField("in", value: inches, width: 52)
+                    Text("in").foregroundStyle(.secondary)
+                }
+                LabeledContent("Weight") {
+                    HStack(spacing: 4) {
+                        numberField("lb", value: $weightPounds, width: 72)
+                        Text("lb").foregroundStyle(.secondary)
+                    }
+                }
+                LabeledContent("Age") {
+                    HStack(spacing: 4) {
+                        numberField("yr", value: $age, width: 72)
+                        Text("yr").foregroundStyle(.secondary)
+                    }
+                }
+                Picker("Sex", selection: $sexRaw) {
+                    ForEach(BiologicalSex.allCases) { Text($0.title).tag($0.rawValue) }
+                }
+                Picker("Activity", selection: $activityRaw) {
+                    ForEach(ActivityLevel.allCases) { Text($0.title).tag($0.rawValue) }
+                }
+            } header: {
+                Text("Body")
+            } footer: {
+                Text("These feed the recommended daily goals under Settings → Daily goals (Mifflin-St Jeor estimate).")
             }
         }
-    }
-
-    private func recommendedRow(_ label: String, _ value: String) -> some View {
-        LabeledContent(label) {
-            Text(value).foregroundStyle(.secondary)
-        }
+        .navigationTitle("Profile")
+        .navigationBarTitleDisplayMode(.inline)
     }
 
     private func numberField(_ label: String, value: Binding<Double>, width: CGFloat) -> some View {
@@ -180,6 +109,100 @@ struct SettingsView: View {
             .keyboardType(.decimalPad)
             .multilineTextAlignment(.trailing)
             .frame(maxWidth: width)
+    }
+}
+
+// MARK: - Daily goals
+
+/// The goal type + recommended values derived from Profile, and the manual
+/// daily targets that drive the Today rings and Trends chart.
+struct GoalsSettingsView: View {
+    @AppStorage(TargetKeys.calories) private var calorieTarget = 2000.0
+    @AppStorage(TargetKeys.protein) private var proteinTarget = 150.0
+    @AppStorage(TargetKeys.carbs) private var carbTarget = 250.0
+    @AppStorage(TargetKeys.fat) private var fatTarget = 70.0
+    @AppStorage(TargetKeys.water) private var waterTarget = 64.0
+
+    @AppStorage(BodyKeys.heightInches) private var heightInches = 0.0
+    @AppStorage(BodyKeys.weightPounds) private var weightPounds = 0.0
+    @AppStorage(BodyKeys.age) private var age = 0.0
+    @AppStorage(BodyKeys.sex) private var sexRaw = BiologicalSex.male.rawValue
+    @AppStorage(BodyKeys.activity) private var activityRaw = ActivityLevel.moderate.rawValue
+    @AppStorage(BodyKeys.goal) private var goalRaw = GoalType.maintain.rawValue
+
+    @State private var appliedMessageVisible = false
+
+    private var sex: BiologicalSex { BiologicalSex(rawValue: sexRaw) ?? .male }
+    private var activity: ActivityLevel { ActivityLevel(rawValue: activityRaw) ?? .moderate }
+    private var goal: GoalType { GoalType(rawValue: goalRaw) ?? .maintain }
+
+    private var recommended: RecommendedGoals? {
+        GoalCalculator.recommended(
+            sex: sex, heightInches: heightInches, weightPounds: weightPounds,
+            ageYears: age, activity: activity, goal: goal
+        )
+    }
+
+    var body: some View {
+        Form {
+            Section {
+                Picker("Goal", selection: $goalRaw) {
+                    ForEach(GoalType.allCases) { Text($0.title).tag($0.rawValue) }
+                }
+            } header: {
+                Text("Goal")
+            } footer: {
+                Text("Maintain keeps your current weight; Lose trims ~500 kcal/day, Gain adds ~300.")
+            }
+
+            Section {
+                if let rec = recommended {
+                    recommendedRow("Calories", "\(Int(rec.calories)) kcal")
+                    recommendedRow("Protein", "\(Int(rec.protein)) g")
+                    recommendedRow("Carbs", "\(Int(rec.carbs)) g")
+                    recommendedRow("Fat", "\(Int(rec.fat)) g")
+                    recommendedRow("Water", "\(Int(rec.waterOunces)) oz")
+
+                    Button("Apply to my targets") {
+                        applyRecommended(rec)
+                    }
+
+                    if appliedMessageVisible {
+                        Label("Targets updated", systemImage: "checkmark.circle.fill")
+                            .foregroundStyle(.green)
+                            .font(.subheadline)
+                    }
+                } else {
+                    Text("Add your height, weight, and age under Settings → Profile to see recommended goals.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+            } header: {
+                Text("Recommended")
+            } footer: {
+                Text("A 30% protein / 40% carbs / 30% fat split of your goal calories, and about half your body weight in ounces of water.")
+            }
+
+            Section {
+                targetField("Calories (kcal)", value: $calorieTarget)
+                targetField("Protein (g)", value: $proteinTarget)
+                targetField("Carbs (g)", value: $carbTarget)
+                targetField("Fat (g)", value: $fatTarget)
+                targetField("Water (oz)", value: $waterTarget)
+            } header: {
+                Text("Daily targets")
+            } footer: {
+                Text("These are what the Today rings and Trends chart measure against. Apply the recommended values above, or set them by hand.")
+            }
+        }
+        .navigationTitle("Daily goals")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private func recommendedRow(_ label: String, _ value: String) -> some View {
+        LabeledContent(label) {
+            Text(value).foregroundStyle(.secondary)
+        }
     }
 
     private func targetField(_ label: String, value: Binding<Double>) -> some View {
@@ -203,6 +226,50 @@ struct SettingsView: View {
             appliedMessageVisible = false
         }
     }
+}
+
+// MARK: - API keys
+
+struct APIKeysSettingsView: View {
+    @State private var claudeKey = ""
+    @State private var usdaKey = ""
+    @State private var hasSavedClaudeKey = false
+    @State private var savedMessageVisible = false
+
+    var body: some View {
+        Form {
+            Section {
+                SecureField(
+                    hasSavedClaudeKey ? "Claude API key (saved)" : "Claude API key",
+                    text: $claudeKey
+                )
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+
+                SecureField("USDA API key (optional)", text: $usdaKey)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+
+                Button("Save keys") {
+                    saveKeys()
+                }
+                .disabled(claudeKey.isEmpty && usdaKey.isEmpty)
+
+                if savedMessageVisible {
+                    Label("Saved to Keychain", systemImage: "checkmark.circle.fill")
+                        .foregroundStyle(.green)
+                        .font(.subheadline)
+                }
+            } footer: {
+                Text("Keys are stored in the iOS Keychain, never in UserDefaults. Without a USDA key the app uses the free public DEMO_KEY, which is rate-limited — get a free key at api.data.gov.")
+            }
+        }
+        .navigationTitle("API keys")
+        .navigationBarTitleDisplayMode(.inline)
+        .onAppear {
+            hasSavedClaudeKey = KeychainService.get(.claudeAPIKey) != nil
+        }
+    }
 
     private func saveKeys() {
         if !claudeKey.isEmpty {
@@ -219,5 +286,23 @@ struct SettingsView: View {
             try? await Task.sleep(for: .seconds(2))
             savedMessageVisible = false
         }
+    }
+}
+
+// MARK: - Developer
+
+struct DeveloperSettingsView: View {
+    var body: some View {
+        Form {
+            Section {
+                NavigationLink("Match diagnostics") {
+                    DebugLogView()
+                }
+            } footer: {
+                Text("Trace of how each logged item was matched: candidates considered, selection reason, and plausibility flags.")
+            }
+        }
+        .navigationTitle("Developer")
+        .navigationBarTitleDisplayMode(.inline)
     }
 }
