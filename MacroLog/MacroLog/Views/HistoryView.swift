@@ -117,8 +117,6 @@ struct HistoryView: View {
                         }
                         metricSelector
                     }
-                } header: {
-                    Text("Trends")
                 } footer: {
                     if !daysInRange.isEmpty {
                         Text("Each line is that nutrient as a percent of your daily goal (dashed line = 100%). Tap a nutrient to show or hide it; the number is its average per day. Tap a day on the Today tab to see and edit its meals.")
@@ -127,6 +125,7 @@ struct HistoryView: View {
             }
             .appBackground(appBackground)
             .navigationTitle("Trends")
+            .navigationBarTitleDisplayMode(.inline)
         }
     }
 

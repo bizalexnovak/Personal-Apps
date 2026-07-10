@@ -17,6 +17,7 @@ struct ContentView: View {
     @StateObject private var hub = CaptureHub()
     @ObservedObject private var pendingStore = PendingMealStore.shared
     @State private var showOnboarding = KeychainService.get(.claudeAPIKey) == nil
+    @State private var showWelcome = true
     /// Ticks so Auto re-evaluates day/night across the 7am / 7pm boundaries.
     @State private var now = Date()
 
@@ -57,15 +58,17 @@ struct ContentView: View {
     }
 
     var body: some View {
-        ZStack {
-            tabScreen(HomeView(), AppTab.today)
-            tabScreen(MealListView(), AppTab.log)
-            tabScreen(HistoryView(), AppTab.trends)
-            tabScreen(SettingsView(), AppTab.settings)
-        }
-        // Custom bottom bar: shrunk tab container with the "+" beside it (only
-        // on Today / Trends), so the "+" never sits on top of the tabs.
-        .safeAreaInset(edge: .bottom) {
+        // A plain VStack (content above, custom bar below) so the tabs sit in a
+        // shrunk container with the "+" beside them AND non-scrolling content
+        // (the Log capture screen) stays above the bar instead of behind it.
+        VStack(spacing: 0) {
+            ZStack {
+                tabScreen(HomeView(), AppTab.today)
+                tabScreen(MealListView(), AppTab.log)
+                tabScreen(HistoryView(), AppTab.trends)
+                tabScreen(SettingsView(), AppTab.settings)
+            }
+            .ignoresSafeArea(.container, edges: .top) // let screens go under the status bar
             AppTabBar(
                 selection: $hub.selectedTab,
                 showPlus: hub.selectedTab == AppTab.today || hub.selectedTab == AppTab.trends
@@ -84,7 +87,10 @@ struct ContentView: View {
             CaptureView(mode: request.mode)
                 .environmentObject(coordinator)
         }
-        .sheet(isPresented: $showOnboarding) {
+        .sheet(isPresented: Binding(
+            get: { showOnboarding && !showWelcome },
+            set: { showOnboarding = $0 }
+        )) {
             OnboardingView()
         }
         .alert("Couldn't log meal", isPresented: .init(
@@ -95,6 +101,23 @@ struct ContentView: View {
         } message: {
             Text(coordinator.errorMessage ?? "")
         }
+        .overlay {
+            if showWelcome {
+                WelcomeView()
+                    .transition(.opacity)
+                    .onTapGesture { dismissWelcome() }
+                    .task {
+                        try? await Task.sleep(for: .seconds(1.8))
+                        dismissWelcome()
+                    }
+                    .zIndex(10)
+            }
+        }
+    }
+
+    private func dismissWelcome() {
+        guard showWelcome else { return }
+        withAnimation(.easeOut(duration: 0.35)) { showWelcome = false }
     }
 
     /// Keeps every tab alive (preserving its state) while showing only the
@@ -105,6 +128,46 @@ struct ContentView: View {
             .opacity(hub.selectedTab == tab ? 1 : 0)
             .allowsHitTesting(hub.selectedTab == tab)
             .zIndex(hub.selectedTab == tab ? 1 : 0)
+    }
+}
+
+/// A brief welcome/splash shown at launch. Auto-dismisses after a moment, or on
+/// tap. Greets by time of day and first name: "Good morning, Alex / Good health."
+struct WelcomeView: View {
+    @AppStorage(ProfileKeys.name) private var name = ""
+    @Environment(\.appAccent) private var accent
+
+    private var greeting: String {
+        let hour = Calendar.current.component(.hour, from: .now)
+        let part = hour < 12 ? "Good morning" : (hour < 17 ? "Good afternoon" : "Good evening")
+        if let first = name.split(separator: " ").first {
+            return "\(part), \(first)"
+        }
+        return part
+    }
+
+    var body: some View {
+        ZStack {
+            LinearGradient(
+                colors: [accent, accent.opacity(0.65)],
+                startPoint: .top, endPoint: .bottom
+            )
+            .ignoresSafeArea()
+            VStack(spacing: 12) {
+                Image(systemName: "figure.strengthtraining.traditional")
+                    .font(.system(size: 52, weight: .semibold))
+                    .foregroundStyle(.white)
+                Text(greeting)
+                    .font(.largeTitle.weight(.bold))
+                    .foregroundStyle(.white)
+                    .multilineTextAlignment(.center)
+                Text("Good health.")
+                    .font(.title3)
+                    .foregroundStyle(.white.opacity(0.9))
+            }
+            .padding()
+        }
+        .contentShape(Rectangle())
     }
 }
 
