@@ -31,7 +31,7 @@ final class PendingMealStore: ObservableObject {
 
 /// In-app capture routing. The tab bar's global "+" menu and the Log tab's own
 /// switcher both go through here so capture always happens inline on the Log
-/// tab (no modal). `AppTab` indexes the TabView selection.
+/// tab (no modal). `AppTab` indexes the custom tab bar's selection.
 enum AppTab {
     static let today = 0
     static let log = 1
@@ -60,7 +60,7 @@ enum LogCaptureMode: String, CaseIterable, Identifiable, Equatable {
 
 @MainActor
 final class CaptureHub: ObservableObject {
-    /// Which tab is showing (bound to the TabView selection).
+    /// Which tab is showing (bound to the custom tab bar's selection).
     @Published var selectedTab = AppTab.today
     /// The active mode on the Log tab.
     @Published var logMode: LogCaptureMode = .voice

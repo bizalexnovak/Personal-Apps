@@ -4,6 +4,48 @@ import UIKit
 /// Shared building blocks for the capture→review flow, so the Siri `CaptureView`
 /// (modal) and the Log tab (inline) render exactly the same pieces.
 
+/// The mic graphic — identical icon and position whether idle or actively
+/// listening, so tapping to start doesn't move or change it. Idle gives a gentle
+/// continuous pulse; listening pulses with the live audio level.
+struct MicGraphic: View {
+    @Environment(\.appAccent) private var accent
+    /// nil = idle (gentle auto pulse); non-nil = listening (audio-driven).
+    var audioLevel: Double?
+    @State private var idlePulse = false
+
+    private var outerScale: CGFloat {
+        if let level = audioLevel { return 1 + CGFloat(level) * 0.5 }
+        return idlePulse ? 1.08 : 0.94
+    }
+    private var midScale: CGFloat {
+        if let level = audioLevel { return 1 + CGFloat(level) * 0.3 }
+        return idlePulse ? 1.04 : 0.97
+    }
+
+    var body: some View {
+        ZStack {
+            Circle().fill(accent.opacity(0.15))
+                .frame(width: 180, height: 180)
+                .scaleEffect(outerScale)
+            Circle().fill(accent.opacity(0.22))
+                .frame(width: 132, height: 132)
+                .scaleEffect(midScale)
+            Circle().fill(accent)
+                .frame(width: 104, height: 104)
+            Image(systemName: "mic.fill")
+                .font(.system(size: 42, weight: .semibold))
+                .foregroundStyle(.white)
+        }
+        .frame(width: 184, height: 184)
+        .animation(audioLevel == nil ? nil : .easeOut(duration: 0.12), value: audioLevel)
+        .onAppear {
+            withAnimation(.easeInOut(duration: 1.1).repeatForever(autoreverses: true)) {
+                idlePulse = true
+            }
+        }
+    }
+}
+
 /// Idle, continuously pulsing capture button. Tap to begin.
 struct IdleMicButton: View {
     @Environment(\.appAccent) private var accent

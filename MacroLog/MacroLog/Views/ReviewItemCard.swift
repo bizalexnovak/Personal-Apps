@@ -22,10 +22,6 @@ struct ReviewItemCard: View {
     @State private var fat = 0.0
     @State private var waterOz = 0.0
 
-    // Portion slider position (-1…1, 1× centred). Synced with the coordinator's
-    // scaleFactor so an edit/search that re-anchors the item snaps it to centre.
-    @State private var scalePosition = 0.0
-
     // Search pane
     @State private var query = ""
     @State private var results: [USDAFood] = []
@@ -192,29 +188,10 @@ struct ReviewItemCard: View {
     // MARK: Scale
 
     private var scaleRow: some View {
-        VStack(spacing: 2) {
-            HStack {
-                Text("Portion").font(.caption2).foregroundStyle(.secondary)
-                Spacer()
-                Text(PortionScale.label(PortionScale.factor(for: scalePosition)))
-                    .font(.caption.monospacedDigit().weight(.semibold))
-            }
-            HStack(spacing: 8) {
-                Image(systemName: "minus.circle").font(.caption2).foregroundStyle(.secondary)
-                Slider(value: $scalePosition, in: -1...1)
-                    .onChange(of: scalePosition) { _, pos in
-                        coordinator.setScale(item.id, factor: PortionScale.factor(for: pos))
-                    }
-                Image(systemName: "plus.circle").font(.caption2).foregroundStyle(.secondary)
-            }
-        }
-        // If the coordinator re-anchors the item (edit/search resets to 1×),
-        // pull the slider back to centre without fighting the user's drag.
-        .onChange(of: item.scaleFactor) { _, factor in
-            let target = PortionScale.position(for: factor)
-            if abs(target - scalePosition) > 0.001 { scalePosition = target }
-        }
-        .onAppear { scalePosition = PortionScale.position(for: item.scaleFactor) }
+        PortionSliderView(factor: Binding(
+            get: { item.scaleFactor },
+            set: { coordinator.setScale(item.id, factor: $0) }
+        ))
     }
 
     // MARK: Actions

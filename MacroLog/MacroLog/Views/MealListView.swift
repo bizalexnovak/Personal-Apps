@@ -92,9 +92,14 @@ struct MealListView: View {
             case .voice: voicePhase
             case .scan:
                 ZStack(alignment: .bottom) {
-                    ScannerScreen(onCapture: { data in
-                        Task { await coordinator.beginFromLabel(imageData: data, in: modelContext) }
-                    })
+                    // Only run the camera while the Log tab is actually showing.
+                    if hub.selectedTab == AppTab.log {
+                        ScannerScreen(onCapture: { data in
+                            Task { await coordinator.beginFromLabel(imageData: data, in: modelContext) }
+                        })
+                    } else {
+                        Color.clear
+                    }
                     modeSwitcher.padding(.bottom, 28)
                 }
             case .dish:
@@ -115,13 +120,7 @@ struct MealListView: View {
     private var voicePhase: some View {
         switch speech.state {
         case .listening:
-            ListeningView(
-                audioLevel: speech.audioLevel,
-                transcript: speech.transcript,
-                prompt: "Listening… describe what you ate",
-                subtitle: nil,
-                onDone: { speech.finishListening() }
-            )
+            voiceLayout(listening: true)
         case .requestingPermission:
             ProgressView("Getting the microphone ready…")
         case .denied(let message):
@@ -136,26 +135,52 @@ struct MealListView: View {
         case .captured:
             AnalyzingView(text: "Analyzing your meal…")
         case .failed(let message):
-            idleVoice(note: message)
+            voiceLayout(listening: false, note: message)
         case .idle:
-            idleVoice(note: nil)
+            voiceLayout(listening: false, note: nil)
         }
     }
 
-    /// Idle voice: a pulsing mic to tap, quick-add suggestions, and the switcher.
-    private func idleVoice(note: String?) -> some View {
-        VStack(spacing: 22) {
+    /// Idle and listening share one layout: the mic graphic sits in the exact
+    /// same place and only the text + the controls below it change. Tapping the
+    /// mic (idle) starts recording; while listening the keyboard/suggestions/
+    /// switcher give way to Done (and a Cancel appears in the toolbar).
+    private func voiceLayout(listening: Bool, note: String? = nil) -> some View {
+        VStack(spacing: 20) {
             Spacer()
-            IdleMicButton(
-                systemImage: "mic.fill",
-                caption: note ?? "Tap and describe what you ate."
-            ) {
-                Task { await speech.restart() }
+            VStack(spacing: 16) {
+                MicGraphic(audioLevel: listening ? speech.audioLevel : nil)
+                    .contentShape(Circle())
+                    .onTapGesture {
+                        if !listening { Task { await speech.restart() } }
+                    }
+                Text(micText(listening: listening, note: note))
+                    .font(listening && !speech.transcript.isEmpty ? .title3.weight(.medium) : .body)
+                    .foregroundStyle(listening && !speech.transcript.isEmpty ? .primary : .secondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal)
+                    .animation(.default, value: speech.transcript)
             }
-            if !suggestions.isEmpty { suggestionsStrip }
             Spacer()
-            modeSwitcher.padding(.bottom, 28)
+            if listening {
+                Button("Done") { speech.finishListening() }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.large)
+            } else {
+                VStack(spacing: 16) {
+                    if !suggestions.isEmpty { suggestionsStrip }
+                    modeSwitcher
+                }
+            }
         }
+        .padding(.bottom, 28)
+    }
+
+    private func micText(listening: Bool, note: String?) -> String {
+        if listening {
+            return speech.transcript.isEmpty ? "Listening… describe what you ate" : speech.transcript
+        }
+        return note ?? "Tap and describe what you ate."
     }
 
     private var dishPhase: some View {

@@ -31,14 +31,16 @@ Both keys are stored in the iOS Keychain, never in UserDefaults.
 
 Capture happens on the **Log** tab, inline — no modal. It's voice by default
 (a pulsing mic you tap to start recording on that same screen), with a
-camera-app-style **Voice / Scan** switch and a keyboard button to type. A
-floating **"+" button** on the other tabs opens a mini menu (Voice / Scan /
-Type) that jumps to the Log tab in the chosen mode. Siri (**"Log meal in
-MacroLog"**, **"Log drink in MacroLog"**, **"Scan a label in MacroLog"**) opens
-the same flow modally via `CaptureView`. Items can be renamed and
-portion-scaled with a **slider** (1× centred; drag left to shrink, right to
-grow, roughly ¼×–4×) on the review card and in the meal editor. Everything shows
-the review inline — no separate review screen and no "here's what I heard" step.
+camera-app-style **Voice / Scan** switch and a keyboard button to type. A **"+"** button beside the tabs (Today / Trends) on a custom bottom bar opens
+a mini menu (Voice / Scan / AI / Type) that jumps to the Log tab in the chosen
+mode. Siri (**"Log meal in MacroLog"**, **"Log drink in MacroLog"**, **"Scan a
+label in MacroLog"**) opens the same flow modally via `CaptureView`. Items can
+be renamed and portion-scaled with a **`PortionSliderView`** — a slider that
+snaps toward ½× / 1× / 2× / 3× / 4× (with tick marks) plus a **type-in field**
+for an exact multiplier — on the review card and in the meal editor. Everything
+shows the review inline — no separate review screen and no "here's what I heard"
+step. The review's **Date** row (defaults to today) back-dates a meal to a
+previous day.
 
 - **Voice**: tap the pulsing mic to start (mic + speech permissions on first
   use); it pulses idly before you start and with your voice while listening,

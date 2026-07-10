@@ -57,29 +57,19 @@ struct ContentView: View {
     }
 
     var body: some View {
-        TabView(selection: $hub.selectedTab) {
-            HomeView()
-                .tabItem { Label("Today", systemImage: "chart.bar.fill") }
-                .tag(AppTab.today)
-            MealListView()
-                .tabItem { Label("Log", systemImage: "plus.circle.fill") }
-                .tag(AppTab.log)
-            HistoryView()
-                .tabItem { Label("Trends", systemImage: "chart.xyaxis.line") }
-                .tag(AppTab.trends)
-            SettingsView()
-                .tabItem { Label("Settings", systemImage: "gearshape") }
-                .tag(AppTab.settings)
+        ZStack {
+            tabScreen(HomeView(), AppTab.today)
+            tabScreen(MealListView(), AppTab.log)
+            tabScreen(HistoryView(), AppTab.trends)
+            tabScreen(SettingsView(), AppTab.settings)
         }
-        // A "+" reachable from the Today/Trends tabs jumps to the Log tab in the
-        // chosen mode. Sits at the bottom-right corner, in line with the tab
-        // bar. Hidden on Log (its own controls) and Settings (doesn't belong).
-        .overlay(alignment: .bottomTrailing) {
-            if hub.selectedTab != AppTab.log && hub.selectedTab != AppTab.settings {
-                captureMenu
-                    .padding(.trailing, 14)
-                    .padding(.bottom, 8)
-            }
+        // Custom bottom bar: shrunk tab container with the "+" beside it (only
+        // on Today / Trends), so the "+" never sits on top of the tabs.
+        .safeAreaInset(edge: .bottom) {
+            AppTabBar(
+                selection: $hub.selectedTab,
+                showPlus: hub.selectedTab == AppTab.today || hub.selectedTab == AppTab.trends
+            )
         }
         .tint(appAccent)
         .environment(\.appAccent, appAccent)
@@ -107,21 +97,14 @@ struct ContentView: View {
         }
     }
 
-    private var captureMenu: some View {
-        Menu {
-            Button { hub.goVoice() } label: { Label("Voice", systemImage: "mic.fill") }
-            Button { hub.goScan() } label: { Label("Scan a label", systemImage: "doc.viewfinder") }
-            Button { hub.goDish() } label: { Label("AI", systemImage: "sparkles") }
-            Button { hub.goType() } label: { Label("Type", systemImage: "keyboard") }
-        } label: {
-            Image(systemName: "plus")
-                .font(.title3.weight(.semibold))
-                .foregroundStyle(.white)
-                .frame(width: 50, height: 50)
-                .background(Circle().fill(appAccent))
-                .shadow(radius: 4, y: 2)
-        }
-        .accessibilityLabel("Log a meal")
+    /// Keeps every tab alive (preserving its state) while showing only the
+    /// selected one — so switching tabs doesn't reset in-progress capture, etc.
+    @ViewBuilder
+    private func tabScreen<V: View>(_ view: V, _ tab: Int) -> some View {
+        view
+            .opacity(hub.selectedTab == tab ? 1 : 0)
+            .allowsHitTesting(hub.selectedTab == tab)
+            .zIndex(hub.selectedTab == tab ? 1 : 0)
     }
 }
 

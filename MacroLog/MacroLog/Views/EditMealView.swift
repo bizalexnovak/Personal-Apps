@@ -30,14 +30,32 @@ private struct FoodItemEditor: View {
     @State private var showSwapSheet = false
     @State private var showOverrideSheet = false
 
-    // Portion slider (-1…1, 1× centred). Each drag is relative to a baseline
-    // snapshot taken when the drag starts, so scaling doesn't compound; the
-    // slider re-centres to 1× when released.
-    @State private var scalePosition = 0.0
-    @State private var scaleBase: (quantity: Double, calories: Double, protein: Double, carbs: Double, fat: Double, micros: Micronutrients)?
+    // Portion slider: absolute against a baseline (1× = the item as it was when
+    // the editor opened / was last manually changed). Typing or dragging scales
+    // from that baseline, so it never compounds.
+    @State private var base: (quantity: Double, calories: Double, protein: Double, carbs: Double, fat: Double, micros: Micronutrients)?
+    @State private var scaleFactor: Double = 1
 
-    /// Rescales macros linearly when the quantity changes — valid because the
-    /// stored macros were computed as (per-gram values × quantity).
+    /// Re-anchor 1× to the item's current values (after a manual quantity/macro
+    /// change or a food swap).
+    private func reanchor() {
+        base = (item.quantity, item.calories, item.protein, item.carbs, item.fat, item.micros)
+        scaleFactor = 1
+    }
+
+    private func applyFactor(_ f: Double) {
+        guard let base else { return }
+        scaleFactor = f
+        item.quantity = base.quantity * f
+        item.calories = base.calories * f
+        item.protein = base.protein * f
+        item.carbs = base.carbs * f
+        item.fat = base.fat * f
+        item.micros = base.micros.scaled(by: f)
+    }
+
+    /// Rescales macros linearly when the quantity changes, then re-anchors the
+    /// slider so 1× tracks the new quantity.
     private var quantityBinding: Binding<Double> {
         Binding {
             item.quantity
@@ -52,20 +70,8 @@ private struct FoodItemEditor: View {
                 item.micros = item.micros.scaled(by: factor)
             }
             item.quantity = newValue
+            reanchor()
         }
-    }
-
-    /// Applies the slider factor against the baseline captured at drag start —
-    /// for repeat meals where you ate more or less than last time.
-    private func applyScale(_ position: Double) {
-        guard let base = scaleBase else { return }
-        let f = PortionScale.factor(for: position)
-        item.quantity = base.quantity * f
-        item.calories = base.calories * f
-        item.protein = base.protein * f
-        item.carbs = base.carbs * f
-        item.fat = base.fat * f
-        item.micros = base.micros.scaled(by: f)
     }
 
     var body: some View {
@@ -82,31 +88,10 @@ private struct FoodItemEditor: View {
                     .textFieldStyle(.roundedBorder)
             }
 
-            VStack(spacing: 2) {
-                HStack {
-                    Text("Portion")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                    if scaleBase != nil {
-                        Text(PortionScale.label(PortionScale.factor(for: scalePosition)))
-                            .font(.caption.monospacedDigit().weight(.semibold))
-                    }
-                }
-                HStack(spacing: 8) {
-                    Image(systemName: "minus.circle").font(.caption).foregroundStyle(.secondary)
-                    Slider(value: $scalePosition, in: -1...1) { editing in
-                        if editing {
-                            scaleBase = (item.quantity, item.calories, item.protein, item.carbs, item.fat, item.micros)
-                        } else {
-                            scaleBase = nil
-                            scalePosition = 0
-                        }
-                    }
-                    .onChange(of: scalePosition) { _, pos in applyScale(pos) }
-                    Image(systemName: "plus.circle").font(.caption).foregroundStyle(.secondary)
-                }
-            }
+            PortionSliderView(factor: Binding(
+                get: { scaleFactor },
+                set: { applyFactor($0) }
+            ))
 
             Button {
                 showOverrideSheet = true
@@ -139,11 +124,12 @@ private struct FoodItemEditor: View {
                 }
             }
         }
+        .onAppear { reanchor() }
         .sheet(isPresented: $showSwapSheet) {
-            FoodSwapView(item: item)
+            FoodSwapView(item: item, onApply: reanchor)
         }
         .sheet(isPresented: $showOverrideSheet) {
-            MacroOverrideSheet(item: item)
+            MacroOverrideSheet(item: item, onApply: reanchor)
         }
     }
 
@@ -163,6 +149,7 @@ private struct FoodItemEditor: View {
 /// quantity and unit.
 private struct FoodSwapView: View {
     @Bindable var item: FoodItem
+    var onApply: () -> Void = {}
     @Environment(\.dismiss) private var dismiss
 
     @State private var query = ""
@@ -242,6 +229,7 @@ private struct FoodSwapView: View {
         item.fat = match.fat
         item.matchConfidence = match.confidence
         item.micros = match.micros
+        onApply()
         dismiss()
     }
 }
@@ -250,6 +238,7 @@ private struct FoodSwapView: View {
 /// item as verified (high confidence).
 private struct MacroOverrideSheet: View {
     @Bindable var item: FoodItem
+    var onApply: () -> Void = {}
     @Environment(\.dismiss) private var dismiss
 
     @State private var calories: Double = 0
@@ -296,6 +285,7 @@ private struct MacroOverrideSheet: View {
                         item.carbs = carbs
                         item.fat = fat
                         item.matchConfidence = MatchConfidence.high
+                        onApply()
                         dismiss()
                     }
                 }
