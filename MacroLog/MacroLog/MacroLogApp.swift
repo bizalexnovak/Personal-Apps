@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import Combine
 
 @main
 struct MacroLogApp: App {
@@ -16,8 +17,10 @@ struct ContentView: View {
     @StateObject private var hub = CaptureHub()
     @ObservedObject private var pendingStore = PendingMealStore.shared
     @State private var showOnboarding = KeychainService.get(.claudeAPIKey) == nil
+    /// Ticks so Auto re-evaluates day/night across the 7am / 7pm boundaries.
+    @State private var now = Date()
 
-    @AppStorage(ThemeKeys.appearance) private var appearanceRaw = AppearanceMode.system.rawValue
+    @AppStorage(ThemeKeys.appearance) private var appearanceRaw = AppearanceMode.dark.rawValue
     @AppStorage(ThemeKeys.appAccent) private var colorAppAccent = ""
     @AppStorage(ThemeKeys.background) private var colorBackground = ""
     @AppStorage(ThemeKeys.colorCalories) private var colorCalories = ""
@@ -26,9 +29,25 @@ struct ContentView: View {
     @AppStorage(ThemeKeys.colorFat) private var colorFat = ""
     @AppStorage(ThemeKeys.colorWater) private var colorWater = ""
 
-    private var appearance: AppearanceMode { AppearanceMode(rawValue: appearanceRaw) ?? .system }
+    private var appearance: AppearanceMode { AppearanceMode(rawValue: appearanceRaw) ?? .dark }
     private var appAccent: Color { Color(hex: colorAppAccent) ?? MetricPalette.defaultAppAccent }
-    private var appBackground: Color? { Color(hex: colorBackground) }
+
+    /// The custom background only applies in Custom mode; the other modes use
+    /// the standard light/dark background.
+    private var appBackground: Color? {
+        appearance == .custom ? Color(hex: colorBackground) : nil
+    }
+
+    /// Concrete light/dark for the whole app. Auto uses the clock; Custom picks
+    /// the scheme that keeps text readable on the chosen background.
+    private var resolvedScheme: ColorScheme {
+        switch appearance {
+        case .light: return .light
+        case .dark: return .dark
+        case .auto: return AppearanceMode.isNight(now) ? .dark : .light
+        case .custom: return (Color(hex: colorBackground)?.isDark ?? false) ? .dark : .light
+        }
+    }
 
     private var palette: MetricPalette {
         MetricPalette.resolved(
@@ -66,7 +85,8 @@ struct ContentView: View {
         .environment(\.appAccent, appAccent)
         .environment(\.appBackground, appBackground)
         .environment(\.metricPalette, palette)
-        .preferredColorScheme(appearance.colorScheme)
+        .preferredColorScheme(resolvedScheme)
+        .onReceive(Timer.publish(every: 60, on: .main, in: .common).autoconnect()) { now = $0 }
         .environmentObject(coordinator)
         .environmentObject(hub)
         // Siri / deep-link capture is modal; in-app capture is inline on Log.

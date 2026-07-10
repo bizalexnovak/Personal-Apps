@@ -102,14 +102,15 @@ raw text ─▶ ClaudeMealParsingService ─▶ [FoodItemRequest] ─▶ USDANut
   Edit Meal (adjust quantity, swap USDA match, manual macro override), Trends
   (multi-day chart), Settings (Profile / Daily goals / Appearance / API keys /
   Developer sub-screens), Onboarding.
-- **Theme** — light/dark preference (System/Light/Dark), a customizable overall
-  **app accent** colour (buttons, active tab, capture controls, the "+"), a
-  customizable **background** colour (overrides the light/dark background across
-  every main screen via `appBackground` + `.scrollContentBackground(.hidden)`),
-  and a customizable five-colour metric palette. All stored in AppStorage and
-  injected through the environment (`appAccent`, `appBackground`,
-  `MetricPalette`) so the UI, Today rings/bar, and Trends chart update live;
-  Settings → Appearance edits them.
+- **Theme** — four appearance modes: **Light**, **Dark**, **Auto** (flips
+  light/dark by time of day, ~7am–7pm, re-evaluated on a minute timer), and
+  **Custom** (uses a customizable background colour, with text auto-switching to
+  light/dark based on the colour's luma). Plus a customizable **app accent**
+  (buttons, active tab, capture controls, the "+") and a customizable
+  five-colour **metric palette**. All stored in AppStorage and injected through
+  the environment (`appAccent`, `appBackground`, `MetricPalette`) so the UI,
+  Today rings/bar, and Trends chart update live; Settings → Appearance edits
+  them. Default is Dark.
 
 ### The Today diary
 

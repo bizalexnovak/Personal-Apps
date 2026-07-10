@@ -247,7 +247,7 @@ struct GoalsSettingsView: View {
 /// rings/bar and the Trends chart.
 struct AppearanceSettingsView: View {
     @Environment(\.appBackground) private var appBackground
-    @AppStorage(ThemeKeys.appearance) private var appearanceRaw = AppearanceMode.system.rawValue
+    @AppStorage(ThemeKeys.appearance) private var appearanceRaw = AppearanceMode.dark.rawValue
     @AppStorage(ThemeKeys.appAccent) private var colorAppAccent = ""
     @AppStorage(ThemeKeys.background) private var colorBackground = ""
     @AppStorage(ThemeKeys.colorCalories) private var colorCalories = ""
@@ -266,7 +266,7 @@ struct AppearanceSettingsView: View {
             } header: {
                 Text("Theme")
             } footer: {
-                Text("System follows your device's light/dark setting.")
+                Text("Light and Dark are fixed. Auto follows the time of day. Custom uses your background colour below.")
             }
 
             Section {
@@ -279,26 +279,18 @@ struct AppearanceSettingsView: View {
             }
 
             Section {
-                if colorBackground.isEmpty {
-                    ColorPicker(
-                        "Background",
-                        selection: Binding(
-                            get: { Color(hex: colorBackground) ?? defaultBackgroundSwatch },
-                            set: { colorBackground = $0.hexString }
-                        ),
-                        supportsOpacity: false
-                    )
-                    Text("Currently following the \(appearanceLabel) background.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                } else {
-                    colorRow("Background", store: $colorBackground, default: defaultBackgroundSwatch)
-                    Button("Use system background", role: .destructive) { colorBackground = "" }
+                colorRow("Background", store: $colorBackground, default: defaultBackgroundSwatch)
+                if !colorBackground.isEmpty {
+                    Button("Reset background", role: .destructive) { colorBackground = "" }
+                }
+                if appearance != .custom {
+                    Button("Switch to Custom theme") { appearanceRaw = AppearanceMode.custom.rawValue }
+                        .font(.subheadline)
                 }
             } header: {
-                Text("Background")
+                Text("Custom background")
             } footer: {
-                Text("Overrides the light/dark background across the app. Pick a shade that keeps text readable, or reset to follow the system.")
+                Text("Used when Theme is set to Custom. Text automatically switches to light or dark based on how dark this colour is.")
             }
 
             Section {
@@ -325,9 +317,7 @@ struct AppearanceSettingsView: View {
 
     private var defaultBackgroundSwatch: Color { Color(uiColor: .systemBackground) }
 
-    private var appearanceLabel: String {
-        (AppearanceMode(rawValue: appearanceRaw) ?? .system).title.lowercased()
-    }
+    private var appearance: AppearanceMode { AppearanceMode(rawValue: appearanceRaw) ?? .dark }
 
     private func colorRow(_ label: String, store: Binding<String>, default def: Color) -> some View {
         ColorPicker(

@@ -1,26 +1,26 @@
 import SwiftUI
 import UIKit
 
-/// App-wide light/dark preference. `system` follows the device.
+/// App-wide appearance. Light/Dark are fixed presets; Auto alternates with the
+/// time of day (like iPhone's automatic setting); Custom uses the user's custom
+/// background colour and derives light/dark from how dark that colour is.
 enum AppearanceMode: String, CaseIterable, Identifiable {
-    case system, light, dark
+    case light, dark, auto, custom
     var id: String { rawValue }
 
     var title: String {
         switch self {
-        case .system: return "System"
         case .light: return "Light"
         case .dark: return "Dark"
+        case .auto: return "Auto"
+        case .custom: return "Custom"
         }
     }
 
-    /// nil = follow the system setting.
-    var colorScheme: ColorScheme? {
-        switch self {
-        case .system: return nil
-        case .light: return .light
-        case .dark: return .dark
-        }
+    /// Auto flips to dark in the evening/overnight.
+    static func isNight(_ date: Date = .now) -> Bool {
+        let hour = Calendar.current.component(.hour, from: date)
+        return hour < 7 || hour >= 19
     }
 }
 
@@ -180,5 +180,13 @@ extension Color {
         UIColor(self).getRed(&r, green: &g, blue: &b, alpha: &a)
         return String(format: "#%02X%02X%02X",
                       Int((r * 255).rounded()), Int((g * 255).rounded()), Int((b * 255).rounded()))
+    }
+
+    /// Whether this colour reads as dark (so overlaid text should be light).
+    /// Uses Rec. 601 luma.
+    var isDark: Bool {
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        UIColor(self).getRed(&r, green: &g, blue: &b, alpha: &a)
+        return (0.299 * r + 0.587 * g + 0.114 * b) < 0.5
     }
 }
