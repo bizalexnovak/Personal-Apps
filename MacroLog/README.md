@@ -29,29 +29,34 @@ Both keys are stored in the iOS Keychain, never in UserDefaults.
 
 ## Siri & voice capture
 
-Three ways in, one screen. Say **"Log meal in MacroLog"**, **"Log drink in
-MacroLog"** (both open voice capture; the parser handles food, water, and other
-drinks), or **"Scan a label in MacroLog"** (opens the camera), or use the
-**Log** tab (a capture surface — voice by default, a camera-app-style switch to
-Scan, and a keyboard button to type), or just type. Items can be
-renamed and portion-scaled with a **slider** (1× centred; drag left to shrink,
-right to grow, roughly ¼×–4×) on the review card and in the meal editor — handy
-for repeat meals where the portion differs (half a pepper, two scoops).
-`CaptureView` handles all of it and shows the review inline — there is no
-separate review screen and no "here's what I heard" confirm step.
+Capture happens on the **Log** tab, inline — no modal. It's voice by default
+(a pulsing mic you tap to start recording on that same screen), with a
+camera-app-style **Voice / Scan** switch and a keyboard button to type. A
+floating **"+" button** on the other tabs opens a mini menu (Voice / Scan /
+Type) that jumps to the Log tab in the chosen mode. Siri (**"Log meal in
+MacroLog"**, **"Log drink in MacroLog"**, **"Scan a label in MacroLog"**) opens
+the same flow modally via `CaptureView`. Items can be renamed and
+portion-scaled with a **slider** (1× centred; drag left to shrink, right to
+grow, roughly ¼×–4×) on the review card and in the meal editor. Everything shows
+the review inline — no separate review screen and no "here's what I heard" step.
 
-- **Voice**: SFSpeechRecognizer + AVAudioEngine start immediately (mic + speech
-  permissions on first use), a pulsing mic shows the live transcript, and it
-  auto-stops after ~2 s of silence (or tap Done). Recognition is biased toward
-  food vocabulary — brands like Chobani, proteins, units — via `contextualStrings`.
-- **Scan Label**: photograph a nutrition facts label; the image goes to Claude
-  (vision) which reads calories/protein/carbs/fat and serving size straight off
-  the label. Label data is authoritative, so USDA lookup is skipped. The product
-  name is rarely on the facts panel, so right after the scan the app opens
-  **voice capture asking you to say the name** ("it's a Quest bar" → "Quest
-  bar"); the spoken name is paired with the label's macros before the review
-  card appears. You can tap **Skip** to fall back to whatever text the scan read.
-- **Type**: the text field routes through the same flow.
+- **Voice**: tap the pulsing mic to start (mic + speech permissions on first
+  use); it pulses idly before you start and with your voice while listening,
+  shows the live transcript, and auto-stops after ~2 s of silence (or tap Done).
+  Recognition is biased toward food vocabulary — brands like Chobani, proteins,
+  units — via `contextualStrings`. (`CaptureComponents` holds the shared pulse /
+  listening / review pieces used by both the Log tab and the Siri screen.)
+- **Scan Label**: a **live scanner** (`LiveLabelScannerView`) reads the camera
+  feed with on-device Vision text recognition and **auto-captures the frame as
+  soon as it recognizes a nutrition label** ("Nutrition Facts", "Calories",
+  "Serving…") — no shutter (tap to grab it manually as a fallback). That frame
+  goes to Claude (vision) which reads calories/protein/carbs/fat, micronutrients,
+  and serving size straight off the label; label data is authoritative, so USDA
+  lookup is skipped. The product name is rarely on the facts panel, so right
+  after the capture the app opens **voice capture asking you to say the name**
+  ("it's a Quest bar" → "Quest bar") before the review card appears. Tap
+  **Skip** to fall back to whatever text the scan read.
+- **Type**: the keyboard button (or the "+" menu's Type) routes through the same flow.
 
 The captured transcript (or label) runs through Claude parsing and USDA lookups
 in place (brief loading state), then the **same screen** transitions to review:
@@ -87,10 +92,11 @@ raw text ─▶ ClaudeMealParsingService ─▶ [FoodItemRequest] ─▶ USDANut
   Edit Meal (adjust quantity, swap USDA match, manual macro override), Trends
   (multi-day chart), Settings (Profile / Daily goals / Appearance / API keys /
   Developer sub-screens), Onboarding.
-- **Theme** — light/dark preference (System/Light/Dark) and a customizable
-  five-colour metric palette, stored in AppStorage and injected through the
-  environment (`MetricPalette`) so the Today rings/bar and Trends chart update
-  live; Settings → Appearance edits both.
+- **Theme** — light/dark preference (System/Light/Dark), a customizable overall
+  **app accent** colour (buttons, active tab, capture controls, the "+"), and a
+  customizable five-colour metric palette, all stored in AppStorage and injected
+  through the environment (`appAccent`, `MetricPalette`) so the UI, Today
+  rings/bar, and Trends chart update live; Settings → Appearance edits all three.
 
 ### The Today diary
 

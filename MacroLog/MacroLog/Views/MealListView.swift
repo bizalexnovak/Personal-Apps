@@ -1,110 +1,200 @@
 import SwiftUI
+import UIKit
 
-/// The Log tab: a capture surface, not a list. Voice by default with a
-/// camera-app-style switch to Scan, plus a keyboard button in the corner to
-/// type instead. Tapping the big button launches the selected capture mode
-/// (the review + saving happens in CaptureView, and logged meals are viewed and
-/// edited on the Today tab).
+/// The Log tab: an inline capture surface. Voice by default (a pulsing mic you
+/// tap to start recording on this same screen — no modal), a camera-app-style
+/// switch to Scan (auto-captures a nutrition label from the live feed), and a
+/// keyboard button to type. Capture, matching, and the review all happen here;
+/// logged meals are viewed and edited on the Today tab.
 struct MealListView: View {
-    @Environment(\.metricPalette) private var palette
+    @EnvironmentObject private var coordinator: MealCaptureCoordinator
+    @EnvironmentObject private var hub: CaptureHub
+    @Environment(\.modelContext) private var modelContext
+    @StateObject private var speech = SpeechCaptureController()
 
-    private enum Mode: String, CaseIterable, Identifiable {
-        case voice, scan
-        var id: String { rawValue }
-        var title: String { self == .voice ? "Voice" : "Scan" }
-        var icon: String { self == .voice ? "mic.fill" : "camera.fill" }
-        var caption: String {
-            self == .voice
-                ? "Tap and describe what you ate."
-                : "Tap to scan a nutrition label."
-        }
-    }
-
-    @State private var mode: Mode = .voice
+    @State private var mode: LogCaptureMode = .voice
     @State private var showTypeSheet = false
     @State private var typedText = ""
 
     var body: some View {
         NavigationStack {
-            VStack {
-                Spacer()
-
-                Button(action: startCurrentMode) {
-                    VStack(spacing: 18) {
-                        ZStack {
-                            Circle()
-                                .fill(accent.opacity(0.15))
-                                .frame(width: 168, height: 168)
-                            Circle()
-                                .strokeBorder(accent.opacity(0.6), lineWidth: 5)
-                                .frame(width: 132, height: 132)
-                            Circle()
-                                .fill(accent)
-                                .frame(width: 104, height: 104)
-                            Image(systemName: mode.icon)
-                                .font(.system(size: 42, weight: .semibold))
-                                .foregroundStyle(.white)
-                        }
-                        Text(mode.caption)
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                .buttonStyle(.plain)
-                .animation(.easeInOut(duration: 0.2), value: mode)
-
-                Spacer()
-
-                modeSwitcher
-                    .padding(.bottom, 28)
+            content
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .animation(.easeInOut(duration: 0.3), value: coordinator.review?.id)
+                .navigationTitle(navigationTitle)
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar { toolbarContent }
+                .sheet(isPresented: $showTypeSheet) { typeSheet }
+        }
+        .onAppear { mode = hub.logMode }
+        .onChange(of: hub.logMode) { _, newMode in
+            mode = newMode
+            if newMode == .scan { speech.cancel() }
+        }
+        .onChange(of: hub.autoStartVoice) { _, start in
+            if start {
+                hub.autoStartVoice = false
+                mode = .voice
+                Task { await speech.restart() }
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .navigationTitle("Log")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        showTypeSheet = true
-                    } label: {
-                        Image(systemName: "keyboard")
-                    }
-                    .accessibilityLabel("Type instead")
-                }
+        }
+        .onChange(of: hub.openType) { _, open in
+            if open {
+                hub.openType = false
+                showTypeSheet = true
             }
-            .sheet(isPresented: $showTypeSheet) { typeSheet }
+        }
+        .onChange(of: speech.state) { _, newState in
+            guard case .captured = newState else { return }
+            let text = speech.transcript
+            if coordinator.pendingLabel != nil {
+                coordinator.finishLabel(name: text, in: modelContext)
+            } else {
+                Task { await coordinator.begin(text: text, in: modelContext) }
+            }
+        }
+        // After a scan, ask for the item's name by voice.
+        .onChange(of: coordinator.pendingLabel != nil) { _, naming in
+            if naming { Task { await speech.restart() } }
         }
     }
 
-    private var accent: Color {
-        mode == .voice ? palette.calories : palette.carbs
+    // MARK: - Phases
+
+    @ViewBuilder
+    private var content: some View {
+        if coordinator.review != nil {
+            MealReviewView(coordinator: coordinator, onSaved: reset)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+        } else if coordinator.isWorking {
+            AnalyzingView(scanning: mode == .scan && coordinator.pendingLabel == nil)
+        } else if coordinator.pendingLabel != nil {
+            nameStep
+        } else {
+            switch mode {
+            case .voice: voicePhase
+            case .scan:
+                ZStack(alignment: .bottom) {
+                    ScannerScreen(onCapture: { data in
+                        Task { await coordinator.beginFromLabel(imageData: data, in: modelContext) }
+                    })
+                    modeSwitcher.padding(.bottom, 28)
+                }
+            }
+        }
     }
 
-    // MARK: Mode switcher (camera-app style)
+    @ViewBuilder
+    private var voicePhase: some View {
+        switch speech.state {
+        case .listening:
+            ListeningView(
+                audioLevel: speech.audioLevel,
+                transcript: speech.transcript,
+                prompt: "Listening… describe what you ate",
+                subtitle: nil,
+                onDone: { speech.finishListening() }
+            )
+        case .requestingPermission:
+            ProgressView("Getting the microphone ready…")
+        case .denied(let message):
+            CaptureProblemView(message: message, systemImage: "mic.slash.fill") {
+                Button("Open Settings") {
+                    if let url = URL(string: UIApplication.openSettingsURLString) {
+                        UIApplication.shared.open(url)
+                    }
+                }
+                .buttonStyle(.borderedProminent)
+            }
+        case .captured:
+            AnalyzingView(scanning: false)
+        case .failed(let message):
+            idleVoice(note: message)
+        case .idle:
+            idleVoice(note: nil)
+        }
+    }
+
+    /// Idle voice: a pulsing mic to tap, plus the mode switcher.
+    private func idleVoice(note: String?) -> some View {
+        VStack {
+            Spacer()
+            IdleMicButton(
+                systemImage: "mic.fill",
+                caption: note ?? "Tap and describe what you ate."
+            ) {
+                Task { await speech.restart() }
+            }
+            Spacer()
+            modeSwitcher
+                .padding(.bottom, 28)
+        }
+    }
+
+    private var nameStep: some View {
+        ListeningView(
+            audioLevel: speech.audioLevel,
+            transcript: speech.transcript,
+            prompt: "Listening… what's this item called?",
+            subtitle: "Label scanned. Say the name of this food.",
+            showSkip: true,
+            onDone: { speech.finishListening() },
+            onSkip: {
+                speech.cancel()
+                coordinator.finishLabel(name: "", in: modelContext)
+            }
+        )
+    }
+
+    // MARK: - Mode switcher (camera-app style)
 
     private var modeSwitcher: some View {
         HStack(spacing: 8) {
-            ForEach(Mode.allCases) { option in
-                Button {
-                    withAnimation(.easeInOut(duration: 0.2)) { mode = option }
-                } label: {
-                    Text(option.title.uppercased())
-                        .font(.caption.weight(.semibold))
-                        .tracking(0.5)
-                        .foregroundStyle(mode == option ? accent : .secondary)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 8)
-                        .background(
-                            Capsule().fill(mode == option ? accent.opacity(0.15) : .clear)
-                        )
-                }
-                .buttonStyle(.plain)
-            }
+            switchButton(.voice, "Voice")
+            switchButton(.scan, "Scan")
         }
         .padding(4)
-        .background(Capsule().fill(.quaternary.opacity(0.4)))
+        .background(Capsule().fill(.ultraThinMaterial))
     }
 
-    // MARK: Type sheet
+    private func switchButton(_ option: LogCaptureMode, _ title: String) -> some View {
+        Button {
+            withAnimation(.easeInOut(duration: 0.2)) { mode = option }
+            hub.logMode = option
+            if option == .scan { speech.cancel() }
+        } label: {
+            Text(title.uppercased())
+                .font(.caption.weight(.semibold))
+                .tracking(0.5)
+                .foregroundStyle(mode == option ? Color.accentColor : .secondary)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+                .background(Capsule().fill(mode == option ? Color.accentColor.opacity(0.15) : .clear))
+        }
+        .buttonStyle(.plain)
+    }
+
+    // MARK: - Chrome
+
+    private var navigationTitle: String {
+        if coordinator.review != nil { return "Review Meal" }
+        if coordinator.pendingLabel != nil { return "Name the Item" }
+        return "Log"
+    }
+
+    @ToolbarContentBuilder
+    private var toolbarContent: some ToolbarContent {
+        if coordinator.review != nil || speech.state == .listening || coordinator.pendingLabel != nil {
+            ToolbarItem(placement: .cancellationAction) {
+                Button("Cancel") { reset() }
+            }
+        } else {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button { showTypeSheet = true } label: { Image(systemName: "keyboard") }
+                    .accessibilityLabel("Type instead")
+            }
+        }
+    }
 
     private var typeSheet: some View {
         NavigationStack {
@@ -120,10 +210,7 @@ struct MealListView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") {
-                        typedText = ""
-                        showTypeSheet = false
-                    }
+                    Button("Cancel") { typedText = ""; showTypeSheet = false }
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Log") { submitTyped() }
@@ -134,20 +221,18 @@ struct MealListView: View {
         .presentationDetents([.medium])
     }
 
-    // MARK: Actions
-
-    private func startCurrentMode() {
-        switch mode {
-        case .voice: PendingMealStore.shared.requestVoice()
-        case .scan: PendingMealStore.shared.requestScan()
-        }
-    }
+    // MARK: - Actions
 
     private func submitTyped() {
         let text = typedText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
         typedText = ""
         showTypeSheet = false
-        PendingMealStore.shared.requestText(text)
+        Task { await coordinator.begin(text: text, in: modelContext) }
+    }
+
+    private func reset() {
+        speech.cancel()
+        coordinator.cancelReview()
     }
 }

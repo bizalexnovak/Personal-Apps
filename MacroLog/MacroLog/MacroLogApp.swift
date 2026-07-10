@@ -13,10 +13,12 @@ struct MacroLogApp: App {
 
 struct ContentView: View {
     @StateObject private var coordinator = MealCaptureCoordinator()
+    @StateObject private var hub = CaptureHub()
     @ObservedObject private var pendingStore = PendingMealStore.shared
     @State private var showOnboarding = KeychainService.get(.claudeAPIKey) == nil
 
     @AppStorage(ThemeKeys.appearance) private var appearanceRaw = AppearanceMode.system.rawValue
+    @AppStorage(ThemeKeys.appAccent) private var colorAppAccent = ""
     @AppStorage(ThemeKeys.colorCalories) private var colorCalories = ""
     @AppStorage(ThemeKeys.colorProtein) private var colorProtein = ""
     @AppStorage(ThemeKeys.colorCarbs) private var colorCarbs = ""
@@ -24,6 +26,7 @@ struct ContentView: View {
     @AppStorage(ThemeKeys.colorWater) private var colorWater = ""
 
     private var appearance: AppearanceMode { AppearanceMode(rawValue: appearanceRaw) ?? .system }
+    private var appAccent: Color { Color(hex: colorAppAccent) ?? MetricPalette.defaultAppAccent }
 
     private var palette: MetricPalette {
         MetricPalette.resolved(
@@ -33,22 +36,37 @@ struct ContentView: View {
     }
 
     var body: some View {
-        TabView {
+        TabView(selection: $hub.selectedTab) {
             HomeView()
                 .tabItem { Label("Today", systemImage: "chart.bar.fill") }
+                .tag(AppTab.today)
             MealListView()
                 .tabItem { Label("Log", systemImage: "plus.circle.fill") }
+                .tag(AppTab.log)
             HistoryView()
                 .tabItem { Label("Trends", systemImage: "chart.xyaxis.line") }
+                .tag(AppTab.trends)
             SettingsView()
                 .tabItem { Label("Settings", systemImage: "gearshape") }
+                .tag(AppTab.settings)
         }
-        .tint(palette.calories)
+        // A floating "+" reachable from the other tabs jumps to the Log tab in
+        // the chosen mode. Hidden on the Log tab itself, which has its own
+        // controls (and to keep it clear of the Save All bar).
+        .overlay(alignment: .bottomTrailing) {
+            if hub.selectedTab != AppTab.log {
+                captureMenu
+                    .padding(.trailing, 20)
+                    .padding(.bottom, 60)
+            }
+        }
+        .tint(appAccent)
+        .environment(\.appAccent, appAccent)
         .environment(\.metricPalette, palette)
         .preferredColorScheme(appearance.colorScheme)
         .environmentObject(coordinator)
-        // The capture screen handles voice/scan/text AND renders the review
-        // inline — there's no separate review cover anymore.
+        .environmentObject(hub)
+        // Siri / deep-link capture is modal; in-app capture is inline on Log.
         .fullScreenCover(item: $pendingStore.request) { request in
             CaptureView(mode: request.mode)
                 .environmentObject(coordinator)
@@ -64,6 +82,22 @@ struct ContentView: View {
         } message: {
             Text(coordinator.errorMessage ?? "")
         }
+    }
+
+    private var captureMenu: some View {
+        Menu {
+            Button { hub.goVoice() } label: { Label("Voice", systemImage: "mic.fill") }
+            Button { hub.goScan() } label: { Label("Scan", systemImage: "camera.fill") }
+            Button { hub.goType() } label: { Label("Type", systemImage: "keyboard") }
+        } label: {
+            Image(systemName: "plus")
+                .font(.title2.weight(.semibold))
+                .foregroundStyle(.white)
+                .frame(width: 56, height: 56)
+                .background(Circle().fill(appAccent))
+                .shadow(radius: 4, y: 2)
+        }
+        .accessibilityLabel("Log a meal")
     }
 }
 

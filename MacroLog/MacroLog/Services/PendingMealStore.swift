@@ -15,9 +15,9 @@ struct CaptureRequest: Identifiable, Equatable {
     let mode: CaptureMode
 }
 
-/// Hand-off between entry points (Siri intent, mic button, scan button, typed
-/// field) and the app UI. Setting `request` presents the capture screen; the
-/// screen clears it on dismiss.
+/// Hand-off from Siri / deep links to the modal capture screen. Setting
+/// `request` presents CaptureView; the screen clears it on dismiss. In-app
+/// capture instead routes through `CaptureHub` to the Log tab (see below).
 @MainActor
 final class PendingMealStore: ObservableObject {
     static let shared = PendingMealStore()
@@ -27,4 +27,43 @@ final class PendingMealStore: ObservableObject {
     func requestVoice() { request = CaptureRequest(mode: .voice) }
     func requestScan() { request = CaptureRequest(mode: .scan) }
     func requestText(_ text: String) { request = CaptureRequest(mode: .text(text)) }
+}
+
+/// In-app capture routing. The tab bar's global "+" menu and the Log tab's own
+/// switcher both go through here so capture always happens inline on the Log
+/// tab (no modal). `AppTab` indexes the TabView selection.
+enum AppTab {
+    static let today = 0
+    static let log = 1
+    static let trends = 2
+    static let settings = 3
+}
+
+enum LogCaptureMode: Equatable { case voice, scan }
+
+@MainActor
+final class CaptureHub: ObservableObject {
+    /// Which tab is showing (bound to the TabView selection).
+    @Published var selectedTab = AppTab.today
+    /// Voice vs. scan on the Log tab.
+    @Published var logMode: LogCaptureMode = .voice
+    /// One-shot flags the Log tab consumes after switching in.
+    @Published var autoStartVoice = false
+    @Published var openType = false
+
+    func goVoice() {
+        logMode = .voice
+        autoStartVoice = true
+        selectedTab = AppTab.log
+    }
+
+    func goScan() {
+        logMode = .scan
+        selectedTab = AppTab.log
+    }
+
+    func goType() {
+        openType = true
+        selectedTab = AppTab.log
+    }
 }

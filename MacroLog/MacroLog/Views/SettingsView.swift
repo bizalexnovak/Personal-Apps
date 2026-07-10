@@ -239,6 +239,7 @@ struct GoalsSettingsView: View {
 /// rings/bar and the Trends chart.
 struct AppearanceSettingsView: View {
     @AppStorage(ThemeKeys.appearance) private var appearanceRaw = AppearanceMode.system.rawValue
+    @AppStorage(ThemeKeys.appAccent) private var colorAppAccent = ""
     @AppStorage(ThemeKeys.colorCalories) private var colorCalories = ""
     @AppStorage(ThemeKeys.colorProtein) private var colorProtein = ""
     @AppStorage(ThemeKeys.colorCarbs) private var colorCarbs = ""
@@ -256,6 +257,15 @@ struct AppearanceSettingsView: View {
                 Text("Theme")
             } footer: {
                 Text("System follows your device's light/dark setting.")
+            }
+
+            Section {
+                colorRow("App color", store: $colorAppAccent, default: MetricPalette.defaultAppAccent)
+                Button("Reset app color", role: .destructive) { colorAppAccent = "" }
+            } header: {
+                Text("App color")
+            } footer: {
+                Text("Tints buttons, the active tab, and the capture controls.")
             }
 
             Section {

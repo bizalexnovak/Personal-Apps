@@ -28,6 +28,7 @@ enum AppearanceMode: String, CaseIterable, Identifiable {
 /// stored as "#RRGGBB" hex strings; an empty string means "use the default".
 enum ThemeKeys {
     static let appearance = "theme_appearance"
+    static let appAccent = "theme_app_accent"
     static let colorCalories = "theme_color_calories"
     static let colorProtein = "theme_color_protein"
     static let colorCarbs = "theme_color_carbs"
@@ -97,6 +98,23 @@ extension EnvironmentValues {
     var metricPalette: MetricPalette {
         get { self[MetricPaletteKey.self] }
         set { self[MetricPaletteKey.self] = newValue }
+    }
+}
+
+/// The overall app accent (buttons, active tab, the +/capture controls). The
+/// default is MacroLog's orange; customizable under Settings → Appearance.
+extension MetricPalette {
+    static let defaultAppAccent = Color(.sRGB, red: 0.961, green: 0.486, blue: 0.0)
+}
+
+private struct AppAccentKey: EnvironmentKey {
+    static let defaultValue = MetricPalette.defaultAppAccent
+}
+
+extension EnvironmentValues {
+    var appAccent: Color {
+        get { self[AppAccentKey.self] }
+        set { self[AppAccentKey.self] = newValue }
     }
 }
 
