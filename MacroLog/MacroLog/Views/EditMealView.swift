@@ -30,10 +30,11 @@ private struct FoodItemEditor: View {
     @State private var showSwapSheet = false
     @State private var showOverrideSheet = false
 
-    /// Scale factors for the quick-adjust row (relative to current values).
-    private static let scaleOptions: [(label: String, factor: Double)] = [
-        ("½×", 0.5), ("⅔×", 2.0 / 3.0), ("1½×", 1.5), ("2×", 2), ("3×", 3),
-    ]
+    // Portion slider (-1…1, 1× centred). Each drag is relative to a baseline
+    // snapshot taken when the drag starts, so scaling doesn't compound; the
+    // slider re-centres to 1× when released.
+    @State private var scalePosition = 0.0
+    @State private var scaleBase: (quantity: Double, calories: Double, protein: Double, carbs: Double, fat: Double)?
 
     /// Rescales macros linearly when the quantity changes — valid because the
     /// stored macros were computed as (per-gram values × quantity).
@@ -53,14 +54,16 @@ private struct FoodItemEditor: View {
         }
     }
 
-    /// Scales quantity and every macro by the same factor — for repeat meals
-    /// where you ate more or less than last time (½ a pepper, 2 scoops, …).
-    private func scale(_ factor: Double) {
-        item.quantity *= factor
-        item.calories *= factor
-        item.protein *= factor
-        item.carbs *= factor
-        item.fat *= factor
+    /// Applies the slider factor against the baseline captured at drag start —
+    /// for repeat meals where you ate more or less than last time.
+    private func applyScale(_ position: Double) {
+        guard let base = scaleBase else { return }
+        let f = PortionScale.factor(for: position)
+        item.quantity = base.quantity * f
+        item.calories = base.calories * f
+        item.protein = base.protein * f
+        item.carbs = base.carbs * f
+        item.fat = base.fat * f
     }
 
     var body: some View {
@@ -77,14 +80,29 @@ private struct FoodItemEditor: View {
                     .textFieldStyle(.roundedBorder)
             }
 
-            HStack(spacing: 6) {
-                Text("Scale")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                ForEach(Self.scaleOptions, id: \.label) { option in
-                    Button(option.label) { scale(option.factor) }
-                        .buttonStyle(.bordered)
-                        .controlSize(.small)
+            VStack(spacing: 2) {
+                HStack {
+                    Text("Portion")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    if scaleBase != nil {
+                        Text(PortionScale.label(PortionScale.factor(for: scalePosition)))
+                            .font(.caption.monospacedDigit().weight(.semibold))
+                    }
+                }
+                HStack(spacing: 8) {
+                    Image(systemName: "minus.circle").font(.caption).foregroundStyle(.secondary)
+                    Slider(value: $scalePosition, in: -1...1) { editing in
+                        if editing {
+                            scaleBase = (item.quantity, item.calories, item.protein, item.carbs, item.fat)
+                        } else {
+                            scaleBase = nil
+                            scalePosition = 0
+                        }
+                    }
+                    .onChange(of: scalePosition) { _, pos in applyScale(pos) }
+                    Image(systemName: "plus.circle").font(.caption).foregroundStyle(.secondary)
                 }
             }
 

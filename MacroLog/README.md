@@ -33,10 +33,11 @@ Three ways in, one screen. Say **"Log meal in MacroLog"**, **"Log drink in
 MacroLog"** (both open voice capture; the parser handles food, water, and other
 drinks), or **"Scan a label in MacroLog"** (opens the camera), or use the
 **mic** / **camera** buttons on the Meals tab, or just type. Items can be
-renamed and portion-scaled (½× / ⅔× / 1½× / 2× / 3×) on the review card and in
-the meal editor — handy for repeat meals where the portion differs (half a
-pepper, two scoops). `CaptureView` handles all of it and shows the review inline — there
-is no separate review screen and no "here's what I heard" confirm step.
+renamed and portion-scaled with a **slider** (1× centred; drag left to shrink,
+right to grow, roughly ¼×–4×) on the review card and in the meal editor — handy
+for repeat meals where the portion differs (half a pepper, two scoops).
+`CaptureView` handles all of it and shows the review inline — there is no
+separate review screen and no "here's what I heard" confirm step.
 
 - **Voice**: SFSpeechRecognizer + AVAudioEngine start immediately (mic + speech
   permissions on first use), a pulsing mic shows the live transcript, and it
@@ -44,7 +45,11 @@ is no separate review screen and no "here's what I heard" confirm step.
   food vocabulary — brands like Chobani, proteins, units — via `contextualStrings`.
 - **Scan Label**: photograph a nutrition facts label; the image goes to Claude
   (vision) which reads calories/protein/carbs/fat and serving size straight off
-  the label. Label data is authoritative, so USDA lookup is skipped.
+  the label. Label data is authoritative, so USDA lookup is skipped. The product
+  name is rarely on the facts panel, so right after the scan the app opens
+  **voice capture asking you to say the name** ("it's a Quest bar" → "Quest
+  bar"); the spoken name is paired with the label's macros before the review
+  card appears. You can tap **Skip** to fall back to whatever text the scan read.
 - **Type**: the text field routes through the same flow.
 
 The captured transcript (or label) runs through Claude parsing and USDA lookups

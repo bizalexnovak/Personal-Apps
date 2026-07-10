@@ -29,7 +29,7 @@ struct CaptureView: View {
             }
             .animation(.easeInOut(duration: 0.3), value: coordinator.review?.id)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .navigationTitle(coordinator.review == nil ? "Log a Meal" : "Review Meal")
+            .navigationTitle(navigationTitle)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -54,7 +54,16 @@ struct CaptureView: View {
         .onChange(of: speech.state) { _, newState in
             guard case .captured = newState else { return }
             let text = speech.transcript
-            Task { await coordinator.begin(text: text, in: modelContext) }
+            if coordinator.pendingLabel != nil {
+                coordinator.finishLabel(name: text, in: modelContext)
+            } else {
+                Task { await coordinator.begin(text: text, in: modelContext) }
+            }
+        }
+        // A scanned label has macros but no name — kick off voice capture to
+        // ask the user what it is.
+        .onChange(of: isNamingLabel) { _, naming in
+            if naming { Task { await speech.restart() } }
         }
         .fullScreenCover(isPresented: $showCamera) {
             CameraPicker { image in
@@ -64,6 +73,14 @@ struct CaptureView: View {
             .ignoresSafeArea()
         }
         .onDisappear { speech.cancel() }
+    }
+
+    private var isNamingLabel: Bool { coordinator.pendingLabel != nil }
+
+    private var navigationTitle: String {
+        if coordinator.review != nil { return "Review Meal" }
+        if isNamingLabel { return "Name the Item" }
+        return "Log a Meal"
     }
 
     // MARK: - Start
@@ -93,6 +110,8 @@ struct CaptureView: View {
     private var captureContent: some View {
         if coordinator.isWorking {
             analyzingView
+        } else if isNamingLabel {
+            voicePhase // ask for the scanned item's name by voice
         } else {
             switch mode {
             case .voice: voicePhase
@@ -145,9 +164,22 @@ struct CaptureView: View {
         }
     }
 
+    private var listeningPrompt: String {
+        isNamingLabel
+            ? "Listening… what's this item called?"
+            : "Listening… describe what you ate"
+    }
+
     private var listeningView: some View {
         VStack(spacing: 32) {
             Spacer()
+            if isNamingLabel {
+                Text("Label scanned. Say the name of this food.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal)
+            }
             ZStack {
                 Circle()
                     .fill(.orange.opacity(0.2))
@@ -163,7 +195,7 @@ struct CaptureView: View {
                     .font(.system(size: 44))
                     .foregroundStyle(.orange)
             }
-            Text(speech.transcript.isEmpty ? "Listening… describe what you ate" : speech.transcript)
+            Text(speech.transcript.isEmpty ? listeningPrompt : speech.transcript)
                 .font(speech.transcript.isEmpty ? .body : .title3.weight(.medium))
                 .foregroundStyle(speech.transcript.isEmpty ? .secondary : .primary)
                 .multilineTextAlignment(.center)
@@ -175,8 +207,16 @@ struct CaptureView: View {
             }
             .buttonStyle(.borderedProminent)
             .controlSize(.large)
-            .padding(.bottom, 24)
+            if isNamingLabel {
+                Button("Skip — name it later") {
+                    speech.cancel()
+                    coordinator.finishLabel(name: "", in: modelContext)
+                }
+                .font(.subheadline)
+                .padding(.top, 4)
+            }
         }
+        .padding(.bottom, 24)
     }
 
     private func problemView(message: String, systemImage: String, @ViewBuilder action: () -> some View) -> some View {

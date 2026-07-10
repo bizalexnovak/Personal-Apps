@@ -13,6 +13,17 @@ final class MealCaptureCoordinator: ObservableObject {
         case edited
     }
 
+    /// Snapshot of quantity + macros at scaleFactor 1.0 so the portion slider
+    /// is absolute (drag to 2× then back to 1× restores the original values
+    /// instead of compounding). Reset whenever the match is replaced.
+    struct ScaleBaseline {
+        var quantity: Double
+        var calories: Double
+        var protein: Double
+        var carbs: Double
+        var fat: Double
+    }
+
     struct ReviewItem: Identifiable {
         let id = UUID()
         var request: FoodItemRequest
@@ -23,9 +34,23 @@ final class MealCaptureCoordinator: ObservableObject {
         var clarificationQuestion: String?
         var options: [ClarificationOption]
         var status: ReviewStatus
+        /// Current portion multiplier (1.0 = as matched). Driven by the slider.
+        var scaleFactor: Double = 1
+        var scaleBaseline: ScaleBaseline?
 
         var needsAttention: Bool {
             match == nil || match?.confidence == MatchConfidence.low
+        }
+
+        /// Re-anchor the slider to the current match/quantity and reset to 1×.
+        /// Call after the match is first set or later replaced.
+        mutating func captureScaleBaseline() {
+            guard let m = match else { scaleBaseline = nil; return }
+            scaleBaseline = ScaleBaseline(
+                quantity: request.quantity,
+                calories: m.calories, protein: m.protein, carbs: m.carbs, fat: m.fat
+            )
+            scaleFactor = 1
         }
     }
 
@@ -38,6 +63,10 @@ final class MealCaptureCoordinator: ObservableObject {
     @Published var review: ReviewSession?
     @Published private(set) var isWorking = false
     @Published var errorMessage: String?
+    /// Set after a nutrition label is scanned: the macros are known but the
+    /// product name isn't (it's rarely on the label), so the app asks the user
+    /// to say the name before building the review.
+    @Published var pendingLabel: LabelNutrition?
 
     var parser: MealParsing = ClaudeMealParsingService()
     var labelScanner: LabelScanning = ClaudeLabelScanningService()
@@ -45,7 +74,7 @@ final class MealCaptureCoordinator: ObservableObject {
 
     private var context: ModelContext?
 
-    var isCapturing: Bool { isWorking || review != nil }
+    var isCapturing: Bool { isWorking || review != nil || pendingLabel != nil }
 
     var canSaveAll: Bool {
         guard let review, !review.items.isEmpty else { return false }
@@ -114,12 +143,14 @@ final class MealCaptureCoordinator: ObservableObject {
             errorMessage = "Couldn't find any food items in that."
             return
         }
+        for i in items.indices { items[i].captureScaleBaseline() }
         review = ReviewSession(rawText: text, items: items)
     }
 
-    /// Scan Label path: extract macros straight from a photographed nutrition
-    /// label (authoritative — no USDA lookup) and build a one-item review with
-    /// the values already filled in for confirmation.
+    /// Scan Label path, step 1: read the macros straight off a photographed
+    /// nutrition label (authoritative — no USDA lookup). The product name is
+    /// rarely on the facts panel, so instead of building the review here we
+    /// stash the label and let CaptureView ask the user to say the name.
     func beginFromLabel(imageData: Data, in context: ModelContext) async {
         guard !isCapturing else { return }
         self.context = context
@@ -134,25 +165,59 @@ final class MealCaptureCoordinator: ObservableObject {
             return
         }
         isWorking = false
+        pendingLabel = label
+    }
 
+    /// Scan Label path, step 2: combine the authoritative label macros with the
+    /// spoken product name, then build the one-item review. An empty spoken
+    /// name falls back to whatever the label read (or a generic placeholder).
+    func finishLabel(name spokenName: String, in context: ModelContext) {
+        guard let label = pendingLabel else { return }
+        self.context = context
+
+        let cleaned = Self.cleanSpokenName(spokenName)
+        let name = !cleaned.isEmpty ? cleaned
+            : (label.name.isEmpty ? "Scanned item" : label.name)
         let description = label.servingSize.isEmpty
-            ? label.name
-            : "\(label.name) · \(label.servingSize)"
+            ? name
+            : "\(name) · \(label.servingSize)"
         let match = NutritionMatch(
             matchedDescription: description,
             calories: label.calories, protein: label.protein,
             carbs: label.carbs, fat: label.fat,
             confidence: MatchConfidence.high // label values are authoritative
         )
-        let item = ReviewItem(
-            request: FoodItemRequest(name: label.name, quantity: 1, unit: "serving"),
+        var item = ReviewItem(
+            request: FoodItemRequest(name: name, quantity: 1, unit: "serving"),
             match: match,
             clarificationQuestion: nil,
             options: [],
             status: .needsReview
         )
-        MatchDebugLog.shared.record(transcript: "Scanned label: \(label.name)")
-        review = ReviewSession(rawText: "Scanned label: \(label.name)", items: [item])
+        item.captureScaleBaseline()
+        MatchDebugLog.shared.record(transcript: "Scanned label: \(name)")
+        pendingLabel = nil
+        review = ReviewSession(rawText: "Scanned label: \(name)", items: [item])
+    }
+
+    /// Trim conversational lead-ins from a spoken product name so "it's a Quest
+    /// bar" becomes "Quest bar".
+    static func cleanSpokenName(_ raw: String) -> String {
+        var s = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        s = s.trimmingCharacters(in: CharacterSet(charactersIn: ".!?,"))
+        let lowered = s.lowercased()
+        // Longest prefixes first so "it's a " wins over "it's ".
+        let prefixes = [
+            "it is called ", "it's called ", "the name is ", "its called ",
+            "it is a ", "it's a ", "this is a ", "that is a ", "that's a ",
+            "this is ", "that is ", "that's ", "it is ", "it's ", "its ",
+            "call it ", "name is ", "a ",
+        ]
+        for p in prefixes where lowered.hasPrefix(p) {
+            s = String(s.dropFirst(p.count))
+            break
+        }
+        return s.trimmingCharacters(in: .whitespaces)
     }
 
     // MARK: - Card actions
@@ -188,16 +253,19 @@ final class MealCaptureCoordinator: ObservableObject {
         updateItem(itemID) { $0.request.name = trimmed }
     }
 
-    /// Scale quantity and all macros by a factor (½, 2×, …) for a repeat meal
-    /// where the portion differs from what's populated.
-    func scale(_ itemID: UUID, by factor: Double) {
+    /// Set the portion multiplier from the slider. Absolute (relative to the
+    /// captured baseline), so 2× then 1× returns to the original values.
+    func setScale(_ itemID: UUID, factor: Double) {
         updateItem(itemID) { item in
-            item.request.quantity *= factor
+            guard let base = item.scaleBaseline else { return }
+            let f = max(0.1, factor)
+            item.scaleFactor = f
+            item.request.quantity = base.quantity * f
             if var m = item.match {
-                m.calories *= factor
-                m.protein *= factor
-                m.carbs *= factor
-                m.fat *= factor
+                m.calories = base.calories * f
+                m.protein = base.protein * f
+                m.carbs = base.carbs * f
+                m.fat = base.fat * f
                 item.match = m
             }
             if item.status == .confirmed { item.status = .edited }
@@ -215,6 +283,7 @@ final class MealCaptureCoordinator: ObservableObject {
                 confidence: MatchConfidence.high
             )
             item.status = .edited
+            item.captureScaleBaseline()
         }
     }
 
@@ -227,6 +296,7 @@ final class MealCaptureCoordinator: ObservableObject {
                 confidence: MatchConfidence.high
             )
             item.status = .edited
+            item.captureScaleBaseline()
         }
     }
 
@@ -242,6 +312,7 @@ final class MealCaptureCoordinator: ObservableObject {
         updateItem(itemID) { item in
             item.match = match
             item.status = .confirmed
+            item.captureScaleBaseline()
         }
     }
 
@@ -259,6 +330,7 @@ final class MealCaptureCoordinator: ObservableObject {
             item.clarificationQuestion = nil
             item.options = []
             item.status = .needsReview
+            item.captureScaleBaseline()
         }
     }
 
@@ -279,6 +351,7 @@ final class MealCaptureCoordinator: ObservableObject {
 
     func cancelReview() {
         review = nil
+        pendingLabel = nil
         isWorking = false
     }
 

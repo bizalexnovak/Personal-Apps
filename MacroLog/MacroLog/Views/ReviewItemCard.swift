@@ -22,9 +22,9 @@ struct ReviewItemCard: View {
     @State private var fat = 0.0
     @State private var waterOz = 0.0
 
-    private static let scaleOptions: [(label: String, factor: Double)] = [
-        ("½×", 0.5), ("⅔×", 2.0 / 3.0), ("1½×", 1.5), ("2×", 2), ("3×", 3),
-    ]
+    // Portion slider position (-1…1, 1× centred). Synced with the coordinator's
+    // scaleFactor so an edit/search that re-anchors the item snaps it to centre.
+    @State private var scalePosition = 0.0
 
     // Search pane
     @State private var query = ""
@@ -192,16 +192,29 @@ struct ReviewItemCard: View {
     // MARK: Scale
 
     private var scaleRow: some View {
-        HStack(spacing: 6) {
-            Text("Scale").font(.caption2).foregroundStyle(.secondary)
-            ForEach(Self.scaleOptions, id: \.label) { option in
-                Button(option.label) {
-                    coordinator.scale(item.id, by: option.factor)
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.mini)
+        VStack(spacing: 2) {
+            HStack {
+                Text("Portion").font(.caption2).foregroundStyle(.secondary)
+                Spacer()
+                Text(PortionScale.label(PortionScale.factor(for: scalePosition)))
+                    .font(.caption.monospacedDigit().weight(.semibold))
+            }
+            HStack(spacing: 8) {
+                Image(systemName: "minus.circle").font(.caption2).foregroundStyle(.secondary)
+                Slider(value: $scalePosition, in: -1...1)
+                    .onChange(of: scalePosition) { _, pos in
+                        coordinator.setScale(item.id, factor: PortionScale.factor(for: pos))
+                    }
+                Image(systemName: "plus.circle").font(.caption2).foregroundStyle(.secondary)
             }
         }
+        // If the coordinator re-anchors the item (edit/search resets to 1×),
+        // pull the slider back to centre without fighting the user's drag.
+        .onChange(of: item.scaleFactor) { _, factor in
+            let target = PortionScale.position(for: factor)
+            if abs(target - scalePosition) > 0.001 { scalePosition = target }
+        }
+        .onAppear { scalePosition = PortionScale.position(for: item.scaleFactor) }
     }
 
     // MARK: Actions

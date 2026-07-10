@@ -350,7 +350,7 @@ final class MealCaptureCoordinatorTests: XCTestCase {
         XCTAssertEqual(meal.waterOunces, 24, accuracy: 0.01)
     }
 
-    func testScaleMultipliesQuantityAndMacros() async throws {
+    func testSetScaleIsAbsoluteAgainstBaseline() async throws {
         let context = try makeContext()
         let coordinator = makeCoordinator(
             parsed: [FoodItemRequest(name: "protein shake", quantity: 1, unit: "serving")],
@@ -359,13 +359,19 @@ final class MealCaptureCoordinatorTests: XCTestCase {
         await coordinator.begin(text: "protein shake", in: context)
         let id = try XCTUnwrap(coordinator.review?.items.first?.id)
 
-        coordinator.scale(id, by: 2)
+        coordinator.setScale(id, factor: 2)
         let item = try XCTUnwrap(coordinator.review?.items.first)
         XCTAssertEqual(item.request.quantity, 2, accuracy: 0.001)
         XCTAssertEqual(item.match?.calories ?? 0, 320, accuracy: 0.001)
         XCTAssertEqual(item.match?.protein ?? 0, 60, accuracy: 0.001)
 
-        coordinator.scale(id, by: 0.5) // back down
+        // Absolute, not cumulative: 0.5× is half the baseline, not half of 2×.
+        coordinator.setScale(id, factor: 0.5)
+        XCTAssertEqual(coordinator.review?.items.first?.request.quantity ?? 0, 0.5, accuracy: 0.001)
+        XCTAssertEqual(coordinator.review?.items.first?.match?.calories ?? 0, 80, accuracy: 0.001)
+
+        // Back to 1× restores the original values exactly.
+        coordinator.setScale(id, factor: 1)
         XCTAssertEqual(coordinator.review?.items.first?.match?.calories ?? 0, 160, accuracy: 0.001)
     }
 
