@@ -16,6 +16,8 @@ struct NutritionMatch: Equatable {
     var carbs: Double
     var fat: Double
     var confidence: String
+    /// Micronutrient detail for the resolved portion (empty when unknown).
+    var micros: Micronutrients = .empty
 }
 
 enum NutritionLookupError: LocalizedError {
@@ -577,6 +579,7 @@ struct USDANutritionLookupService: NutritionLookup {
         let protein = per100g.protein * factor
         let carbs = per100g.carbs * factor
         let fat = per100g.fat * factor
+        let micros = food.micronutrientsPer100g.scaled(by: factor)
 
         let flags = plausibilityFlags(
             calories: calories, protein: protein, carbs: carbs, fat: fat,
@@ -588,7 +591,8 @@ struct USDANutritionLookupService: NutritionLookup {
         let match = NutritionMatch(
             matchedDescription: food.description,
             calories: calories, protein: protein, carbs: carbs, fat: fat,
-            confidence: confident ? MatchConfidence.high : MatchConfidence.low
+            confidence: confident ? MatchConfidence.high : MatchConfidence.low,
+            micros: micros
         )
         return (match, flags, grams)
     }
@@ -763,6 +767,21 @@ struct USDAFood: Codable, Identifiable, Equatable {
             }
         }
         return 0
+    }
+
+    /// Micronutrients per 100 g / 100 ml, pulled by FDC nutrient number. A field
+    /// with no matching nutrient stays nil (not recorded), distinct from a real 0.
+    var micronutrientsPer100g: Micronutrients {
+        var m = Micronutrients()
+        for field in Micronutrients.fields {
+            for id in field.usdaIDs {
+                if let n = foodNutrients.first(where: { $0.nutrientId == id }), let v = n.value {
+                    m[keyPath: field.keyPath] = v
+                    break
+                }
+            }
+        }
+        return m
     }
 }
 

@@ -27,8 +27,8 @@ struct MealLoggingService {
         rawText: String,
         in context: ModelContext
     ) throws -> Meal {
-        let items = entries.map { request, match in
-            FoodItem(
+        let items = entries.map { request, match -> FoodItem in
+            let item = FoodItem(
                 name: request.name,
                 quantity: request.quantity,
                 unit: request.unit,
@@ -38,6 +38,8 @@ struct MealLoggingService {
                 fat: match.fat,
                 matchConfidence: match.confidence
             )
+            item.micros = match.micros
+            return item
         }
         let meal = Meal(rawText: rawText, items: items)
         context.insert(meal)
@@ -62,6 +64,7 @@ struct MealLoggingService {
                 item.carbs = match.carbs
                 item.fat = match.fat
                 item.matchConfidence = match.confidence
+                item.micros = match.micros
             }
             items.append(item)
         }

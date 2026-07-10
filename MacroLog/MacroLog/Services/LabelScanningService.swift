@@ -1,7 +1,8 @@
 import Foundation
 
 /// Macros extracted directly from a photographed nutrition-facts label. Label
-/// data is authoritative, so this skips USDA entirely.
+/// data is authoritative, so this skips USDA entirely. Micronutrient fields are
+/// optional — present only when printed on the label.
 struct LabelNutrition: Codable, Equatable {
     var name: String
     var servingSize: String
@@ -9,6 +10,36 @@ struct LabelNutrition: Codable, Equatable {
     var protein: Double
     var carbs: Double
     var fat: Double
+
+    // Micronutrients as printed (nil when not on the label).
+    var saturatedFat: Double?
+    var transFat: Double?
+    var cholesterol: Double?
+    var sodium: Double?
+    var fiber: Double?
+    var totalSugars: Double?
+    var addedSugars: Double?
+    var potassium: Double?
+    var calcium: Double?
+    var iron: Double?
+    var vitaminD: Double?
+
+    /// The micronutrient values a label carries, mapped into the shared type.
+    var micronutrients: Micronutrients {
+        Micronutrients(
+            saturatedFat: saturatedFat,
+            transFat: transFat,
+            fiber: fiber,
+            totalSugars: totalSugars,
+            addedSugars: addedSugars,
+            cholesterol: cholesterol,
+            sodium: sodium,
+            potassium: potassium,
+            calcium: calcium,
+            iron: iron,
+            vitaminD: vitaminD
+        )
+    }
 }
 
 protocol LabelScanning {
@@ -20,11 +51,15 @@ protocol LabelScanning {
 struct ClaudeLabelScanningService: LabelScanning {
     static let systemPrompt = """
     You read nutrition facts labels from photographs. Extract the values for ONE serving as printed on the label. Respond ONLY with valid JSON, no markdown, no preamble.
-    Format: {"name": string, "servingSize": string, "calories": number, "protein": number, "carbs": number, "fat": number}
+    Format: {"name": string, "servingSize": string, "calories": number, "protein": number, "carbs": number, "fat": number, "saturatedFat": number|null, "transFat": number|null, "cholesterol": number|null, "sodium": number|null, "fiber": number|null, "totalSugars": number|null, "addedSugars": number|null, "potassium": number|null, "calcium": number|null, "iron": number|null, "vitaminD": number|null}
     - "name": the product name if visible on the packaging, otherwise a short generic description of the food.
     - "servingSize": the serving size exactly as printed (e.g. "1 can (12 fl oz)", "2/3 cup (55g)").
-    - calories, protein, carbs, fat: the per-serving numbers in kcal and grams. If a value is genuinely not on the label, use 0.
-    Read the printed numbers only — do not estimate or infer values that aren't shown.
+    - calories, protein, carbs, fat: the per-serving numbers in kcal and grams. If a macro is genuinely not on the label, use 0.
+    - saturatedFat, transFat, fiber, totalSugars, addedSugars: grams per serving.
+    - cholesterol, sodium, potassium, calcium, iron: milligrams (mg) per serving.
+    - vitaminD: micrograms (mcg) per serving.
+    - For every micronutrient field: use the printed number, or null if that nutrient is not shown on the label. Do NOT use 0 for a missing micronutrient, and do not estimate.
+    Read the printed numbers only — do not infer values that aren't shown.
     """
 
     var session: URLSession = .shared

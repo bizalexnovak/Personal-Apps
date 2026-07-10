@@ -34,7 +34,7 @@ private struct FoodItemEditor: View {
     // snapshot taken when the drag starts, so scaling doesn't compound; the
     // slider re-centres to 1× when released.
     @State private var scalePosition = 0.0
-    @State private var scaleBase: (quantity: Double, calories: Double, protein: Double, carbs: Double, fat: Double)?
+    @State private var scaleBase: (quantity: Double, calories: Double, protein: Double, carbs: Double, fat: Double, micros: Micronutrients)?
 
     /// Rescales macros linearly when the quantity changes — valid because the
     /// stored macros were computed as (per-gram values × quantity).
@@ -49,6 +49,7 @@ private struct FoodItemEditor: View {
                 item.protein *= factor
                 item.carbs *= factor
                 item.fat *= factor
+                item.micros = item.micros.scaled(by: factor)
             }
             item.quantity = newValue
         }
@@ -64,6 +65,7 @@ private struct FoodItemEditor: View {
         item.protein = base.protein * f
         item.carbs = base.carbs * f
         item.fat = base.fat * f
+        item.micros = base.micros.scaled(by: f)
     }
 
     var body: some View {
@@ -95,7 +97,7 @@ private struct FoodItemEditor: View {
                     Image(systemName: "minus.circle").font(.caption).foregroundStyle(.secondary)
                     Slider(value: $scalePosition, in: -1...1) { editing in
                         if editing {
-                            scaleBase = (item.quantity, item.calories, item.protein, item.carbs, item.fat)
+                            scaleBase = (item.quantity, item.calories, item.protein, item.carbs, item.fat, item.micros)
                         } else {
                             scaleBase = nil
                             scalePosition = 0
@@ -125,6 +127,8 @@ private struct FoodItemEditor: View {
                 showSwapSheet = true
             }
             .font(.subheadline)
+
+            MicronutrientDisclosure(micros: item.micros)
         } header: {
             HStack {
                 Text(item.name.isEmpty ? "Item" : item.name)
@@ -237,6 +241,7 @@ private struct FoodSwapView: View {
         item.carbs = match.carbs
         item.fat = match.fat
         item.matchConfidence = match.confidence
+        item.micros = match.micros
         dismiss()
     }
 }
@@ -302,5 +307,43 @@ private struct MacroOverrideSheet: View {
                 fat = item.fat
             }
         }
+    }
+}
+
+/// Read-only read-out of an item's recorded micronutrients (fat/carb breakdown,
+/// minerals, vitamins). Collapsed by default — this detail is captured with each
+/// entry but intentionally kept out of the way.
+private struct MicronutrientDisclosure: View {
+    let micros: Micronutrients
+
+    var body: some View {
+        DisclosureGroup("Micronutrients") {
+            let recorded = micros.recorded
+            if recorded.isEmpty {
+                Text("None recorded for this item.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else {
+                ForEach(recorded, id: \.label) { entry in
+                    LabeledContent(entry.label) {
+                        Text(format(entry.value, unit: entry.unit))
+                            .monospacedDigit()
+                            .foregroundStyle(.secondary)
+                    }
+                    .font(.subheadline)
+                }
+            }
+        }
+        .font(.subheadline)
+    }
+
+    /// One decimal for small gram amounts, whole numbers for mg/mcg.
+    private func format(_ value: Double, unit: String) -> String {
+        if unit == "g" {
+            let rounded = (value * 10).rounded() / 10
+            let text = rounded == rounded.rounded() ? "\(Int(rounded))" : String(format: "%.1f", rounded)
+            return "\(text) \(unit)"
+        }
+        return "\(Int(value.rounded())) \(unit)"
     }
 }

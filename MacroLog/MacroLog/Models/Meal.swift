@@ -49,7 +49,25 @@ final class FoodItem {
     /// "high" when the USDA match and unit conversion were unambiguous, "low" when the
     /// values are a guess and the item should be reviewed manually.
     var matchConfidence: String
+    /// Micronutrients for this entry's portion, JSON-encoded. Stored as Data so
+    /// adding new micronutrient fields later needs no schema migration; access
+    /// it through the `micros` computed property below.
+    var microsData: Data?
     var meal: Meal?
+
+    /// Decoded micronutrients (fat/carb breakdown, minerals, vitamins).
+    /// Computed — not itself persisted; it reads/writes `microsData`.
+    var micros: Micronutrients {
+        get {
+            guard let microsData,
+                  let decoded = try? JSONDecoder().decode(Micronutrients.self, from: microsData)
+            else { return .empty }
+            return decoded
+        }
+        set {
+            microsData = newValue.isEmpty ? nil : (try? JSONEncoder().encode(newValue))
+        }
+    }
 
     init(
         name: String,

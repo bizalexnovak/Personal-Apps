@@ -123,6 +123,19 @@ grams of protein, 60 grams of carbs, 25 grams of fat" — those are used directl
 instead of a USDA match (calories derived from the macros if you don't say a
 calorie number).
 
+### Micronutrients
+
+Beyond the four headline macros, each entry also records **micronutrients** —
+the fat breakdown (saturated / trans / mono- / polyunsaturated), the carb
+breakdown (fiber / total & added sugars), plus cholesterol, sodium, potassium,
+calcium, iron, and vitamins A/C/D. These come from USDA FoodData Central (which
+returns them per food) and from scanned labels, and they **scale with the
+portion** just like the macros. They're deliberately kept off Home and the
+Trends chart — recorded quietly with every entry and viewable, read-only, under
+**Micronutrients** in the meal editor (`Micronutrients` is stored on each
+`FoodItem` as JSON, so more fields can be added later without a schema
+migration).
+
 ### Recommended goals from body metrics
 
 Settings → **Body & goal** takes your height, weight, age, sex, and activity

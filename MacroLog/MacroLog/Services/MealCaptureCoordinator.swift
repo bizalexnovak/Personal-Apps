@@ -22,6 +22,7 @@ final class MealCaptureCoordinator: ObservableObject {
         var protein: Double
         var carbs: Double
         var fat: Double
+        var micros: Micronutrients
     }
 
     struct ReviewItem: Identifiable {
@@ -48,7 +49,8 @@ final class MealCaptureCoordinator: ObservableObject {
             guard let m = match else { scaleBaseline = nil; return }
             scaleBaseline = ScaleBaseline(
                 quantity: request.quantity,
-                calories: m.calories, protein: m.protein, carbs: m.carbs, fat: m.fat
+                calories: m.calories, protein: m.protein, carbs: m.carbs, fat: m.fat,
+                micros: m.micros
             )
             scaleFactor = 1
         }
@@ -185,7 +187,8 @@ final class MealCaptureCoordinator: ObservableObject {
             matchedDescription: description,
             calories: label.calories, protein: label.protein,
             carbs: label.carbs, fat: label.fat,
-            confidence: MatchConfidence.high // label values are authoritative
+            confidence: MatchConfidence.high, // label values are authoritative
+            micros: label.micronutrients
         )
         var item = ReviewItem(
             request: FoodItemRequest(name: name, quantity: 1, unit: "serving"),
@@ -266,6 +269,7 @@ final class MealCaptureCoordinator: ObservableObject {
                 m.protein = base.protein * f
                 m.carbs = base.carbs * f
                 m.fat = base.fat * f
+                m.micros = base.micros.scaled(by: f)
                 item.match = m
             }
             if item.status == .confirmed { item.status = .edited }
@@ -293,7 +297,8 @@ final class MealCaptureCoordinator: ObservableObject {
             item.match = NutritionMatch(
                 matchedDescription: item.match?.matchedDescription ?? "Manual entry",
                 calories: calories, protein: protein, carbs: carbs, fat: fat,
-                confidence: MatchConfidence.high
+                confidence: MatchConfidence.high,
+                micros: item.match?.micros ?? .empty // keep recorded micros
             )
             item.status = .edited
             item.captureScaleBaseline()

@@ -375,6 +375,56 @@ final class MealCaptureCoordinatorTests: XCTestCase {
         XCTAssertEqual(coordinator.review?.items.first?.match?.calories ?? 0, 160, accuracy: 0.001)
     }
 
+    func testUSDAMicronutrientExtractionAndScaling() {
+        let food = USDAFood(
+            fdcId: 1, description: "Test food", dataType: "Branded",
+            brandOwner: nil, brandName: nil, servingSize: 100, servingSizeUnit: "g",
+            householdServingFullText: nil,
+            foodNutrients: [
+                .init(nutrientId: 1258, nutrientName: "Saturated fat", unitName: "G", value: 5),
+                .init(nutrientId: 1093, nutrientName: "Sodium", unitName: "MG", value: 200),
+                .init(nutrientId: 1079, nutrientName: "Fiber", unitName: "G", value: 3),
+            ]
+        )
+        let per100 = food.micronutrientsPer100g
+        XCTAssertEqual(per100.saturatedFat ?? 0, 5, accuracy: 0.001)
+        XCTAssertEqual(per100.sodium ?? 0, 200, accuracy: 0.001)
+        XCTAssertEqual(per100.fiber ?? 0, 3, accuracy: 0.001)
+        XCTAssertNil(per100.cholesterol) // unrecorded stays nil, not 0
+
+        let half = per100.scaled(by: 0.5)
+        XCTAssertEqual(half.saturatedFat ?? 0, 2.5, accuracy: 0.001)
+        XCTAssertEqual(half.fiber ?? 0, 1.5, accuracy: 0.001)
+        XCTAssertNil(half.cholesterol)
+    }
+
+    func testMicronutrientsPersistAndScaleThroughSave() async throws {
+        let context = try makeContext()
+        let micros = Micronutrients(saturatedFat: 3, fiber: 2, sodium: 400)
+        let barMatch = NutritionMatch(
+            matchedDescription: "Protein bar", calories: 200, protein: 20,
+            carbs: 24, fat: 8, confidence: MatchConfidence.high, micros: micros
+        )
+        let coordinator = makeCoordinator(
+            parsed: [FoodItemRequest(name: "protein bar", quantity: 1, unit: "bar")],
+            matches: ["protein bar": barMatch]
+        )
+        await coordinator.begin(text: "a protein bar", in: context)
+        let id = try XCTUnwrap(coordinator.review?.items.first?.id)
+
+        // Double the portion before saving — micros scale with the macros.
+        coordinator.setScale(id, factor: 2)
+        coordinator.confirm(id)
+        await coordinator.saveAll()
+
+        let meal = try XCTUnwrap(try savedMeals(in: context).first)
+        let item = try XCTUnwrap(meal.items.first)
+        XCTAssertEqual(item.micros.saturatedFat ?? 0, 6, accuracy: 0.001)
+        XCTAssertEqual(item.micros.fiber ?? 0, 4, accuracy: 0.001)
+        XCTAssertEqual(item.micros.sodium ?? 0, 800, accuracy: 0.001)
+        XCTAssertNil(item.micros.transFat)
+    }
+
     func testRenameUpdatesItemName() async throws {
         let context = try makeContext()
         let coordinator = makeCoordinator(
