@@ -71,14 +71,14 @@ struct ContentView: View {
                 .tabItem { Label("Settings", systemImage: "gearshape") }
                 .tag(AppTab.settings)
         }
-        // A floating "+" reachable from the other tabs jumps to the Log tab in
-        // the chosen mode. Hidden on the Log tab itself, which has its own
-        // controls (and to keep it clear of the Save All bar).
+        // A "+" reachable from the Today/Trends tabs jumps to the Log tab in the
+        // chosen mode. Sits at the bottom-right corner, in line with the tab
+        // bar. Hidden on Log (its own controls) and Settings (doesn't belong).
         .overlay(alignment: .bottomTrailing) {
-            if hub.selectedTab != AppTab.log {
+            if hub.selectedTab != AppTab.log && hub.selectedTab != AppTab.settings {
                 captureMenu
-                    .padding(.trailing, 20)
-                    .padding(.bottom, 60)
+                    .padding(.trailing, 14)
+                    .padding(.bottom, 8)
             }
         }
         .tint(appAccent)
@@ -111,13 +111,13 @@ struct ContentView: View {
         Menu {
             Button { hub.goVoice() } label: { Label("Voice", systemImage: "mic.fill") }
             Button { hub.goScan() } label: { Label("Scan a label", systemImage: "doc.viewfinder") }
-            Button { hub.goDish() } label: { Label("Photograph a dish", systemImage: "fork.knife") }
+            Button { hub.goDish() } label: { Label("AI", systemImage: "sparkles") }
             Button { hub.goType() } label: { Label("Type", systemImage: "keyboard") }
         } label: {
             Image(systemName: "plus")
-                .font(.title2.weight(.semibold))
+                .font(.title3.weight(.semibold))
                 .foregroundStyle(.white)
-                .frame(width: 56, height: 56)
+                .frame(width: 50, height: 50)
                 .background(Circle().fill(appAccent))
                 .shadow(radius: 4, y: 2)
         }

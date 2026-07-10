@@ -65,6 +65,9 @@ final class MealCaptureCoordinator: ObservableObject {
     @Published var review: ReviewSession?
     @Published private(set) var isWorking = false
     @Published var errorMessage: String?
+    /// The day the meal under review will be saved to. Defaults to now; the
+    /// review screen lets the user back-date it to a previous day.
+    @Published var logDate = Date()
     /// Set after a nutrition label is scanned: the macros are known but the
     /// product name isn't (it's rarely on the label), so the app asks the user
     /// to say the name before building the review.
@@ -90,6 +93,7 @@ final class MealCaptureCoordinator: ObservableObject {
         guard !isCapturing else { return }
         self.context = context
         isWorking = true
+        logDate = Date()
         MatchDebugLog.shared.record(transcript: text)
 
         let requests: [FoodItemRequest]
@@ -158,6 +162,7 @@ final class MealCaptureCoordinator: ObservableObject {
         guard !isCapturing else { return }
         self.context = context
         isWorking = true
+        logDate = Date()
 
         let label: LabelNutrition
         do {
@@ -211,6 +216,7 @@ final class MealCaptureCoordinator: ObservableObject {
         guard !isCapturing else { return }
         self.context = context
         isWorking = true
+        logDate = Date()
 
         let dish: EstimatedDish
         do {
@@ -419,7 +425,7 @@ final class MealCaptureCoordinator: ObservableObject {
             item.match.map { (request: item.request, match: $0) }
         }
         do {
-            try logger.saveResolved(entries, rawText: session.rawText, in: context)
+            try logger.saveResolved(entries, rawText: session.rawText, on: logDate, in: context)
             review = nil
         } catch {
             errorMessage = error.localizedDescription

@@ -198,6 +198,20 @@ struct MealReviewView: View {
                             .foregroundStyle(.secondary)
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
+                    if !(coordinator.review?.items.isEmpty ?? true) {
+                        HStack {
+                            Label("Date", systemImage: "calendar")
+                                .font(.subheadline)
+                            Spacer()
+                            DatePicker(
+                                "",
+                                selection: $coordinator.logDate,
+                                in: ...Date(),
+                                displayedComponents: .date
+                            )
+                            .labelsHidden()
+                        }
+                    }
                     ForEach(coordinator.review?.items ?? []) { item in
                         ReviewItemCard(item: item, coordinator: coordinator)
                     }

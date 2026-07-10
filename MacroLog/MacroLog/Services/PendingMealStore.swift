@@ -46,14 +46,14 @@ enum LogCaptureMode: String, CaseIterable, Identifiable, Equatable {
         switch self {
         case .voice: return "Voice"
         case .scan: return "Scan"
-        case .dish: return "Dish"
+        case .dish: return "AI"
         }
     }
     var menuIcon: String {
         switch self {
         case .voice: return "mic.fill"
         case .scan: return "doc.viewfinder"
-        case .dish: return "fork.knife"
+        case .dish: return "sparkles"
         }
     }
 }

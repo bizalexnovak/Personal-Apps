@@ -25,6 +25,7 @@ struct MealLoggingService {
     func saveResolved(
         _ entries: [(request: FoodItemRequest, match: NutritionMatch)],
         rawText: String,
+        on date: Date = .now,
         in context: ModelContext
     ) throws -> Meal {
         let items = entries.map { request, match -> FoodItem in
@@ -41,7 +42,7 @@ struct MealLoggingService {
             item.micros = match.micros
             return item
         }
-        let meal = Meal(rawText: rawText, items: items)
+        let meal = Meal(timestamp: date, rawText: rawText, items: items)
         context.insert(meal)
         try context.save()
         return meal
