@@ -1,8 +1,13 @@
 import SwiftUI
 import SwiftData
+import Charts
 
+/// The day diary: navigate day by day, see calories against goal plus protein/
+/// carbs/fat/water rings, an hourly intake chart, and that day's meals (which
+/// are editable and deletable, same as anywhere else).
 struct HomeView: View {
-    @Query private var meals: [Meal]
+    @Query(sort: \Meal.timestamp, order: .reverse) private var meals: [Meal]
+    @Environment(\.modelContext) private var modelContext
 
     @AppStorage(TargetKeys.calories) private var calorieTarget = 2000.0
     @AppStorage(TargetKeys.protein) private var proteinTarget = 150.0
@@ -10,9 +15,27 @@ struct HomeView: View {
     @AppStorage(TargetKeys.fat) private var fatTarget = 70.0
     @AppStorage(TargetKeys.water) private var waterTarget = 64.0
 
-    private var todaysMeals: [Meal] {
-        meals.filter { Calendar.current.isDateInToday($0.timestamp) }
+    @State private var selectedDate = Calendar.current.startOfDay(for: .now)
+
+    private var dayMeals: [Meal] {
+        meals.filter { Calendar.current.isDate($0.timestamp, inSameDayAs: selectedDate) }
     }
+
+    private var isToday: Bool { Calendar.current.isDateInToday(selectedDate) }
+
+    private var sortedDayMeals: [Meal] {
+        dayMeals.sorted { $0.timestamp > $1.timestamp }
+    }
+
+    // MARK: Totals
+
+    private var calories: Double { dayMeals.reduce(0) { $0 + $1.totalCalories } }
+    private var protein: Double { dayMeals.reduce(0) { $0 + $1.totalProtein } }
+    private var carbs: Double { dayMeals.reduce(0) { $0 + $1.totalCarbs } }
+    private var fat: Double { dayMeals.reduce(0) { $0 + $1.totalFat } }
+    private var water: Double { dayMeals.reduce(0) { $0 + $1.waterOunces } }
+
+    // MARK: Body
 
     var body: some View {
         NavigationStack {
@@ -20,61 +43,144 @@ struct HomeView: View {
                 Section {
                     MacroProgressRow(
                         label: "Calories", unit: "kcal", color: .orange,
-                        value: todaysMeals.reduce(0) { $0 + $1.totalCalories },
-                        target: calorieTarget
+                        value: calories, target: calorieTarget
                     )
-                    MacroProgressRow(
-                        label: "Protein", unit: "g", color: .red,
-                        value: todaysMeals.reduce(0) { $0 + $1.totalProtein },
-                        target: proteinTarget
-                    )
-                    MacroProgressRow(
-                        label: "Carbs", unit: "g", color: .blue,
-                        value: todaysMeals.reduce(0) { $0 + $1.totalCarbs },
-                        target: carbTarget
-                    )
-                    MacroProgressRow(
-                        label: "Fat", unit: "g", color: .yellow,
-                        value: todaysMeals.reduce(0) { $0 + $1.totalFat },
-                        target: fatTarget
-                    )
-                } header: {
-                    Text(Date.now, format: .dateTime.weekday(.wide).month().day())
+                    HStack(alignment: .top, spacing: 8) {
+                        MacroRing(label: "Protein", unit: "g", color: .red,
+                                  value: protein, target: proteinTarget)
+                        MacroRing(label: "Carbs", unit: "g", color: .blue,
+                                  value: carbs, target: carbTarget)
+                        MacroRing(label: "Fat", unit: "g", color: .yellow,
+                                  value: fat, target: fatTarget)
+                        MacroRing(label: "Water", unit: "oz", color: .cyan,
+                                  value: water, target: waterTarget)
+                    }
+                    .padding(.vertical, 4)
                 }
 
-                Section {
-                    MacroProgressRow(
-                        label: "Water", unit: "oz", color: .cyan,
-                        value: todaysMeals.reduce(0) { $0 + $1.waterOunces },
-                        target: waterTarget
-                    )
-                }
-
-                if todaysMeals.isEmpty {
+                if dayMeals.isEmpty {
                     ContentUnavailableView(
-                        "Nothing logged today",
+                        isToday ? "Nothing logged today" : "Nothing logged this day",
                         systemImage: "fork.knife",
-                        description: Text("Say \u{201C}Log meal in MacroLog\u{201D} to Siri, or add a meal from the Meals tab.")
+                        description: Text(isToday
+                            ? "Say \u{201C}Log meal in MacroLog\u{201D} to Siri, or add a meal from the Meals tab."
+                            : "No meals were logged on this day.")
                     )
                 } else {
-                    Section("Today's meals") {
-                        ForEach(todaysMeals.sorted { $0.timestamp > $1.timestamp }) { meal in
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(meal.displayName)
-                                    .lineLimit(1)
-                                Text("\(Int(meal.totalCalories.rounded())) kcal · \(meal.timestamp, format: .dateTime.hour().minute())")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
+                    Section {
+                        hourlyChart
+                    } header: {
+                        Text("When you ate")
+                    } footer: {
+                        Text("Calories by the hour you logged them.")
+                    }
+
+                    Section("Meals") {
+                        ForEach(sortedDayMeals) { meal in
+                            NavigationLink {
+                                EditMealView(meal: meal)
+                            } label: {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(meal.displayName)
+                                        .lineLimit(2)
+                                    Text("\(Int(meal.totalCalories.rounded())) kcal · \(meal.timestamp, format: .dateTime.hour().minute())")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
                             }
                         }
+                        .onDelete(perform: deleteMeals)
                     }
                 }
             }
-            .navigationTitle("Today")
+            .navigationTitle(smartDateTitle)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button { shiftDay(-1) } label: {
+                        Image(systemName: "chevron.left")
+                    }
+                    .accessibilityLabel("Previous day")
+                }
+                ToolbarItemGroup(placement: .topBarTrailing) {
+                    if !isToday {
+                        Button("Today") {
+                            selectedDate = Calendar.current.startOfDay(for: .now)
+                        }
+                    }
+                    Button { shiftDay(1) } label: {
+                        Image(systemName: "chevron.right")
+                    }
+                    .disabled(isToday)
+                    .accessibilityLabel("Next day")
+                }
+            }
         }
+    }
+
+    // MARK: Day navigation
+
+    private var smartDateTitle: String {
+        let cal = Calendar.current
+        if cal.isDateInToday(selectedDate) { return "Today" }
+        if cal.isDateInYesterday(selectedDate) { return "Yesterday" }
+        return selectedDate.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day())
+    }
+
+    /// Move by whole days, never past today.
+    private func shiftDay(_ delta: Int) {
+        let cal = Calendar.current
+        guard let shifted = cal.date(byAdding: .day, value: delta, to: selectedDate) else { return }
+        let today = cal.startOfDay(for: .now)
+        selectedDate = min(cal.startOfDay(for: shifted), today)
+    }
+
+    private func deleteMeals(_ offsets: IndexSet) {
+        for index in offsets {
+            modelContext.delete(sortedDayMeals[index])
+        }
+    }
+
+    // MARK: Hourly chart
+
+    /// Calories binned to the hour they were logged.
+    private var hourlyCalories: [HourBin] {
+        let cal = Calendar.current
+        let startOfDay = cal.startOfDay(for: selectedDate)
+        let grouped = Dictionary(grouping: dayMeals) { cal.component(.hour, from: $0.timestamp) }
+        return grouped.map { hour, hourMeals in
+            HourBin(
+                time: cal.date(byAdding: .hour, value: hour, to: startOfDay) ?? startOfDay,
+                calories: hourMeals.reduce(0) { $0 + $1.totalCalories }
+            )
+        }
+        .sorted { $0.time < $1.time }
+    }
+
+    private var hourlyChart: some View {
+        let startOfDay = Calendar.current.startOfDay(for: selectedDate)
+        let endOfDay = startOfDay.addingTimeInterval(24 * 3600)
+        return Chart(hourlyCalories) { bin in
+            BarMark(
+                x: .value("Time", bin.time, unit: .hour),
+                y: .value("Calories", bin.calories)
+            )
+            .foregroundStyle(.orange)
+            .cornerRadius(3)
+        }
+        .chartXScale(domain: startOfDay ... endOfDay)
+        .chartXAxis {
+            AxisMarks(values: .stride(by: .hour, count: 6)) { _ in
+                AxisGridLine()
+                AxisValueLabel(format: .dateTime.hour())
+            }
+        }
+        .frame(height: 170)
+        .padding(.vertical, 4)
     }
 }
 
+/// Calories vs. goal as a labelled progress bar (kept for the headline metric).
 private struct MacroProgressRow: View {
     let label: String
     let unit: String
@@ -97,4 +203,54 @@ private struct MacroProgressRow: View {
         }
         .padding(.vertical, 4)
     }
+}
+
+/// A macro shown as a circular progress ring: consumed in the centre, goal
+/// underneath. Fills toward the daily target and caps at a full ring.
+private struct MacroRing: View {
+    let label: String
+    let unit: String
+    let color: Color
+    let value: Double
+    let target: Double
+
+    private var progress: Double { target > 0 ? min(value / target, 1) : 0 }
+
+    var body: some View {
+        VStack(spacing: 6) {
+            ZStack {
+                Circle()
+                    .stroke(color.opacity(0.18), lineWidth: 7)
+                Circle()
+                    .trim(from: 0, to: progress)
+                    .stroke(color, style: StrokeStyle(lineWidth: 7, lineCap: .round))
+                    .rotationEffect(.degrees(-90))
+                Text("\(Int(value.rounded()))")
+                    .font(.callout.monospacedDigit().weight(.semibold))
+                    .minimumScaleFactor(0.6)
+                    .lineLimit(1)
+            }
+            .frame(width: 60, height: 60)
+            .animation(.easeInOut(duration: 0.3), value: progress)
+
+            VStack(spacing: 1) {
+                Text(label)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                Text("/ \(Int(target.rounded())) \(unit)")
+                    .font(.caption2.monospacedDigit())
+                    .foregroundStyle(.tertiary)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(label): \(Int(value.rounded())) of \(Int(target.rounded())) \(unit)")
+    }
+}
+
+/// Calories logged in one clock hour, for the intake timeline chart.
+struct HourBin: Identifiable {
+    var time: Date
+    var calories: Double
+    var id: Date { time }
 }

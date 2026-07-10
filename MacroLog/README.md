@@ -85,7 +85,17 @@ raw text ─▶ ClaudeMealParsingService ─▶ [FoodItemRequest] ─▶ USDANut
 - **Views/** — Home (daily totals vs. targets), Meals (log + expandable list),
   Edit Meal (adjust quantity, swap USDA match, manual macro override), Settings, Onboarding.
 
-### Water & history
+### The Today diary
+
+The **Today** tab is a day-by-day diary (MyFitnessPal-style). Chevrons in the
+nav bar step **back and forward through days** (never into the future; a
+**Today** button jumps back to the current day). For the selected day it shows
+**calories vs. goal as a bar**, then **protein / carbs / fat / water as
+circular progress rings** (consumed in the centre, goal underneath), a **"When
+you ate" hourly chart** (calories by the clock hour you logged them), and that
+day's **meals — tap to edit, swipe to delete**.
+
+### Water & trends
 
 Water is tracked separately, in fluid ounces, with its own goal (Settings →
 Daily targets → Water). Say "a bottle of water" / "24 oz of water" / "two
@@ -93,8 +103,8 @@ glasses of water" and it's converted to ounces (`WaterConversion`: bottle =
 16 oz, glass/cup = 8 oz, can = 12 oz, plus ml/L/pint/quart/gallon; unknown
 units default to a glass) and added to the Today water ring — water items skip
 USDA and never count calories. On the review card a water item shows its
-ounces and can be edited directly (Edit → Water (oz)). The **History** tab
-opens on a **trends chart** (Swift Charts): one line per nutrient —
+ounces and can be edited directly (Edit → Water (oz)). The **Trends** tab is a
+**multi-day chart** (Swift Charts): one line per nutrient —
 calories/protein/carbs/fat/water — plotted as a percent of its daily goal per
 day, with 1W/1M/3M/6M/1Y/All range toggles, a dashed 100%-goal reference line, and a
 tappable legend below that doubles as the per-nutrient **average per day** and a
@@ -102,9 +112,8 @@ tappable legend below that doubles as the per-nutrient **average per day** and a
 five differently-scaled lines on one comparable axis (no dual axes). Colours are
 chart-tuned shades of the app's macro palette, CVD-validated, with distinct
 point symbols per line so the series are distinguishable without relying on
-colour. Below the chart, each logged day in range is listed; tap a day to see a
-**"When you ate" timeline** (calories by the hour you logged them) plus that
-day's meals, which you can **edit or delete** (same editor as Today).
+colour. To see or edit a specific day's meals, use the day navigation on the
+Today tab.
 
 **Spoken macros override the lookup.** If you state numbers — "chicken, 64
 grams of protein, 60 grams of carbs, 25 grams of fat" — those are used directly

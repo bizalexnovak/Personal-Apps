@@ -2,8 +2,9 @@ import SwiftUI
 import SwiftData
 import Charts
 
-/// History: a trends chart (each nutrient as % of its daily goal, per day) with
-/// week/month ranges and range averages, above the list of logged days.
+/// Trends: each nutrient as a percent of its daily goal over time, with
+/// week/month/…/all ranges, per-range averages, and a tappable show/hide
+/// legend. Per-day meals live on the Today tab (which navigates by day).
 struct HistoryView: View {
     @Query(sort: \Meal.timestamp, order: .reverse) private var meals: [Meal]
 
@@ -118,36 +119,12 @@ struct HistoryView: View {
                     Text("Trends")
                 } footer: {
                     if !daysInRange.isEmpty {
-                        Text("Each line is that nutrient as a percent of your daily goal (dashed line = 100%). Tap a nutrient to show or hide it; the number is its average per day.")
+                        Text("Each line is that nutrient as a percent of your daily goal (dashed line = 100%). Tap a nutrient to show or hide it; the number is its average per day. Tap a day on the Today tab to see and edit its meals.")
                     }
-                }
-
-                if !daysInRange.isEmpty {
-                    Section("Logged days") {
-                        ForEach(daysInRange.sorted { $0.date > $1.date }) { day in
-                            NavigationLink {
-                                DayDetailView(date: day.date, meals: mealsOn(day.date))
-                            } label: {
-                                DayRow(date: day.date, totals: day)
-                            }
-                        }
-                    }
-                }
-
-                if meals.isEmpty {
-                    ContentUnavailableView(
-                        "No history yet",
-                        systemImage: "calendar",
-                        description: Text("Days you log meals will show up here.")
-                    )
                 }
             }
-            .navigationTitle("History")
+            .navigationTitle("Trends")
         }
-    }
-
-    private func mealsOn(_ date: Date) -> [Meal] {
-        meals.filter { Calendar.current.isDate($0.timestamp, inSameDayAs: date) }
     }
 
     // MARK: Chart
@@ -351,131 +328,3 @@ struct MetricPoint: Identifiable {
     var id: String { "\(metric.rawValue)-\(date.timeIntervalSince1970)" }
 }
 
-// MARK: - Day list rows
-
-private struct DayRow: View {
-    let date: Date
-    let totals: DayTotals
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 3) {
-            Text(date, format: .dateTime.weekday(.wide).month().day())
-                .font(.headline)
-            HStack(spacing: 10) {
-                Text("\(Int(totals.calories.rounded())) kcal")
-                Text("P \(Int(totals.protein.rounded()))")
-                Text("C \(Int(totals.carbs.rounded()))")
-                Text("F \(Int(totals.fat.rounded()))")
-                Label("\(Int(totals.water.rounded())) oz", systemImage: "drop.fill")
-                    .foregroundStyle(.cyan)
-            }
-            .font(.caption)
-            .foregroundStyle(.secondary)
-        }
-        .padding(.vertical, 2)
-    }
-}
-
-/// One day's meals with a totals header. Meals are editable and deletable,
-/// same as Today's list.
-private struct DayDetailView: View {
-    @Environment(\.modelContext) private var modelContext
-    let date: Date
-    let meals: [Meal]
-
-    private var sortedMeals: [Meal] {
-        meals.sorted { $0.timestamp > $1.timestamp }
-    }
-
-    /// Calories binned to the hour they were logged, for the timeline chart.
-    private var hourlyCalories: [HourBin] {
-        let cal = Calendar.current
-        let startOfDay = cal.startOfDay(for: date)
-        let grouped = Dictionary(grouping: meals) { cal.component(.hour, from: $0.timestamp) }
-        return grouped.map { hour, hourMeals in
-            HourBin(
-                time: cal.date(byAdding: .hour, value: hour, to: startOfDay) ?? startOfDay,
-                calories: hourMeals.reduce(0) { $0 + $1.totalCalories }
-            )
-        }
-        .sorted { $0.time < $1.time }
-    }
-
-    var body: some View {
-        List {
-            if !hourlyCalories.isEmpty {
-                Section {
-                    timelineChart
-                } header: {
-                    Text("When you ate")
-                } footer: {
-                    Text("Calories by the hour you logged them.")
-                }
-            }
-            Section("Totals") {
-                totalRow("Calories", meals.reduce(0) { $0 + $1.totalCalories }, "kcal")
-                totalRow("Protein", meals.reduce(0) { $0 + $1.totalProtein }, "g")
-                totalRow("Carbs", meals.reduce(0) { $0 + $1.totalCarbs }, "g")
-                totalRow("Fat", meals.reduce(0) { $0 + $1.totalFat }, "g")
-                totalRow("Water", meals.reduce(0) { $0 + $1.waterOunces }, "oz")
-            }
-            Section("Meals") {
-                ForEach(sortedMeals) { meal in
-                    NavigationLink {
-                        EditMealView(meal: meal)
-                    } label: {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(meal.displayName)
-                                .lineLimit(2)
-                            Text("\(Int(meal.totalCalories.rounded())) kcal · \(meal.timestamp, format: .dateTime.hour().minute())")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                }
-                .onDelete { offsets in
-                    for index in offsets {
-                        modelContext.delete(sortedMeals[index])
-                    }
-                }
-            }
-        }
-        .navigationTitle(Text(date, format: .dateTime.month().day()))
-        .navigationBarTitleDisplayMode(.inline)
-    }
-
-    private var timelineChart: some View {
-        let startOfDay = Calendar.current.startOfDay(for: date)
-        let endOfDay = startOfDay.addingTimeInterval(24 * 3600)
-        return Chart(hourlyCalories) { bin in
-            BarMark(
-                x: .value("Time", bin.time, unit: .hour),
-                y: .value("Calories", bin.calories)
-            )
-            .foregroundStyle(.orange)
-            .cornerRadius(3)
-        }
-        .chartXScale(domain: startOfDay ... endOfDay)
-        .chartXAxis {
-            AxisMarks(values: .stride(by: .hour, count: 6)) { value in
-                AxisGridLine()
-                AxisValueLabel(format: .dateTime.hour())
-            }
-        }
-        .frame(height: 180)
-        .padding(.vertical, 4)
-    }
-
-    private func totalRow(_ label: String, _ value: Double, _ unit: String) -> some View {
-        LabeledContent(label) {
-            Text("\(Int(value.rounded())) \(unit)")
-                .monospacedDigit()
-        }
-    }
-}
-
-struct HourBin: Identifiable {
-    var time: Date
-    var calories: Double
-    var id: Date { time }
-}

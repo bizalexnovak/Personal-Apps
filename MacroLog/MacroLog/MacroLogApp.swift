@@ -23,7 +23,7 @@ struct ContentView: View {
             MealListView()
                 .tabItem { Label("Meals", systemImage: "fork.knife") }
             HistoryView()
-                .tabItem { Label("History", systemImage: "calendar") }
+                .tabItem { Label("Trends", systemImage: "chart.xyaxis.line") }
             SettingsView()
                 .tabItem { Label("Settings", systemImage: "gearshape") }
         }
