@@ -9,6 +9,7 @@ struct HomeView: View {
     @Query(sort: \Meal.timestamp, order: .reverse) private var meals: [Meal]
     @Environment(\.modelContext) private var modelContext
     @Environment(\.metricPalette) private var palette
+    @Environment(\.appBackground) private var appBackground
 
     @AppStorage(TargetKeys.calories) private var calorieTarget = 2000.0
     @AppStorage(TargetKeys.protein) private var proteinTarget = 150.0
@@ -95,6 +96,7 @@ struct HomeView: View {
                     }
                 }
             }
+            .appBackground(appBackground)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {

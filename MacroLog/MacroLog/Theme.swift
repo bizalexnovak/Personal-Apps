@@ -29,6 +29,7 @@ enum AppearanceMode: String, CaseIterable, Identifiable {
 enum ThemeKeys {
     static let appearance = "theme_appearance"
     static let appAccent = "theme_app_accent"
+    static let background = "theme_background"
     static let colorCalories = "theme_color_calories"
     static let colorProtein = "theme_color_protein"
     static let colorCarbs = "theme_color_carbs"
@@ -115,6 +116,34 @@ extension EnvironmentValues {
     var appAccent: Color {
         get { self[AppAccentKey.self] }
         set { self[AppAccentKey.self] = newValue }
+    }
+}
+
+/// A custom app background colour. nil = follow the system (light/dark)
+/// background. When set, it overrides the background on every main screen.
+private struct AppBackgroundKey: EnvironmentKey {
+    static let defaultValue: Color? = nil
+}
+
+extension EnvironmentValues {
+    var appBackground: Color? {
+        get { self[AppBackgroundKey.self] }
+        set { self[AppBackgroundKey.self] = newValue }
+    }
+}
+
+extension View {
+    /// Fills the screen behind scrollable content with a custom colour when one
+    /// is set, hiding the default system scroll background. No-op when nil.
+    @ViewBuilder
+    func appBackground(_ color: Color?) -> some View {
+        if let color {
+            self
+                .scrollContentBackground(.hidden)
+                .background(color.ignoresSafeArea())
+        } else {
+            self
+        }
     }
 }
 

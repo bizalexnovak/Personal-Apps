@@ -39,13 +39,30 @@ enum AppTab {
     static let settings = 3
 }
 
-enum LogCaptureMode: Equatable { case voice, scan }
+enum LogCaptureMode: String, CaseIterable, Identifiable, Equatable {
+    case voice, scan, dish
+    var id: String { rawValue }
+    var title: String {
+        switch self {
+        case .voice: return "Voice"
+        case .scan: return "Scan"
+        case .dish: return "Dish"
+        }
+    }
+    var menuIcon: String {
+        switch self {
+        case .voice: return "mic.fill"
+        case .scan: return "doc.viewfinder"
+        case .dish: return "fork.knife"
+        }
+    }
+}
 
 @MainActor
 final class CaptureHub: ObservableObject {
     /// Which tab is showing (bound to the TabView selection).
     @Published var selectedTab = AppTab.today
-    /// Voice vs. scan on the Log tab.
+    /// The active mode on the Log tab.
     @Published var logMode: LogCaptureMode = .voice
     /// One-shot flags the Log tab consumes after switching in.
     @Published var autoStartVoice = false
@@ -59,6 +76,11 @@ final class CaptureHub: ObservableObject {
 
     func goScan() {
         logMode = .scan
+        selectedTab = AppTab.log
+    }
+
+    func goDish() {
+        logMode = .dish
         selectedTab = AppTab.log
     }
 

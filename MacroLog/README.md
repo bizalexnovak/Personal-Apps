@@ -56,7 +56,17 @@ the review inline — no separate review screen and no "here's what I heard" ste
   after the capture the app opens **voice capture asking you to say the name**
   ("it's a Quest bar" → "Quest bar") before the review card appears. Tap
   **Skip** to fall back to whatever text the scan read.
+- **Dish photo**: a separate mode from label scanning — photograph a *prepared
+  meal* and Claude (vision) estimates each component's portion and macros
+  (`DishEstimationService`). Because these are estimates, every item comes back
+  low-confidence with its card open for you to confirm or adjust.
 - **Type**: the keyboard button (or the "+" menu's Type) routes through the same flow.
+
+**Quick add.** The Log tab's idle screen shows one-tap chips for items you log
+often (`MealSuggestions` groups history by name + quantity + unit and keeps
+repeats logged ≥ 2×, e.g. "24 oz water", "Chobani greek yogurt"). Tapping a chip
+re-logs a copy with its last-known macros and micronutrients immediately — no
+parsing or lookup.
 
 The captured transcript (or label) runs through Claude parsing and USDA lookups
 in place (brief loading state), then the **same screen** transitions to review:
@@ -93,10 +103,13 @@ raw text ─▶ ClaudeMealParsingService ─▶ [FoodItemRequest] ─▶ USDANut
   (multi-day chart), Settings (Profile / Daily goals / Appearance / API keys /
   Developer sub-screens), Onboarding.
 - **Theme** — light/dark preference (System/Light/Dark), a customizable overall
-  **app accent** colour (buttons, active tab, capture controls, the "+"), and a
-  customizable five-colour metric palette, all stored in AppStorage and injected
-  through the environment (`appAccent`, `MetricPalette`) so the UI, Today
-  rings/bar, and Trends chart update live; Settings → Appearance edits all three.
+  **app accent** colour (buttons, active tab, capture controls, the "+"), a
+  customizable **background** colour (overrides the light/dark background across
+  every main screen via `appBackground` + `.scrollContentBackground(.hidden)`),
+  and a customizable five-colour metric palette. All stored in AppStorage and
+  injected through the environment (`appAccent`, `appBackground`,
+  `MetricPalette`) so the UI, Today rings/bar, and Trends chart update live;
+  Settings → Appearance edits them.
 
 ### The Today diary
 

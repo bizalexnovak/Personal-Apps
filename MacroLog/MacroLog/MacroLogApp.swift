@@ -19,6 +19,7 @@ struct ContentView: View {
 
     @AppStorage(ThemeKeys.appearance) private var appearanceRaw = AppearanceMode.system.rawValue
     @AppStorage(ThemeKeys.appAccent) private var colorAppAccent = ""
+    @AppStorage(ThemeKeys.background) private var colorBackground = ""
     @AppStorage(ThemeKeys.colorCalories) private var colorCalories = ""
     @AppStorage(ThemeKeys.colorProtein) private var colorProtein = ""
     @AppStorage(ThemeKeys.colorCarbs) private var colorCarbs = ""
@@ -27,6 +28,7 @@ struct ContentView: View {
 
     private var appearance: AppearanceMode { AppearanceMode(rawValue: appearanceRaw) ?? .system }
     private var appAccent: Color { Color(hex: colorAppAccent) ?? MetricPalette.defaultAppAccent }
+    private var appBackground: Color? { Color(hex: colorBackground) }
 
     private var palette: MetricPalette {
         MetricPalette.resolved(
@@ -62,6 +64,7 @@ struct ContentView: View {
         }
         .tint(appAccent)
         .environment(\.appAccent, appAccent)
+        .environment(\.appBackground, appBackground)
         .environment(\.metricPalette, palette)
         .preferredColorScheme(appearance.colorScheme)
         .environmentObject(coordinator)
@@ -87,7 +90,8 @@ struct ContentView: View {
     private var captureMenu: some View {
         Menu {
             Button { hub.goVoice() } label: { Label("Voice", systemImage: "mic.fill") }
-            Button { hub.goScan() } label: { Label("Scan", systemImage: "camera.fill") }
+            Button { hub.goScan() } label: { Label("Scan a label", systemImage: "doc.viewfinder") }
+            Button { hub.goDish() } label: { Label("Photograph a dish", systemImage: "fork.knife") }
             Button { hub.goType() } label: { Label("Type", systemImage: "keyboard") }
         } label: {
             Image(systemName: "plus")

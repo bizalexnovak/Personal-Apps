@@ -15,6 +15,7 @@ struct HistoryView: View {
     @AppStorage(TargetKeys.water) private var waterTarget = 64.0
 
     @Environment(\.metricPalette) private var palette
+    @Environment(\.appBackground) private var appBackground
     @State private var range: TrendRange = .week
     @State private var selectedMetrics: Set<Metric> = Set(Metric.allCases)
 
@@ -124,6 +125,7 @@ struct HistoryView: View {
                     }
                 }
             }
+            .appBackground(appBackground)
             .navigationTitle("Trends")
         }
     }

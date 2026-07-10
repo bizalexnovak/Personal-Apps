@@ -103,13 +103,16 @@ struct ListeningView: View {
     }
 }
 
-/// Spinner + status text while parsing / reading a label.
+/// Spinner + status text while parsing / reading a label / estimating a dish.
 struct AnalyzingView: View {
-    var scanning: Bool
+    var text: String
+    init(text: String) { self.text = text }
+    init(scanning: Bool) { self.text = scanning ? "Reading the label…" : "Analyzing your meal…" }
+
     var body: some View {
         VStack(spacing: 14) {
             ProgressView()
-            Text(scanning ? "Reading the label…" : "Analyzing your meal…")
+            Text(text)
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
         }

@@ -72,6 +72,7 @@ final class MealCaptureCoordinator: ObservableObject {
 
     var parser: MealParsing = ClaudeMealParsingService()
     var labelScanner: LabelScanning = ClaudeLabelScanningService()
+    var dishEstimator: DishEstimating = ClaudeDishEstimationService()
     var logger = MealLoggingService()
 
     private var context: ModelContext?
@@ -201,6 +202,49 @@ final class MealCaptureCoordinator: ObservableObject {
         MatchDebugLog.shared.record(transcript: "Scanned label: \(name)")
         pendingLabel = nil
         review = ReviewSession(rawText: "Scanned label: \(name)", items: [item])
+    }
+
+    /// Photograph-a-dish path: send the meal photo to Claude for a nutrition
+    /// estimate, then build a review with one card per component. Every item is
+    /// an estimate, so they're all marked low-confidence for the user to check.
+    func beginFromDishPhoto(imageData: Data, in context: ModelContext) async {
+        guard !isCapturing else { return }
+        self.context = context
+        isWorking = true
+
+        let dish: EstimatedDish
+        do {
+            dish = try await dishEstimator.estimate(imageData: imageData)
+        } catch {
+            errorMessage = error.localizedDescription
+            isWorking = false
+            return
+        }
+        isWorking = false
+
+        let items: [ReviewItem] = dish.items.map { estimate in
+            var item = ReviewItem(
+                request: FoodItemRequest(name: estimate.name, quantity: estimate.quantity, unit: estimate.unit),
+                match: NutritionMatch(
+                    matchedDescription: "Estimated from photo",
+                    calories: estimate.calories, protein: estimate.protein,
+                    carbs: estimate.carbs, fat: estimate.fat,
+                    confidence: MatchConfidence.low // estimates always need a look
+                ),
+                clarificationQuestion: nil,
+                options: [],
+                status: .needsReview
+            )
+            item.captureScaleBaseline()
+            return item
+        }
+
+        guard !items.isEmpty else {
+            errorMessage = "Couldn't find any food in that photo."
+            return
+        }
+        MatchDebugLog.shared.record(transcript: "Photo of a dish (\(items.count) items)")
+        review = ReviewSession(rawText: "Photo of a dish", items: items)
     }
 
     /// Trim conversational lead-ins from a spoken product name so "it's a Quest

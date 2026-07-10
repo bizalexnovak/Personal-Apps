@@ -1,9 +1,12 @@
 import SwiftUI
+import UIKit
 
 /// Settings root: a short menu that drills into focused sub-screens instead of
 /// one long scroll. Profile (you + body metrics), Daily goals (targets and the
 /// recommended values), API keys, and Developer tools.
 struct SettingsView: View {
+    @Environment(\.appBackground) private var appBackground
+
     var body: some View {
         NavigationStack {
             List {
@@ -33,6 +36,7 @@ struct SettingsView: View {
                     Label("Developer", systemImage: "wrench.and.screwdriver")
                 }
             }
+            .appBackground(appBackground)
             .navigationTitle("Settings")
         }
     }
@@ -42,6 +46,7 @@ struct SettingsView: View {
 
 /// Your name and the body metrics that feed the recommended-goal formula.
 struct ProfileSettingsView: View {
+    @Environment(\.appBackground) private var appBackground
     @AppStorage(ProfileKeys.name) private var name = ""
 
     @AppStorage(BodyKeys.heightInches) private var heightInches = 0.0
@@ -105,6 +110,7 @@ struct ProfileSettingsView: View {
                 Text("These feed the recommended daily goals under Settings → Daily goals (Mifflin-St Jeor estimate).")
             }
         }
+        .appBackground(appBackground)
         .navigationTitle("Profile")
         .navigationBarTitleDisplayMode(.inline)
     }
@@ -122,6 +128,7 @@ struct ProfileSettingsView: View {
 /// The goal type + recommended values derived from Profile, and the manual
 /// daily targets that drive the Today rings and Trends chart.
 struct GoalsSettingsView: View {
+    @Environment(\.appBackground) private var appBackground
     @AppStorage(TargetKeys.calories) private var calorieTarget = 2000.0
     @AppStorage(TargetKeys.protein) private var proteinTarget = 150.0
     @AppStorage(TargetKeys.carbs) private var carbTarget = 250.0
@@ -200,6 +207,7 @@ struct GoalsSettingsView: View {
                 Text("These are what the Today rings and Trends chart measure against. Apply the recommended values above, or set them by hand.")
             }
         }
+        .appBackground(appBackground)
         .navigationTitle("Daily goals")
         .navigationBarTitleDisplayMode(.inline)
     }
@@ -238,8 +246,10 @@ struct GoalsSettingsView: View {
 /// Light/dark preference and the customizable metric colors used by the Today
 /// rings/bar and the Trends chart.
 struct AppearanceSettingsView: View {
+    @Environment(\.appBackground) private var appBackground
     @AppStorage(ThemeKeys.appearance) private var appearanceRaw = AppearanceMode.system.rawValue
     @AppStorage(ThemeKeys.appAccent) private var colorAppAccent = ""
+    @AppStorage(ThemeKeys.background) private var colorBackground = ""
     @AppStorage(ThemeKeys.colorCalories) private var colorCalories = ""
     @AppStorage(ThemeKeys.colorProtein) private var colorProtein = ""
     @AppStorage(ThemeKeys.colorCarbs) private var colorCarbs = ""
@@ -269,6 +279,29 @@ struct AppearanceSettingsView: View {
             }
 
             Section {
+                if colorBackground.isEmpty {
+                    ColorPicker(
+                        "Background",
+                        selection: Binding(
+                            get: { Color(hex: colorBackground) ?? defaultBackgroundSwatch },
+                            set: { colorBackground = $0.hexString }
+                        ),
+                        supportsOpacity: false
+                    )
+                    Text("Currently following the \(appearanceLabel) background.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else {
+                    colorRow("Background", store: $colorBackground, default: defaultBackgroundSwatch)
+                    Button("Use system background", role: .destructive) { colorBackground = "" }
+                }
+            } header: {
+                Text("Background")
+            } footer: {
+                Text("Overrides the light/dark background across the app. Pick a shade that keeps text readable, or reset to follow the system.")
+            }
+
+            Section {
                 colorRow("Calories", store: $colorCalories, default: MetricPalette.default.calories)
                 colorRow("Protein", store: $colorProtein, default: MetricPalette.default.protein)
                 colorRow("Carbs", store: $colorCarbs, default: MetricPalette.default.carbs)
@@ -285,8 +318,15 @@ struct AppearanceSettingsView: View {
                 Text("Used for the Today rings and bar and the Trends chart lines.")
             }
         }
+        .appBackground(appBackground)
         .navigationTitle("Appearance")
         .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private var defaultBackgroundSwatch: Color { Color(uiColor: .systemBackground) }
+
+    private var appearanceLabel: String {
+        (AppearanceMode(rawValue: appearanceRaw) ?? .system).title.lowercased()
     }
 
     private func colorRow(_ label: String, store: Binding<String>, default def: Color) -> some View {
@@ -304,6 +344,7 @@ struct AppearanceSettingsView: View {
 // MARK: - API keys
 
 struct APIKeysSettingsView: View {
+    @Environment(\.appBackground) private var appBackground
     @State private var claudeKey = ""
     @State private var usdaKey = ""
     @State private var hasSavedClaudeKey = false
@@ -337,6 +378,7 @@ struct APIKeysSettingsView: View {
                 Text("Keys are stored in the iOS Keychain, never in UserDefaults. Without a USDA key the app uses the free public DEMO_KEY, which is rate-limited — get a free key at api.data.gov.")
             }
         }
+        .appBackground(appBackground)
         .navigationTitle("API keys")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
@@ -365,6 +407,8 @@ struct APIKeysSettingsView: View {
 // MARK: - Developer
 
 struct DeveloperSettingsView: View {
+    @Environment(\.appBackground) private var appBackground
+
     var body: some View {
         Form {
             Section {
@@ -375,6 +419,7 @@ struct DeveloperSettingsView: View {
                 Text("Trace of how each logged item was matched: candidates considered, selection reason, and plausibility flags.")
             }
         }
+        .appBackground(appBackground)
         .navigationTitle("Developer")
         .navigationBarTitleDisplayMode(.inline)
     }
