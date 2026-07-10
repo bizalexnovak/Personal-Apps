@@ -1,129 +1,153 @@
 import SwiftUI
-import SwiftData
 
+/// The Log tab: a capture surface, not a list. Voice by default with a
+/// camera-app-style switch to Scan, plus a keyboard button in the corner to
+/// type instead. Tapping the big button launches the selected capture mode
+/// (the review + saving happens in CaptureView, and logged meals are viewed and
+/// edited on the Today tab).
 struct MealListView: View {
-    @Environment(\.modelContext) private var modelContext
-    @Query(sort: \Meal.timestamp, order: .reverse) private var meals: [Meal]
+    @Environment(\.metricPalette) private var palette
 
-    @State private var mealText = ""
-    @FocusState private var inputFocused: Bool
-
-    private var todaysMeals: [Meal] {
-        meals.filter { Calendar.current.isDateInToday($0.timestamp) }
+    private enum Mode: String, CaseIterable, Identifiable {
+        case voice, scan
+        var id: String { rawValue }
+        var title: String { self == .voice ? "Voice" : "Scan" }
+        var icon: String { self == .voice ? "mic.fill" : "camera.fill" }
+        var caption: String {
+            self == .voice
+                ? "Tap and describe what you ate."
+                : "Tap to scan a nutrition label."
+        }
     }
 
-    private func submit() {
-        let text = mealText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty else { return }
-        mealText = ""
-        inputFocused = false
-        PendingMealStore.shared.requestText(text)
-    }
+    @State private var mode: Mode = .voice
+    @State private var showTypeSheet = false
+    @State private var typedText = ""
 
     var body: some View {
         NavigationStack {
-            List {
-                Section {
-                    HStack(spacing: 12) {
-                        Button {
-                            PendingMealStore.shared.requestVoice()
-                        } label: {
-                            Image(systemName: "mic.circle.fill")
-                                .font(.title2)
-                                .foregroundStyle(.orange)
-                        }
-                        .accessibilityLabel("Log by voice")
-                        Button {
-                            PendingMealStore.shared.requestScan()
-                        } label: {
-                            Image(systemName: "camera.circle.fill")
-                                .font(.title2)
-                                .foregroundStyle(.orange)
-                        }
-                        .accessibilityLabel("Scan a nutrition label")
-                        TextField("Describe what you ate…", text: $mealText, axis: .vertical)
-                            .focused($inputFocused)
-                            .submitLabel(.done)
-                        Button(action: submit) {
-                            Image(systemName: "arrow.up.circle.fill")
-                                .font(.title2)
-                        }
-                        .disabled(mealText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                    }
-                    // .borderless isolates each button's tap target so a single
-                    // tap registers (a List row otherwise shares one tap area).
-                    .buttonStyle(.borderless)
-                }
+            VStack {
+                Spacer()
 
-                Section("Today") {
-                    if todaysMeals.isEmpty {
-                        Text("No meals logged today.")
+                Button(action: startCurrentMode) {
+                    VStack(spacing: 18) {
+                        ZStack {
+                            Circle()
+                                .fill(accent.opacity(0.15))
+                                .frame(width: 168, height: 168)
+                            Circle()
+                                .strokeBorder(accent.opacity(0.6), lineWidth: 5)
+                                .frame(width: 132, height: 132)
+                            Circle()
+                                .fill(accent)
+                                .frame(width: 104, height: 104)
+                            Image(systemName: mode.icon)
+                                .font(.system(size: 42, weight: .semibold))
+                                .foregroundStyle(.white)
+                        }
+                        Text(mode.caption)
+                            .font(.subheadline)
                             .foregroundStyle(.secondary)
                     }
-                    ForEach(todaysMeals) { meal in
-                        MealRow(meal: meal)
-                    }
-                    .onDelete { offsets in
-                        for index in offsets {
-                            modelContext.delete(todaysMeals[index])
-                        }
-                    }
                 }
+                .buttonStyle(.plain)
+                .animation(.easeInOut(duration: 0.2), value: mode)
+
+                Spacer()
+
+                modeSwitcher
+                    .padding(.bottom, 28)
             }
-            .scrollDismissesKeyboard(.interactively)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .navigationTitle("Log")
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItemGroup(placement: .keyboard) {
-                    Spacer()
-                    Button("Done") { inputFocused = false }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        showTypeSheet = true
+                    } label: {
+                        Image(systemName: "keyboard")
+                    }
+                    .accessibilityLabel("Type instead")
                 }
             }
-            .navigationTitle("Meals")
+            .sheet(isPresented: $showTypeSheet) { typeSheet }
         }
     }
-}
 
-/// One meal in the list: tap to expand and see the parsed items, with a link
-/// through to the edit screen.
-private struct MealRow: View {
-    let meal: Meal
-    @State private var isExpanded = false
+    private var accent: Color {
+        mode == .voice ? palette.calories : palette.carbs
+    }
 
-    var body: some View {
-        DisclosureGroup(isExpanded: $isExpanded) {
-            ForEach(meal.items) { item in
-                HStack {
-                    VStack(alignment: .leading) {
-                        Text(item.name)
-                        Text("\(item.quantity.formatted()) \(item.unit)")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    Spacer()
-                    Text("\(Int(item.calories.rounded())) kcal")
-                        .font(.subheadline.monospacedDigit())
-                    if item.matchConfidence == MatchConfidence.low {
-                        Image(systemName: "exclamationmark.triangle.fill")
-                            .foregroundStyle(.yellow)
-                            .accessibilityLabel("Needs review")
-                    }
+    // MARK: Mode switcher (camera-app style)
+
+    private var modeSwitcher: some View {
+        HStack(spacing: 8) {
+            ForEach(Mode.allCases) { option in
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) { mode = option }
+                } label: {
+                    Text(option.title.uppercased())
+                        .font(.caption.weight(.semibold))
+                        .tracking(0.5)
+                        .foregroundStyle(mode == option ? accent : .secondary)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 8)
+                        .background(
+                            Capsule().fill(mode == option ? accent.opacity(0.15) : .clear)
+                        )
                 }
-            }
-            NavigationLink("Edit meal") {
-                EditMealView(meal: meal)
-            }
-            .font(.subheadline)
-        } label: {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(meal.displayName)
-                    .lineLimit(2)
-                HStack(spacing: 8) {
-                    Text(meal.timestamp, format: .dateTime.hour().minute())
-                    Text("\(Int(meal.totalCalories.rounded())) kcal")
-                    Text("P \(Int(meal.totalProtein.rounded())) · C \(Int(meal.totalCarbs.rounded())) · F \(Int(meal.totalFat.rounded()))")
-                }
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                .buttonStyle(.plain)
             }
         }
+        .padding(4)
+        .background(Capsule().fill(.quaternary.opacity(0.4)))
+    }
+
+    // MARK: Type sheet
+
+    private var typeSheet: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    TextField("Describe what you ate…", text: $typedText, axis: .vertical)
+                        .lineLimit(3...6)
+                } footer: {
+                    Text("Example: \u{201C}two eggs, a slice of toast, and a coffee with milk.\u{201D}")
+                }
+            }
+            .navigationTitle("Type a meal")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") {
+                        typedText = ""
+                        showTypeSheet = false
+                    }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Log") { submitTyped() }
+                        .disabled(typedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+            }
+        }
+        .presentationDetents([.medium])
+    }
+
+    // MARK: Actions
+
+    private func startCurrentMode() {
+        switch mode {
+        case .voice: PendingMealStore.shared.requestVoice()
+        case .scan: PendingMealStore.shared.requestScan()
+        }
+    }
+
+    private func submitTyped() {
+        let text = typedText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return }
+        typedText = ""
+        showTypeSheet = false
+        PendingMealStore.shared.requestText(text)
     }
 }

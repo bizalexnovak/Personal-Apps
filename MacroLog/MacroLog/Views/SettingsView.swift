@@ -18,6 +18,11 @@ struct SettingsView: View {
                     Label("Daily goals", systemImage: "target")
                 }
                 NavigationLink {
+                    AppearanceSettingsView()
+                } label: {
+                    Label("Appearance", systemImage: "paintpalette")
+                }
+                NavigationLink {
                     APIKeysSettingsView()
                 } label: {
                     Label("API keys", systemImage: "key.fill")
@@ -225,6 +230,64 @@ struct GoalsSettingsView: View {
             try? await Task.sleep(for: .seconds(2))
             appliedMessageVisible = false
         }
+    }
+}
+
+// MARK: - Appearance
+
+/// Light/dark preference and the customizable metric colors used by the Today
+/// rings/bar and the Trends chart.
+struct AppearanceSettingsView: View {
+    @AppStorage(ThemeKeys.appearance) private var appearanceRaw = AppearanceMode.system.rawValue
+    @AppStorage(ThemeKeys.colorCalories) private var colorCalories = ""
+    @AppStorage(ThemeKeys.colorProtein) private var colorProtein = ""
+    @AppStorage(ThemeKeys.colorCarbs) private var colorCarbs = ""
+    @AppStorage(ThemeKeys.colorFat) private var colorFat = ""
+    @AppStorage(ThemeKeys.colorWater) private var colorWater = ""
+
+    var body: some View {
+        Form {
+            Section {
+                Picker("Theme", selection: $appearanceRaw) {
+                    ForEach(AppearanceMode.allCases) { Text($0.title).tag($0.rawValue) }
+                }
+                .pickerStyle(.segmented)
+            } header: {
+                Text("Theme")
+            } footer: {
+                Text("System follows your device's light/dark setting.")
+            }
+
+            Section {
+                colorRow("Calories", store: $colorCalories, default: MetricPalette.default.calories)
+                colorRow("Protein", store: $colorProtein, default: MetricPalette.default.protein)
+                colorRow("Carbs", store: $colorCarbs, default: MetricPalette.default.carbs)
+                colorRow("Fat", store: $colorFat, default: MetricPalette.default.fat)
+                colorRow("Water", store: $colorWater, default: MetricPalette.default.water)
+
+                Button("Reset to defaults", role: .destructive) {
+                    colorCalories = ""; colorProtein = ""; colorCarbs = ""
+                    colorFat = ""; colorWater = ""
+                }
+            } header: {
+                Text("Colors")
+            } footer: {
+                Text("Used for the Today rings and bar and the Trends chart lines.")
+            }
+        }
+        .navigationTitle("Appearance")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private func colorRow(_ label: String, store: Binding<String>, default def: Color) -> some View {
+        ColorPicker(
+            label,
+            selection: Binding(
+                get: { Color(hex: store.wrappedValue) ?? def },
+                set: { store.wrappedValue = $0.hexString }
+            ),
+            supportsOpacity: false
+        )
     }
 }
 

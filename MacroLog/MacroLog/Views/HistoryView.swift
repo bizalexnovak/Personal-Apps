@@ -14,6 +14,7 @@ struct HistoryView: View {
     @AppStorage(TargetKeys.fat) private var fatTarget = 70.0
     @AppStorage(TargetKeys.water) private var waterTarget = 64.0
 
+    @Environment(\.metricPalette) private var palette
     @State private var range: TrendRange = .week
     @State private var selectedMetrics: Set<Metric> = Set(Metric.allCases)
 
@@ -147,7 +148,7 @@ struct HistoryView: View {
                 .interpolationMethod(.catmullRom)
             }
         }
-        .chartForegroundStyleScale(domain: visibleMetrics.map(\.title), range: visibleMetrics.map(\.color))
+        .chartForegroundStyleScale(domain: visibleMetrics.map(\.title), range: visibleMetrics.map { palette.color(for: $0) })
         .chartYAxis {
             AxisMarks { value in
                 AxisGridLine()
@@ -183,12 +184,13 @@ struct HistoryView: View {
 
     private func metricChip(_ metric: Metric) -> some View {
         let on = selectedMetrics.contains(metric)
+        let color = palette.color(for: metric)
         return Button {
             if on { selectedMetrics.remove(metric) } else { selectedMetrics.insert(metric) }
         } label: {
             HStack(spacing: 6) {
                 Circle()
-                    .fill(metric.color)
+                    .fill(color)
                     .frame(width: 9, height: 9)
                     .opacity(on ? 1 : 0.35)
                 VStack(alignment: .leading, spacing: 0) {
@@ -205,11 +207,11 @@ struct HistoryView: View {
             .padding(.vertical, 5)
             .background(
                 RoundedRectangle(cornerRadius: 8)
-                    .fill(on ? metric.color.opacity(0.12) : Color.clear)
+                    .fill(on ? color.opacity(0.12) : Color.clear)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 8)
-                    .strokeBorder(on ? metric.color.opacity(0.4) : Color.secondary.opacity(0.25), lineWidth: 1)
+                    .strokeBorder(on ? color.opacity(0.4) : Color.secondary.opacity(0.25), lineWidth: 1)
             )
         }
         .buttonStyle(.plain)

@@ -8,6 +8,7 @@ import Charts
 struct HomeView: View {
     @Query(sort: \Meal.timestamp, order: .reverse) private var meals: [Meal]
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.metricPalette) private var palette
 
     @AppStorage(TargetKeys.calories) private var calorieTarget = 2000.0
     @AppStorage(TargetKeys.protein) private var proteinTarget = 150.0
@@ -43,17 +44,17 @@ struct HomeView: View {
             List {
                 Section {
                     MacroProgressRow(
-                        label: "Calories", unit: "kcal", color: .orange,
+                        label: "Calories", unit: "kcal", color: palette.calories,
                         value: calories, target: calorieTarget
                     )
                     HStack(alignment: .top, spacing: 8) {
-                        MacroRing(label: "Protein", unit: "g", color: .red,
+                        MacroRing(label: "Protein", unit: "g", color: palette.protein,
                                   value: protein, target: proteinTarget)
-                        MacroRing(label: "Carbs", unit: "g", color: .blue,
+                        MacroRing(label: "Carbs", unit: "g", color: palette.carbs,
                                   value: carbs, target: carbTarget)
-                        MacroRing(label: "Fat", unit: "g", color: .yellow,
+                        MacroRing(label: "Fat", unit: "g", color: palette.fat,
                                   value: fat, target: fatTarget)
-                        MacroRing(label: "Water", unit: "oz", color: .cyan,
+                        MacroRing(label: "Water", unit: "oz", color: palette.water,
                                   value: water, target: waterTarget)
                     }
                     .padding(.vertical, 4)
@@ -210,7 +211,7 @@ struct HomeView: View {
                 x: .value("Time", bin.time, unit: .hour),
                 y: .value("Calories", bin.calories)
             )
-            .foregroundStyle(.orange)
+            .foregroundStyle(palette.calories)
             .cornerRadius(3)
         }
         .chartXScale(domain: startOfDay ... endOfDay)

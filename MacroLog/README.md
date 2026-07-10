@@ -32,7 +32,8 @@ Both keys are stored in the iOS Keychain, never in UserDefaults.
 Three ways in, one screen. Say **"Log meal in MacroLog"**, **"Log drink in
 MacroLog"** (both open voice capture; the parser handles food, water, and other
 drinks), or **"Scan a label in MacroLog"** (opens the camera), or use the
-**mic** / **camera** buttons on the Meals tab, or just type. Items can be
+**Log** tab (a capture surface — voice by default, a camera-app-style switch to
+Scan, and a keyboard button to type), or just type. Items can be
 renamed and portion-scaled with a **slider** (1× centred; drag left to shrink,
 right to grow, roughly ¼×–4×) on the review card and in the meal editor — handy
 for repeat meals where the portion differs (half a pepper, two scoops).
@@ -82,10 +83,14 @@ raw text ─▶ ClaudeMealParsingService ─▶ [FoodItemRequest] ─▶ USDANut
   which orchestrates the pipeline for both Siri and the in-app UI. Parsing and
   lookup are behind protocols (`MealParsing`, `NutritionLookup`) so tests inject mocks.
 - **Intents/** — `LogMealIntent` + `MacroLogShortcuts` (App Intents / Siri phrases).
-- **Views/** — Today (day-by-day diary), Meals (log + expandable list),
+- **Views/** — Today (day-by-day diary), Log (voice/scan/type capture surface),
   Edit Meal (adjust quantity, swap USDA match, manual macro override), Trends
-  (multi-day chart), Settings (Profile / Daily goals / API keys / Developer
-  sub-screens), Onboarding.
+  (multi-day chart), Settings (Profile / Daily goals / Appearance / API keys /
+  Developer sub-screens), Onboarding.
+- **Theme** — light/dark preference (System/Light/Dark) and a customizable
+  five-colour metric palette, stored in AppStorage and injected through the
+  environment (`MetricPalette`) so the Today rings/bar and Trends chart update
+  live; Settings → Appearance edits both.
 
 ### The Today diary
 

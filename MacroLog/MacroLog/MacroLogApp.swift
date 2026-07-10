@@ -16,17 +16,36 @@ struct ContentView: View {
     @ObservedObject private var pendingStore = PendingMealStore.shared
     @State private var showOnboarding = KeychainService.get(.claudeAPIKey) == nil
 
+    @AppStorage(ThemeKeys.appearance) private var appearanceRaw = AppearanceMode.system.rawValue
+    @AppStorage(ThemeKeys.colorCalories) private var colorCalories = ""
+    @AppStorage(ThemeKeys.colorProtein) private var colorProtein = ""
+    @AppStorage(ThemeKeys.colorCarbs) private var colorCarbs = ""
+    @AppStorage(ThemeKeys.colorFat) private var colorFat = ""
+    @AppStorage(ThemeKeys.colorWater) private var colorWater = ""
+
+    private var appearance: AppearanceMode { AppearanceMode(rawValue: appearanceRaw) ?? .system }
+
+    private var palette: MetricPalette {
+        MetricPalette.resolved(
+            calories: colorCalories, protein: colorProtein, carbs: colorCarbs,
+            fat: colorFat, water: colorWater
+        )
+    }
+
     var body: some View {
         TabView {
             HomeView()
                 .tabItem { Label("Today", systemImage: "chart.bar.fill") }
             MealListView()
-                .tabItem { Label("Meals", systemImage: "fork.knife") }
+                .tabItem { Label("Log", systemImage: "plus.circle.fill") }
             HistoryView()
                 .tabItem { Label("Trends", systemImage: "chart.xyaxis.line") }
             SettingsView()
                 .tabItem { Label("Settings", systemImage: "gearshape") }
         }
+        .tint(palette.calories)
+        .environment(\.metricPalette, palette)
+        .preferredColorScheme(appearance.colorScheme)
         .environmentObject(coordinator)
         // The capture screen handles voice/scan/text AND renders the review
         // inline — there's no separate review cover anymore.
