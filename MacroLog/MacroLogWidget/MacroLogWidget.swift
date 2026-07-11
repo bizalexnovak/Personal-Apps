@@ -158,23 +158,42 @@ private struct SmallView: View {
     let snapshot: DayNutritionSnapshot
     let metric: WidgetMetric
 
+    private var centerText: String {
+        "\(Int(metric.value(snapshot).rounded()))/\(Int(metric.target(snapshot).rounded()))"
+    }
+    private var progress: Double {
+        let t = metric.target(snapshot)
+        return t > 0 ? min(metric.value(snapshot) / t, 1) : 0
+    }
+
     var body: some View {
-        VStack(spacing: 0) {
-            Spacer(minLength: 0)
-            WidgetRing(
-                value: metric.value(snapshot), target: metric.target(snapshot),
-                color: metric.color, label: metric.label,
-                centerText: "\(Int(metric.value(snapshot).rounded()))/\(Int(metric.target(snapshot).rounded()))",
-                showLabel: false,
-                diameter: 90, lineWidth: 10, valueFont: .system(size: 24, weight: .bold)
-            )
-            Spacer(minLength: 0)
+        // Absolute placement via the widget's real size so the ring and label
+        // land exactly where intended regardless of the widget's sizing quirks.
+        GeometryReader { geo in
+            let side = min(geo.size.width, geo.size.height)
+            let diameter = side * 0.66
+            let lineWidth: CGFloat = 10
+
+            ZStack {
+                Circle().stroke(metric.color.opacity(0.2), lineWidth: lineWidth)
+                Circle()
+                    .trim(from: 0, to: progress)
+                    .stroke(metric.color, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
+                    .rotationEffect(.degrees(-90))
+                Text(centerText)
+                    .font(.system(size: 24, weight: .bold).monospacedDigit())
+                    .minimumScaleFactor(0.4)
+                    .lineLimit(1)
+                    .padding(lineWidth)
+            }
+            .frame(width: diameter, height: diameter)
+            .position(x: geo.size.width / 2, y: geo.size.height * 0.40)
+
             Text(metric.label)
                 .font(.system(size: 15, weight: .bold))
                 .foregroundStyle(.secondary)
-            Spacer(minLength: 0)
+                .position(x: geo.size.width / 2, y: geo.size.height * 0.86)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 
