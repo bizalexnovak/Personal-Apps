@@ -163,8 +163,9 @@ private struct SmallView: View {
             Spacer(minLength: 0)
             WidgetRing(
                 value: metric.value(snapshot), target: metric.target(snapshot),
-                color: metric.color, label: metric.label, showLabel: false,
+                color: metric.color, label: metric.label,
                 centerText: "\(Int(metric.value(snapshot).rounded()))/\(Int(metric.target(snapshot).rounded()))",
+                showLabel: false,
                 diameter: 90, lineWidth: 10, valueFont: .system(size: 24, weight: .bold)
             )
             Spacer(minLength: 0)
