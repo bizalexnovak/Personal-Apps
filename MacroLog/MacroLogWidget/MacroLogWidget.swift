@@ -118,13 +118,14 @@ private struct WidgetRing: View {
     let target: Double
     let color: Color
     let label: String
+    var diameter: CGFloat = 52
     var lineWidth: CGFloat = 6
-    var valueFont: Font = .system(size: 13, weight: .semibold)
+    var valueFont: Font = .system(size: 14, weight: .semibold)
 
     private var progress: Double { target > 0 ? min(value / target, 1) : 0 }
 
     var body: some View {
-        VStack(spacing: 3) {
+        VStack(spacing: 4) {
             ZStack {
                 Circle().stroke(color.opacity(0.2), lineWidth: lineWidth)
                 Circle()
@@ -133,13 +134,15 @@ private struct WidgetRing: View {
                     .rotationEffect(.degrees(-90))
                 Text("\(Int(value.rounded()))")
                     .font(valueFont.monospacedDigit())
-                    .minimumScaleFactor(0.5)
+                    .minimumScaleFactor(0.4)
                     .lineLimit(1)
-                    .padding(2)
+                    .padding(lineWidth)
             }
+            .frame(width: diameter, height: diameter)
             Text(label)
-                .font(.system(size: 9))
+                .font(.system(size: 10))
                 .foregroundStyle(.secondary)
+                .lineLimit(1)
         }
     }
 }
@@ -151,36 +154,37 @@ private struct SmallView: View {
     let metric: WidgetMetric
 
     var body: some View {
-        VStack(spacing: 6) {
+        VStack(spacing: 8) {
             WidgetRing(
                 value: metric.value(snapshot), target: metric.target(snapshot),
                 color: metric.color, label: metric.label,
-                lineWidth: 9, valueFont: .system(size: 22, weight: .bold)
+                diameter: 84, lineWidth: 9, valueFont: .system(size: 26, weight: .bold)
             )
             Text("of \(Int(metric.target(snapshot).rounded())) \(metric.unit)")
                 .font(.caption2)
                 .foregroundStyle(.secondary)
         }
-        .padding(4)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 
 private struct MediumView: View {
     let snapshot: DayNutritionSnapshot
     var body: some View {
-        HStack(spacing: 10) {
-            WidgetRing(value: snapshot.calories, target: snapshot.calorieTarget,
-                       color: WidgetColors.calories, label: "kcal")
-            WidgetRing(value: snapshot.protein, target: snapshot.proteinTarget,
-                       color: WidgetColors.protein, label: "protein")
-            WidgetRing(value: snapshot.carbs, target: snapshot.carbTarget,
-                       color: WidgetColors.carbs, label: "carbs")
-            WidgetRing(value: snapshot.fat, target: snapshot.fatTarget,
-                       color: WidgetColors.fat, label: "fat")
-            WidgetRing(value: snapshot.water, target: snapshot.waterTarget,
-                       color: WidgetColors.water, label: "water")
+        HStack(spacing: 4) {
+            ring(snapshot.calories, snapshot.calorieTarget, WidgetColors.calories, "kcal")
+            ring(snapshot.protein, snapshot.proteinTarget, WidgetColors.protein, "protein")
+            ring(snapshot.carbs, snapshot.carbTarget, WidgetColors.carbs, "carbs")
+            ring(snapshot.fat, snapshot.fatTarget, WidgetColors.fat, "fat")
+            ring(snapshot.water, snapshot.waterTarget, WidgetColors.water, "water")
         }
-        .padding(.vertical, 6)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private func ring(_ value: Double, _ target: Double, _ color: Color, _ label: String) -> some View {
+        WidgetRing(value: value, target: target, color: color, label: label,
+                   diameter: 52, lineWidth: 6, valueFont: .system(size: 15, weight: .semibold))
+            .frame(maxWidth: .infinity)
     }
 }
 
