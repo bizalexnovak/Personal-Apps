@@ -160,8 +160,8 @@ private struct SmallView: View {
                 color: metric.color, label: metric.label,
                 diameter: 84, lineWidth: 9, valueFont: .system(size: 26, weight: .bold)
             )
-            Text("of \(Int(metric.target(snapshot).rounded())) \(metric.unit)")
-                .font(.caption2)
+            Text("/ \(Int(metric.target(snapshot).rounded())) \(metric.unit)")
+                .font(.caption2.monospacedDigit())
                 .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)

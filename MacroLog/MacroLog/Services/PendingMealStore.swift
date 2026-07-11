@@ -60,8 +60,9 @@ enum LogCaptureMode: String, CaseIterable, Identifiable, Equatable {
 
 @MainActor
 final class CaptureHub: ObservableObject {
-    /// Which tab is showing (bound to the custom tab bar's selection).
-    @Published var selectedTab = AppTab.today
+    /// Which tab is showing (bound to the custom tab bar's selection). The app
+    /// opens on the Log tab.
+    @Published var selectedTab = AppTab.log
     /// The active mode on the Log tab.
     @Published var logMode: LogCaptureMode = .voice
     /// One-shot flags the Log tab consumes after switching in.
