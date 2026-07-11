@@ -121,6 +121,8 @@ private struct WidgetRing: View {
     /// Overrides the centre text (e.g. "24/128"); defaults to just the value.
     var centerText: String? = nil
     var showLabel: Bool = true
+    /// Gap between the ring and the label below it.
+    var labelSpacing: CGFloat = 4
     var diameter: CGFloat = 52
     var lineWidth: CGFloat = 6
     var valueFont: Font = .system(size: 14, weight: .semibold)
@@ -128,7 +130,7 @@ private struct WidgetRing: View {
     private var progress: Double { target > 0 ? min(value / target, 1) : 0 }
 
     var body: some View {
-        VStack(spacing: 4) {
+        VStack(spacing: labelSpacing) {
             ZStack {
                 Circle().stroke(color.opacity(0.2), lineWidth: lineWidth)
                 Circle()
@@ -212,6 +214,7 @@ private struct MediumView: View {
 
     private func ring(_ value: Double, _ target: Double, _ color: Color, _ label: String) -> some View {
         WidgetRing(value: value, target: target, color: color, label: label,
+                   labelSpacing: 14,
                    diameter: 52, lineWidth: 6, valueFont: .system(size: 15, weight: .semibold))
             .frame(maxWidth: .infinity)
     }
