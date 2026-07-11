@@ -192,7 +192,7 @@ private struct SmallView: View {
             Text(metric.label)
                 .font(.system(size: 15, weight: .bold))
                 .foregroundStyle(.secondary)
-                .position(x: geo.size.width / 2, y: geo.size.height * 0.86)
+                .position(x: geo.size.width / 2, y: geo.size.height * 0.93)
         }
     }
 }
