@@ -120,6 +120,7 @@ private struct WidgetRing: View {
     let label: String
     /// Overrides the centre text (e.g. "24/128"); defaults to just the value.
     var centerText: String? = nil
+    var showLabel: Bool = true
     var diameter: CGFloat = 52
     var lineWidth: CGFloat = 6
     var valueFont: Font = .system(size: 14, weight: .semibold)
@@ -141,10 +142,12 @@ private struct WidgetRing: View {
                     .padding(lineWidth)
             }
             .frame(width: diameter, height: diameter)
-            Text(label)
-                .font(.system(size: 10))
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
+            if showLabel {
+                Text(label)
+                    .font(.system(size: 10))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
         }
     }
 }
@@ -156,12 +159,20 @@ private struct SmallView: View {
     let metric: WidgetMetric
 
     var body: some View {
-        WidgetRing(
-            value: metric.value(snapshot), target: metric.target(snapshot),
-            color: metric.color, label: metric.label,
-            centerText: "\(Int(metric.value(snapshot).rounded()))/\(Int(metric.target(snapshot).rounded()))",
-            diameter: 96, lineWidth: 10, valueFont: .system(size: 26, weight: .bold)
-        )
+        VStack(spacing: 0) {
+            Spacer(minLength: 0)
+            WidgetRing(
+                value: metric.value(snapshot), target: metric.target(snapshot),
+                color: metric.color, label: metric.label, showLabel: false,
+                centerText: "\(Int(metric.value(snapshot).rounded()))/\(Int(metric.target(snapshot).rounded()))",
+                diameter: 90, lineWidth: 10, valueFont: .system(size: 24, weight: .bold)
+            )
+            Spacer(minLength: 0)
+            Text(metric.label)
+                .font(.system(size: 15, weight: .bold))
+                .foregroundStyle(.secondary)
+            Spacer(minLength: 0)
+        }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
