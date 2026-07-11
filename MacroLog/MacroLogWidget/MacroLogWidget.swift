@@ -118,6 +118,8 @@ private struct WidgetRing: View {
     let target: Double
     let color: Color
     let label: String
+    /// Overrides the centre text (e.g. "24/128"); defaults to just the value.
+    var centerText: String? = nil
     var diameter: CGFloat = 52
     var lineWidth: CGFloat = 6
     var valueFont: Font = .system(size: 14, weight: .semibold)
@@ -132,7 +134,7 @@ private struct WidgetRing: View {
                     .trim(from: 0, to: progress)
                     .stroke(color, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
                     .rotationEffect(.degrees(-90))
-                Text("\(Int(value.rounded()))")
+                Text(centerText ?? "\(Int(value.rounded()))")
                     .font(valueFont.monospacedDigit())
                     .minimumScaleFactor(0.4)
                     .lineLimit(1)
@@ -154,16 +156,12 @@ private struct SmallView: View {
     let metric: WidgetMetric
 
     var body: some View {
-        VStack(spacing: 8) {
-            WidgetRing(
-                value: metric.value(snapshot), target: metric.target(snapshot),
-                color: metric.color, label: metric.label,
-                diameter: 84, lineWidth: 9, valueFont: .system(size: 26, weight: .bold)
-            )
-            Text("/ \(Int(metric.target(snapshot).rounded())) \(metric.unit)")
-                .font(.caption2.monospacedDigit())
-                .foregroundStyle(.secondary)
-        }
+        WidgetRing(
+            value: metric.value(snapshot), target: metric.target(snapshot),
+            color: metric.color, label: metric.label,
+            centerText: "\(Int(metric.value(snapshot).rounded()))/\(Int(metric.target(snapshot).rounded()))",
+            diameter: 96, lineWidth: 10, valueFont: .system(size: 26, weight: .bold)
+        )
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
