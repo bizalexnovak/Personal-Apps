@@ -1,34 +1,109 @@
 import WidgetKit
 import SwiftUI
+import AppIntents
+
+// MARK: - Configurable metric (small widget)
+
+enum WidgetMetric: String, AppEnum {
+    case calories, protein, carbs, fat, water
+
+    static var typeDisplayRepresentation: TypeDisplayRepresentation { "Metric" }
+    static var caseDisplayRepresentations: [WidgetMetric: DisplayRepresentation] {
+        [
+            .calories: "Calories",
+            .protein: "Protein",
+            .carbs: "Carbs",
+            .fat: "Fat",
+            .water: "Water",
+        ]
+    }
+
+    func value(_ s: DayNutritionSnapshot) -> Double {
+        switch self {
+        case .calories: return s.calories
+        case .protein: return s.protein
+        case .carbs: return s.carbs
+        case .fat: return s.fat
+        case .water: return s.water
+        }
+    }
+
+    func target(_ s: DayNutritionSnapshot) -> Double {
+        switch self {
+        case .calories: return s.calorieTarget
+        case .protein: return s.proteinTarget
+        case .carbs: return s.carbTarget
+        case .fat: return s.fatTarget
+        case .water: return s.waterTarget
+        }
+    }
+
+    var color: Color {
+        switch self {
+        case .calories: return WidgetColors.calories
+        case .protein: return WidgetColors.protein
+        case .carbs: return WidgetColors.carbs
+        case .fat: return WidgetColors.fat
+        case .water: return WidgetColors.water
+        }
+    }
+
+    var unit: String {
+        switch self {
+        case .calories: return "kcal"
+        case .water: return "oz"
+        default: return "g"
+        }
+    }
+
+    var label: String {
+        switch self {
+        case .calories: return "Calories"
+        case .protein: return "Protein"
+        case .carbs: return "Carbs"
+        case .fat: return "Fat"
+        case .water: return "Water"
+        }
+    }
+}
+
+/// The widget's configuration — picks which metric the small size shows.
+struct SelectMetricIntent: WidgetConfigurationIntent {
+    static var title: LocalizedStringResource = "Choose Metric"
+    static var description = IntentDescription("Pick which metric the small widget shows.")
+
+    @Parameter(title: "Metric", default: .calories)
+    var metric: WidgetMetric
+}
 
 // MARK: - Timeline
 
 struct MacroEntry: TimelineEntry {
     let date: Date
     let snapshot: DayNutritionSnapshot
+    let metric: WidgetMetric
 }
 
-struct MacroProvider: TimelineProvider {
+struct MacroProvider: AppIntentTimelineProvider {
     func placeholder(in context: Context) -> MacroEntry {
-        MacroEntry(date: .now, snapshot: .empty)
+        MacroEntry(date: .now, snapshot: .empty, metric: .calories)
     }
 
-    func getSnapshot(in context: Context, completion: @escaping (MacroEntry) -> Void) {
-        completion(MacroEntry(date: .now, snapshot: WidgetDataStore.read() ?? .empty))
+    func snapshot(for configuration: SelectMetricIntent, in context: Context) async -> MacroEntry {
+        MacroEntry(date: .now, snapshot: WidgetDataStore.read() ?? .empty, metric: configuration.metric)
     }
 
-    func getTimeline(in context: Context, completion: @escaping (Timeline<MacroEntry>) -> Void) {
-        let entry = MacroEntry(date: .now, snapshot: WidgetDataStore.read() ?? .empty)
-        // The app reloads the timeline whenever data changes; this is just a
-        // fallback refresh so a long-open widget doesn't go stale.
+    func timeline(for configuration: SelectMetricIntent, in context: Context) async -> Timeline<MacroEntry> {
+        let entry = MacroEntry(date: .now, snapshot: WidgetDataStore.read() ?? .empty, metric: configuration.metric)
+        // The app reloads on data changes; this is a fallback refresh.
         let next = Calendar.current.date(byAdding: .minute, value: 30, to: .now) ?? .now
-        completion(Timeline(entries: [entry], policy: .after(next)))
+        return Timeline(entries: [entry], policy: .after(next))
     }
 }
 
 // MARK: - Colors (match the app's default metric palette)
 
-private enum WidgetColors {
+enum WidgetColors {
     static let calories = Color(.sRGB, red: 0.961, green: 0.486, blue: 0.0)
     static let protein = Color(.sRGB, red: 0.898, green: 0.224, blue: 0.208)
     static let carbs = Color(.sRGB, red: 0.118, green: 0.533, blue: 0.898)
@@ -73,14 +148,16 @@ private struct WidgetRing: View {
 
 private struct SmallView: View {
     let snapshot: DayNutritionSnapshot
+    let metric: WidgetMetric
+
     var body: some View {
         VStack(spacing: 6) {
             WidgetRing(
-                value: snapshot.calories, target: snapshot.calorieTarget,
-                color: WidgetColors.calories, label: "kcal",
+                value: metric.value(snapshot), target: metric.target(snapshot),
+                color: metric.color, label: metric.label,
                 lineWidth: 9, valueFont: .system(size: 22, weight: .bold)
             )
-            Text("of \(Int(snapshot.calorieTarget.rounded())) kcal")
+            Text("of \(Int(metric.target(snapshot).rounded())) \(metric.unit)")
                 .font(.caption2)
                 .foregroundStyle(.secondary)
         }
@@ -114,7 +191,7 @@ struct MacroLogWidgetEntryView: View {
     var body: some View {
         switch family {
         case .systemSmall:
-            SmallView(snapshot: entry.snapshot)
+            SmallView(snapshot: entry.snapshot, metric: entry.metric)
         default:
             MediumView(snapshot: entry.snapshot)
         }
@@ -125,12 +202,16 @@ struct MacroLogWidgetEntryView: View {
 
 struct MacroLogWidget: Widget {
     var body: some WidgetConfiguration {
-        StaticConfiguration(kind: WidgetDataStore.widgetKind, provider: MacroProvider()) { entry in
+        AppIntentConfiguration(
+            kind: WidgetDataStore.widgetKind,
+            intent: SelectMetricIntent.self,
+            provider: MacroProvider()
+        ) { entry in
             MacroLogWidgetEntryView(entry: entry)
                 .containerBackground(.background, for: .widget)
         }
         .configurationDisplayName("Today's Macros")
-        .description("Your calories and macros logged today.")
+        .description("Your calories and macros logged today. Edit the small widget to pick a metric.")
         .supportedFamilies([.systemSmall, .systemMedium])
     }
 }
