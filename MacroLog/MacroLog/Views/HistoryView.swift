@@ -123,6 +123,8 @@ struct HistoryView: View {
                     }
                 }
             }
+            .listSectionSpacing(.compact)
+            .contentMargins(.top, 6, for: .scrollContent)
             .appBackground(appBackground)
             .navigationTitle("Trends")
             .navigationBarTitleDisplayMode(.inline)

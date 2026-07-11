@@ -1,6 +1,7 @@
 import SwiftUI
 import SwiftData
 import Charts
+import WidgetKit
 
 /// The day diary: navigate day by day, see calories against goal plus protein/
 /// carbs/fat/water rings, an hourly intake chart, and that day's meals (which
@@ -25,6 +26,28 @@ struct HomeView: View {
     }
 
     private var isToday: Bool { Calendar.current.isDateInToday(selectedDate) }
+
+    /// Today's totals + targets for the home-screen widget (always today, not
+    /// the browsed day).
+    private var todaySnapshot: DayNutritionSnapshot {
+        let cal = Calendar.current
+        let todays = meals.filter { cal.isDateInToday($0.timestamp) }
+        return DayNutritionSnapshot(
+            date: cal.startOfDay(for: .now),
+            calories: todays.reduce(0) { $0 + $1.totalCalories },
+            protein: todays.reduce(0) { $0 + $1.totalProtein },
+            carbs: todays.reduce(0) { $0 + $1.totalCarbs },
+            fat: todays.reduce(0) { $0 + $1.totalFat },
+            water: todays.reduce(0) { $0 + $1.waterOunces },
+            calorieTarget: calorieTarget, proteinTarget: proteinTarget,
+            carbTarget: carbTarget, fatTarget: fatTarget, waterTarget: waterTarget
+        )
+    }
+
+    private func refreshWidget() {
+        WidgetDataStore.write(todaySnapshot)
+        WidgetCenter.shared.reloadAllTimelines()
+    }
 
     private var sortedDayMeals: [Meal] {
         dayMeals.sorted { $0.timestamp > $1.timestamp }
@@ -97,6 +120,8 @@ struct HomeView: View {
                 }
             }
             .appBackground(appBackground)
+            .onAppear { refreshWidget() }
+            .onChange(of: todaySnapshot) { _, _ in refreshWidget() }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {

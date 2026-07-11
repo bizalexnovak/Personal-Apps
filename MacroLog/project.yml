@@ -17,12 +17,14 @@ targets:
     platform: iOS
     sources:
       - MacroLog
+      - Shared
     settings:
       base:
         TARGETED_DEVICE_FAMILY: "1"
         SUPPORTS_MACCATALYST: false
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         INFOPLIST_KEY_UISupportedInterfaceOrientations: UIInterfaceOrientationPortrait
+        CODE_SIGN_ENTITLEMENTS: MacroLog.entitlements
     info:
       path: MacroLog/Info.plist
       properties:
@@ -32,6 +34,27 @@ targets:
         NSMicrophoneUsageDescription: MacroLog uses the microphone to hear you describe your meal.
         NSSpeechRecognitionUsageDescription: MacroLog transcribes your meal description so it can be parsed and logged.
         NSCameraUsageDescription: MacroLog uses the camera to read nutrition facts labels you photograph.
+    dependencies:
+      - target: MacroLogWidgetExtension
+
+  MacroLogWidgetExtension:
+    type: app-extension
+    platform: iOS
+    sources:
+      - MacroLogWidget
+      - Shared
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.alexnovak.MacroLog.Widget
+        TARGETED_DEVICE_FAMILY: "1"
+        SUPPORTS_MACCATALYST: false
+        CODE_SIGN_ENTITLEMENTS: MacroLogWidget.entitlements
+    info:
+      path: MacroLogWidget/Info.plist
+      properties:
+        CFBundleDisplayName: MacroLog
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
 
   MacroLogTests:
     type: bundle.unit-test
@@ -46,6 +69,7 @@ schemes:
     build:
       targets:
         MacroLog: all
+        MacroLogWidgetExtension: all
         MacroLogTests: [test]
     run:
       config: Debug

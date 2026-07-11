@@ -33,8 +33,8 @@ final class PendingMealStore: ObservableObject {
 /// switcher both go through here so capture always happens inline on the Log
 /// tab (no modal). `AppTab` indexes the custom tab bar's selection.
 enum AppTab {
-    static let today = 0
-    static let log = 1
+    static let log = 0
+    static let today = 1
     static let trends = 2
     static let settings = 3
 }

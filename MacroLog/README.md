@@ -19,6 +19,23 @@ Then select your development team under Signing & Capabilities and run on a devi
 or simulator. Run the unit tests with **⌘U** (they use mocks and in-memory SwiftData —
 no network or API keys needed).
 
+### Home-screen widget (one-time setup)
+
+The `MacroLogWidgetExtension` target shows today's calories + macros on the home
+screen. It shares data with the app through an **App Group**, which needs signing
+set up once after `xcodegen generate`:
+
+1. Select the **MacroLog** target → Signing & Capabilities → set your Team.
+2. Add the **App Groups** capability and check/enter
+   `group.com.alexnovak.MacroLog` (already in `MacroLog.entitlements`).
+3. Select the **MacroLogWidgetExtension** target → set the **same Team** and the
+   **same App Group** (`group.com.alexnovak.MacroLog`).
+
+If you use a different group ID, update it in both `.entitlements` files and in
+`Shared/DayNutritionSnapshot.swift` (`WidgetDataStore.appGroup`). Then long-press
+the home screen → **+** → search **MacroLog** to add the small or medium widget.
+The app refreshes it whenever the day's totals change (`WidgetCenter.reloadAllTimelines`).
+
 On first launch the app asks for:
 
 - **Claude API key** (required) — create one at console.anthropic.com

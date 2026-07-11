@@ -12,8 +12,8 @@ struct AppTabBar: View {
 
     private struct TabItem { let tab: Int; let title: String; let icon: String }
     private let items: [TabItem] = [
-        .init(tab: AppTab.today, title: "Today", icon: "chart.bar.fill"),
         .init(tab: AppTab.log, title: "Log", icon: "fork.knife"),
+        .init(tab: AppTab.today, title: "Today", icon: "chart.bar.fill"),
         .init(tab: AppTab.trends, title: "Trends", icon: "chart.xyaxis.line"),
         .init(tab: AppTab.settings, title: "Settings", icon: "gearshape"),
     ]
@@ -53,7 +53,7 @@ struct AppTabBar: View {
     private var captureMenu: some View {
         Menu {
             Button { hub.goVoice() } label: { Label("Voice", systemImage: "mic.fill") }
-            Button { hub.goScan() } label: { Label("Scan a label", systemImage: "doc.viewfinder") }
+            Button { hub.goScan() } label: { Label("Scan", systemImage: "doc.viewfinder") }
             Button { hub.goDish() } label: { Label("AI", systemImage: "sparkles") }
             Button { hub.goType() } label: { Label("Type", systemImage: "keyboard") }
         } label: {
