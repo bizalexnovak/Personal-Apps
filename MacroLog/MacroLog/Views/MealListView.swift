@@ -43,24 +43,19 @@ struct MealListView: View {
                     .ignoresSafeArea()
                 }
         }
-        .onAppear { mode = hub.logMode }
+        // Consume any queued action on appear (covers a cold launch from Siri,
+        // where the flag is already set before this view exists).
+        .onAppear {
+            mode = hub.logMode
+            consumeAutoStartVoice()
+            consumeOpenType()
+        }
         .onChange(of: hub.logMode) { _, newMode in
             mode = newMode
             if newMode != .voice { speech.cancel() }
         }
-        .onChange(of: hub.autoStartVoice) { _, start in
-            if start {
-                hub.autoStartVoice = false
-                mode = .voice
-                Task { await speech.restart() }
-            }
-        }
-        .onChange(of: hub.openType) { _, open in
-            if open {
-                hub.openType = false
-                showTypeSheet = true
-            }
-        }
+        .onChange(of: hub.autoStartVoice) { _, _ in consumeAutoStartVoice() }
+        .onChange(of: hub.openType) { _, _ in consumeOpenType() }
         .onChange(of: speech.state) { _, newState in
             guard case .captured = newState else { return }
             let text = speech.transcript
@@ -364,6 +359,19 @@ struct MealListView: View {
     }
 
     // MARK: - Actions
+
+    private func consumeAutoStartVoice() {
+        guard hub.autoStartVoice else { return }
+        hub.autoStartVoice = false
+        mode = .voice
+        Task { await speech.restart() }
+    }
+
+    private func consumeOpenType() {
+        guard hub.openType else { return }
+        hub.openType = false
+        showTypeSheet = true
+    }
 
     private func submitTyped() {
         let text = typedText.trimmingCharacters(in: .whitespacesAndNewlines)

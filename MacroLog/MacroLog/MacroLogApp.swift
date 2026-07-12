@@ -15,10 +15,11 @@ struct MacroLogApp: App {
 
 struct ContentView: View {
     @StateObject private var coordinator = MealCaptureCoordinator()
-    @StateObject private var hub = CaptureHub()
+    @StateObject private var hub = CaptureHub.shared
     @ObservedObject private var pendingStore = PendingMealStore.shared
     @State private var showOnboarding = KeychainService.get(.claudeAPIKey) == nil
-    @State private var showWelcome = true
+    // Skip the welcome splash when Siri launched us straight into an action.
+    @State private var showWelcome = !CaptureHub.shared.hasPendingLaunchAction
     @State private var keyboardVisible = false
     /// Ticks so Auto re-evaluates day/night across the 7am / 7pm boundaries.
     @State private var now = Date()

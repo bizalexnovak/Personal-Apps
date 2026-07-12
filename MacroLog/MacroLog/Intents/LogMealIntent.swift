@@ -13,7 +13,7 @@ struct LogMealIntent: AppIntent {
 
     @MainActor
     func perform() async throws -> some IntentResult {
-        PendingMealStore.shared.requestVoice()
+        CaptureHub.shared.goVoice()
         return .result()
     }
 }
@@ -31,7 +31,7 @@ struct LogDrinkIntent: AppIntent {
 
     @MainActor
     func perform() async throws -> some IntentResult {
-        PendingMealStore.shared.requestVoice()
+        CaptureHub.shared.goVoice()
         return .result()
     }
 }
@@ -48,7 +48,7 @@ struct ScanLabelIntent: AppIntent {
 
     @MainActor
     func perform() async throws -> some IntentResult {
-        PendingMealStore.shared.requestScan()
+        CaptureHub.shared.goScan()
         return .result()
     }
 }

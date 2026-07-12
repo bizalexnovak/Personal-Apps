@@ -60,6 +60,10 @@ enum LogCaptureMode: String, CaseIterable, Identifiable, Equatable {
 
 @MainActor
 final class CaptureHub: ObservableObject {
+    /// Shared so Siri intents (which run in-process before the UI exists) can
+    /// route capture to the Log tab the same way the in-app "+" menu does.
+    static let shared = CaptureHub()
+
     /// Which tab is showing (bound to the custom tab bar's selection). The app
     /// opens on the Log tab.
     @Published var selectedTab = AppTab.log
@@ -68,6 +72,12 @@ final class CaptureHub: ObservableObject {
     /// One-shot flags the Log tab consumes after switching in.
     @Published var autoStartVoice = false
     @Published var openType = false
+
+    /// True when a Siri/deep-link action is queued at launch — used to skip the
+    /// welcome splash so the action starts immediately.
+    var hasPendingLaunchAction: Bool {
+        autoStartVoice || openType || logMode == .scan
+    }
 
     func goVoice() {
         logMode = .voice
