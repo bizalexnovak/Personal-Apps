@@ -1,6 +1,7 @@
 import SwiftUI
 import SwiftData
 import Combine
+import UIKit
 
 @main
 struct MacroLogApp: App {
@@ -80,6 +81,12 @@ struct ContentView: View {
         .environment(\.metricPalette, palette)
         .preferredColorScheme(resolvedScheme)
         .onReceive(Timer.publish(every: 60, on: .main, in: .common).autoconnect()) { now = $0 }
+        // Dismiss any open keyboard when moving between tabs.
+        .onChange(of: hub.selectedTab) { _, _ in
+            UIApplication.shared.sendAction(
+                #selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil
+            )
+        }
         .environmentObject(coordinator)
         .environmentObject(hub)
         // Siri / deep-link capture is modal; in-app capture is inline on Log.
@@ -134,16 +141,20 @@ struct ContentView: View {
 /// A brief welcome/splash shown at launch. Auto-dismisses after a moment, or on
 /// tap. Greets by time of day and first name: "Good morning, Alex / Good health."
 struct WelcomeView: View {
-    @AppStorage(ProfileKeys.name) private var name = ""
+    @AppStorage(ProfileKeys.firstName) private var firstName = ""
+    @AppStorage(ProfileKeys.name) private var legacyName = ""
     @Environment(\.appAccent) private var accent
+
+    private var first: String {
+        let f = firstName.trimmingCharacters(in: .whitespaces)
+        if !f.isEmpty { return f }
+        return legacyName.split(separator: " ").first.map(String.init) ?? ""
+    }
 
     private var greeting: String {
         let hour = Calendar.current.component(.hour, from: .now)
         let part = hour < 12 ? "Good morning" : (hour < 17 ? "Good afternoon" : "Good evening")
-        if let first = name.split(separator: " ").first {
-            return "\(part), \(first)"
-        }
-        return part
+        return first.isEmpty ? part : "\(part), \(first)"
     }
 
     var body: some View {
@@ -158,12 +169,12 @@ struct WelcomeView: View {
                     .font(.system(size: 52, weight: .semibold))
                     .foregroundStyle(.white)
                 Text(greeting)
-                    .font(.largeTitle.weight(.bold))
+                    .font(.custom("Snell Roundhand", size: 44).weight(.bold))
                     .foregroundStyle(.white)
                     .multilineTextAlignment(.center)
                 Text("Good health.")
-                    .font(.title3)
-                    .foregroundStyle(.white.opacity(0.9))
+                    .font(.custom("Snell Roundhand", size: 28).weight(.bold))
+                    .foregroundStyle(.white.opacity(0.95))
             }
             .padding()
         }
@@ -183,7 +194,10 @@ enum TargetKeys {
 
 /// Personal profile fields (non-secret) shown under Settings → Profile.
 enum ProfileKeys {
+    /// Legacy single-field name; migrated into first/last on Profile open.
     static let name = "profile_name"
+    static let firstName = "profile_first_name"
+    static let lastName = "profile_last_name"
 }
 
 /// Body metrics used to derive recommended daily goals (Mifflin-St Jeor).

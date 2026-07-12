@@ -163,31 +163,24 @@ struct HomeView: View {
     }
 
     private var datePickerSheet: some View {
-        NavigationStack {
-            VStack {
-                DatePicker(
-                    "Jump to date",
-                    selection: $selectedDate,
-                    in: ...Calendar.current.startOfDay(for: .now),
-                    displayedComponents: .date
-                )
-                .datePickerStyle(.graphical)
-                .padding(.horizontal)
-                .onChange(of: selectedDate) { _, newValue in
-                    let normalized = Calendar.current.startOfDay(for: newValue)
-                    if normalized != selectedDate { selectedDate = normalized }
-                    showDatePicker = false // tapping a day jumps and closes
-                }
-                Spacer()
+        VStack {
+            DatePicker(
+                "",
+                selection: $selectedDate,
+                in: ...Calendar.current.startOfDay(for: .now),
+                displayedComponents: .date
+            )
+            .datePickerStyle(.graphical)
+            .labelsHidden()
+            .padding(.horizontal)
+            .onChange(of: selectedDate) { _, newValue in
+                let normalized = Calendar.current.startOfDay(for: newValue)
+                if normalized != selectedDate { selectedDate = normalized }
+                showDatePicker = false // tapping a day jumps and closes
             }
-            .navigationTitle("Jump to date")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { showDatePicker = false }
-                }
-            }
+            Spacer()
         }
+        .padding(.top)
         .presentationDetents([.medium, .large])
     }
 

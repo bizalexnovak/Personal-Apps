@@ -42,18 +42,37 @@ struct SettingsView: View {
     }
 }
 
+// MARK: - Numeric input helper
+
+/// A String binding over a Double that shows blank for 0 (so a leading "0"
+/// never gets appended to what you type) and parses back on edit.
+func blankableNumber(_ value: Binding<Double>) -> Binding<String> {
+    Binding(
+        get: {
+            let v = value.wrappedValue
+            if v == 0 { return "" }
+            return v == v.rounded() ? String(Int(v)) : String(v)
+        },
+        set: { value.wrappedValue = Double($0.filter { $0.isNumber || $0 == "." }) ?? 0 }
+    )
+}
+
 // MARK: - Profile
 
 /// Your name and the body metrics that feed the recommended-goal formula.
 struct ProfileSettingsView: View {
     @Environment(\.appBackground) private var appBackground
-    @AppStorage(ProfileKeys.name) private var name = ""
+    @AppStorage(ProfileKeys.firstName) private var firstName = ""
+    @AppStorage(ProfileKeys.lastName) private var lastName = ""
+    @AppStorage(ProfileKeys.name) private var legacyName = ""
 
     @AppStorage(BodyKeys.heightInches) private var heightInches = 0.0
     @AppStorage(BodyKeys.weightPounds) private var weightPounds = 0.0
     @AppStorage(BodyKeys.age) private var age = 0.0
     @AppStorage(BodyKeys.sex) private var sexRaw = BiologicalSex.male.rawValue
     @AppStorage(BodyKeys.activity) private var activityRaw = ActivityLevel.moderate.rawValue
+
+    @FocusState private var fieldFocused: Bool
 
     // Height split into feet + inches, both writing back to heightInches.
     private var feet: Binding<Double> {
@@ -73,8 +92,12 @@ struct ProfileSettingsView: View {
     var body: some View {
         Form {
             Section("You") {
-                TextField("Name", text: $name)
+                TextField("First name", text: $firstName)
                     .textContentType(.givenName)
+                    .focused($fieldFocused)
+                TextField("Last name", text: $lastName)
+                    .textContentType(.familyName)
+                    .focused($fieldFocused)
             }
 
             Section {
@@ -110,16 +133,33 @@ struct ProfileSettingsView: View {
                 Text("These feed the recommended daily goals under Settings → Daily goals (Mifflin-St Jeor estimate).")
             }
         }
+        .scrollDismissesKeyboard(.interactively)
+        .toolbar {
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button("Done") { fieldFocused = false }
+            }
+        }
         .appBackground(appBackground)
         .navigationTitle("Profile")
         .navigationBarTitleDisplayMode(.inline)
+        .onAppear(perform: migrateLegacyName)
+    }
+
+    /// One-time split of the old single "name" field into first/last.
+    private func migrateLegacyName() {
+        guard firstName.isEmpty, lastName.isEmpty, !legacyName.isEmpty else { return }
+        let parts = legacyName.split(separator: " ").map(String.init)
+        firstName = parts.first ?? ""
+        lastName = parts.dropFirst().joined(separator: " ")
     }
 
     private func numberField(_ label: String, value: Binding<Double>, width: CGFloat) -> some View {
-        TextField(label, value: value, format: .number)
+        TextField(label, text: blankableNumber(value))
             .keyboardType(.decimalPad)
             .multilineTextAlignment(.trailing)
             .frame(maxWidth: width)
+            .focused($fieldFocused)
     }
 }
 
@@ -143,6 +183,7 @@ struct GoalsSettingsView: View {
     @AppStorage(BodyKeys.goal) private var goalRaw = GoalType.maintain.rawValue
 
     @State private var appliedMessageVisible = false
+    @FocusState private var fieldFocused: Bool
 
     private var sex: BiologicalSex { BiologicalSex(rawValue: sexRaw) ?? .male }
     private var activity: ActivityLevel { ActivityLevel(rawValue: activityRaw) ?? .moderate }
@@ -207,6 +248,13 @@ struct GoalsSettingsView: View {
                 Text("These are what the Today rings and Trends chart measure against. Apply the recommended values above, or set them by hand.")
             }
         }
+        .scrollDismissesKeyboard(.interactively)
+        .toolbar {
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button("Done") { fieldFocused = false }
+            }
+        }
         .appBackground(appBackground)
         .navigationTitle("Daily goals")
         .navigationBarTitleDisplayMode(.inline)
@@ -220,10 +268,11 @@ struct GoalsSettingsView: View {
 
     private func targetField(_ label: String, value: Binding<Double>) -> some View {
         LabeledContent(label) {
-            TextField(label, value: value, format: .number)
+            TextField(label, text: blankableNumber(value))
                 .keyboardType(.decimalPad)
                 .multilineTextAlignment(.trailing)
                 .frame(maxWidth: 100)
+                .focused($fieldFocused)
         }
     }
 
