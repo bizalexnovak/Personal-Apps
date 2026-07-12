@@ -150,26 +150,35 @@ final class LabelScannerViewController: UIViewController, AVCaptureVideoDataOutp
         }
         let text = lines.joined(separator: " ").lowercased()
 
+        // "Nutrition Facts" (the panel header) is decisive — grab it right away.
+        if text.contains("nutrition facts") || text.contains("nutrition fact") {
+            handOff(pixelBuffer)
+            return
+        }
+        // Otherwise accumulate: one qualifying frame is enough to fire, so the
+        // user doesn't have to wait or tap.
         if Self.looksLikeLabel(text) {
             labelHits += 1
         } else {
             labelHits = max(0, labelHits - 1)
         }
-        // Two good frames in a row → confident it's a real label, not a fluke.
-        if labelHits >= 2 {
+        if labelHits >= 1 {
             handOff(pixelBuffer)
         }
     }
 
-    /// Heuristic: "Nutrition Facts" alone is decisive; otherwise require two
-    /// independent label signals so a random word doesn't trigger a capture.
+    /// Heuristic: at least two independent label signals so a random word
+    /// doesn't trigger a capture, but common panels fire on the first frame.
     static func looksLikeLabel(_ text: String) -> Bool {
-        if text.contains("nutrition facts") { return true }
         let signals = [
             text.contains("calorie"),
             text.contains("serving"),
             text.contains("daily value") || text.contains("% dv") || text.contains("amount per"),
-            text.contains("total fat") || text.contains("sodium") || text.contains("carbohydrate"),
+            text.contains("total fat") || text.contains("saturated"),
+            text.contains("sodium") || text.contains("cholesterol"),
+            text.contains("carbohydrate") || text.contains("dietary fiber") || text.contains("total sugars"),
+            text.contains("protein"),
+            text.contains("added sugars") || text.contains("includes"),
         ].filter { $0 }.count
         return signals >= 2
     }

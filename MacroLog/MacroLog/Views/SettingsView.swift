@@ -137,7 +137,7 @@ struct ProfileSettingsView: View {
         .toolbar {
             ToolbarItemGroup(placement: .keyboard) {
                 Spacer()
-                Button("Done") { fieldFocused = false }
+                Button { fieldFocused = false } label: { Image(systemName: "checkmark") }
             }
         }
         .appBackground(appBackground)
@@ -252,7 +252,7 @@ struct GoalsSettingsView: View {
         .toolbar {
             ToolbarItemGroup(placement: .keyboard) {
                 Spacer()
-                Button("Done") { fieldFocused = false }
+                Button { fieldFocused = false } label: { Image(systemName: "checkmark") }
             }
         }
         .appBackground(appBackground)

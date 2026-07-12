@@ -19,6 +19,7 @@ struct ContentView: View {
     @ObservedObject private var pendingStore = PendingMealStore.shared
     @State private var showOnboarding = KeychainService.get(.claudeAPIKey) == nil
     @State private var showWelcome = true
+    @State private var keyboardVisible = false
     /// Ticks so Auto re-evaluates day/night across the 7am / 7pm boundaries.
     @State private var now = Date()
 
@@ -70,10 +71,21 @@ struct ContentView: View {
                 tabScreen(SettingsView(), AppTab.settings)
             }
             .ignoresSafeArea(.container, edges: .top) // let screens go under the status bar
-            AppTabBar(
-                selection: $hub.selectedTab,
-                showPlus: hub.selectedTab == AppTab.today || hub.selectedTab == AppTab.trends
-            )
+            // Hide the tab bar while a keyboard is up so it doesn't collide with
+            // the keyboard's toolbar; it returns when the keyboard dismisses.
+            if !keyboardVisible {
+                AppTabBar(
+                    selection: $hub.selectedTab,
+                    showPlus: hub.selectedTab == AppTab.today || hub.selectedTab == AppTab.trends
+                )
+                .transition(.move(edge: .bottom))
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in
+            keyboardVisible = true
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
+            keyboardVisible = false
         }
         .tint(appAccent)
         .environment(\.appAccent, appAccent)
@@ -169,11 +181,11 @@ struct WelcomeView: View {
                     .font(.system(size: 52, weight: .semibold))
                     .foregroundStyle(.white)
                 Text(greeting)
-                    .font(.custom("Snell Roundhand", size: 44).weight(.bold))
+                    .font(.custom("Bradley Hand", size: 44).weight(.bold))
                     .foregroundStyle(.white)
                     .multilineTextAlignment(.center)
                 Text("Good health.")
-                    .font(.custom("Snell Roundhand", size: 28).weight(.bold))
+                    .font(.custom("Bradley Hand", size: 30).weight(.bold))
                     .foregroundStyle(.white.opacity(0.95))
             }
             .padding()
