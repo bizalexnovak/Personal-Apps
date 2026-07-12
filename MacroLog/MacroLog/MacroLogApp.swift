@@ -122,7 +122,7 @@ struct ContentView: View {
         }
         .overlay {
             if showWelcome {
-                WelcomeView()
+                WelcomeView(accent: appAccent)
                     .transition(.opacity)
                     .onTapGesture { dismissWelcome() }
                     .task {
@@ -153,9 +153,9 @@ struct ContentView: View {
 /// A brief welcome/splash shown at launch. Auto-dismisses after a moment, or on
 /// tap. Greets by time of day and first name: "Good morning, Alex / Good health."
 struct WelcomeView: View {
+    var accent: Color
     @AppStorage(ProfileKeys.firstName) private var firstName = ""
     @AppStorage(ProfileKeys.name) private var legacyName = ""
-    @Environment(\.appAccent) private var accent
 
     private var first: String {
         let f = firstName.trimmingCharacters(in: .whitespaces)

@@ -220,6 +220,45 @@ private struct MediumView: View {
     }
 }
 
+// MARK: - Lock-screen (accessory) views
+
+private struct CircularAccessory: View {
+    let snapshot: DayNutritionSnapshot
+    let metric: WidgetMetric
+    var body: some View {
+        Gauge(value: metric.target(snapshot) > 0 ? min(metric.value(snapshot) / metric.target(snapshot), 1) : 0) {
+            Text(metric.unit)
+        } currentValueLabel: {
+            Text("\(Int(metric.value(snapshot).rounded()))")
+        }
+        .gaugeStyle(.accessoryCircularCapacity)
+    }
+}
+
+private struct RectangularAccessory: View {
+    let snapshot: DayNutritionSnapshot
+    let metric: WidgetMetric
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text("\(Int(snapshot.calories.rounded()))/\(Int(snapshot.calorieTarget.rounded())) kcal")
+                .font(.headline)
+            Text("P \(Int(snapshot.protein.rounded()))  C \(Int(snapshot.carbs.rounded()))  F \(Int(snapshot.fat.rounded()))")
+                .font(.caption)
+            Text("Water \(Int(snapshot.water.rounded()))/\(Int(snapshot.waterTarget.rounded())) oz")
+                .font(.caption)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+private struct InlineAccessory: View {
+    let snapshot: DayNutritionSnapshot
+    let metric: WidgetMetric
+    var body: some View {
+        Text("\(metric.label) \(Int(metric.value(snapshot).rounded()))/\(Int(metric.target(snapshot).rounded())) \(metric.unit)")
+    }
+}
+
 struct MacroLogWidgetEntryView: View {
     var entry: MacroEntry
     @Environment(\.widgetFamily) private var family
@@ -228,6 +267,12 @@ struct MacroLogWidgetEntryView: View {
         switch family {
         case .systemSmall:
             SmallView(snapshot: entry.snapshot, metric: entry.metric)
+        case .accessoryCircular:
+            CircularAccessory(snapshot: entry.snapshot, metric: entry.metric)
+        case .accessoryRectangular:
+            RectangularAccessory(snapshot: entry.snapshot, metric: entry.metric)
+        case .accessoryInline:
+            InlineAccessory(snapshot: entry.snapshot, metric: entry.metric)
         default:
             MediumView(snapshot: entry.snapshot)
         }
@@ -247,8 +292,11 @@ struct MacroLogWidget: Widget {
                 .containerBackground(.background, for: .widget)
         }
         .configurationDisplayName("Today's Macros")
-        .description("Your calories and macros logged today. Edit the small widget to pick a metric.")
-        .supportedFamilies([.systemSmall, .systemMedium])
+        .description("Your calories and macros logged today. Edit the widget to pick a metric.")
+        .supportedFamilies([
+            .systemSmall, .systemMedium,
+            .accessoryCircular, .accessoryRectangular, .accessoryInline,
+        ])
     }
 }
 
