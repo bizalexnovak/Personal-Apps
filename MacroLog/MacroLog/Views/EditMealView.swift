@@ -1,8 +1,19 @@
 import SwiftUI
 import SwiftData
 
+/// Which per-item sheet to present, hoisted to `EditMealView` so it lives on a
+/// stable view (presenting from inside the ForEach row flash-dismisses because
+/// SwiftData re-emitting the items recreates the row and its state).
+struct EditorSheet: Identifiable {
+    enum Kind { case macros, swap }
+    let item: FoodItem
+    let kind: Kind
+    var id: String { "\(item.persistentModelID.hashValue)-\(kind == .macros ? "m" : "s")" }
+}
+
 struct EditMealView: View {
     @Bindable var meal: Meal
+    @State private var sheet: EditorSheet?
 
     var body: some View {
         List {
@@ -15,11 +26,21 @@ struct EditMealView: View {
             }
 
             ForEach(meal.items) { item in
-                FoodItemEditor(item: item)
+                FoodItemEditor(item: item) { kind in
+                    sheet = EditorSheet(item: item, kind: kind)
+                }
             }
         }
         .navigationTitle("Edit Meal")
         .navigationBarTitleDisplayMode(.inline)
+        .sheet(item: $sheet) { target in
+            switch target.kind {
+            case .macros:
+                MacroOverrideSheet(item: target.item)
+            case .swap:
+                FoodSwapView(item: target.item)
+            }
+        }
     }
 }
 
@@ -27,14 +48,8 @@ struct EditMealView: View {
 /// swap the matched USDA food, or tap the macro line to override values by hand.
 private struct FoodItemEditor: View {
     @Bindable var item: FoodItem
-
-    // A single sheet driver — two separate `.sheet` modifiers on one view make
-    // SwiftUI flash-dismiss the first presentation, so both go through one.
-    private enum ActiveSheet: Identifiable {
-        case swap, macros
-        var id: Int { self == .swap ? 0 : 1 }
-    }
-    @State private var activeSheet: ActiveSheet?
+    /// Ask the parent (EditMealView) to present a sheet for this item.
+    var present: (EditorSheet.Kind) -> Void
 
     // Portion slider: absolute against a baseline (1× = the item as it was when
     // the editor opened / was last manually changed). Typing or dragging scales
@@ -100,7 +115,7 @@ private struct FoodItemEditor: View {
             ))
 
             Button {
-                activeSheet = .macros
+                present(.macros)
             } label: {
                 HStack(spacing: 12) {
                     macroValue("kcal", item.calories)
@@ -115,7 +130,7 @@ private struct FoodItemEditor: View {
             .buttonStyle(.plain)
 
             Button("Swap matched food…") {
-                activeSheet = .swap
+                present(.swap)
             }
             .font(.subheadline)
 
@@ -131,13 +146,11 @@ private struct FoodItemEditor: View {
             }
         }
         .onAppear { reanchor() }
-        .sheet(item: $activeSheet) { sheet in
-            switch sheet {
-            case .swap:
-                FoodSwapView(item: item, onApply: reanchor)
-            case .macros:
-                MacroOverrideSheet(item: item, onApply: reanchor)
-            }
+        // Re-anchor the portion slider's 1× when macros change from outside the
+        // slider (macro override / food swap). Guarded to skip the slider's own
+        // writes (which leave scaleFactor != 1) so it never fights a drag.
+        .onChange(of: item.calories) { _, _ in
+            if scaleFactor == 1 { reanchor() }
         }
     }
 
