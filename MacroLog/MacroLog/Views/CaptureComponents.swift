@@ -9,17 +9,16 @@ import UIKit
 /// continuous pulse; listening pulses with the live audio level.
 struct MicGraphic: View {
     @Environment(\.appAccent) private var accent
-    /// nil = idle (gentle auto pulse); non-nil = listening (audio-driven).
+    /// nil = idle; non-nil = listening. Either way it keeps a gentle pulse; a
+    /// non-nil level adds live audio reactivity on top.
     var audioLevel: Double?
     @State private var idlePulse = false
 
     private var outerScale: CGFloat {
-        if let level = audioLevel { return 1 + CGFloat(level) * 0.5 }
-        return idlePulse ? 1.08 : 0.94
+        (idlePulse ? 1.08 : 0.94) + CGFloat(audioLevel ?? 0) * 0.5
     }
     private var midScale: CGFloat {
-        if let level = audioLevel { return 1 + CGFloat(level) * 0.3 }
-        return idlePulse ? 1.04 : 0.97
+        (idlePulse ? 1.04 : 0.97) + CGFloat(audioLevel ?? 0) * 0.3
     }
 
     var body: some View {
@@ -37,7 +36,7 @@ struct MicGraphic: View {
                 .foregroundStyle(.white)
         }
         .frame(width: 184, height: 184)
-        .animation(audioLevel == nil ? nil : .easeOut(duration: 0.12), value: audioLevel)
+        .animation(.easeOut(duration: 0.12), value: audioLevel)
         .onAppear {
             withAnimation(.easeInOut(duration: 1.1).repeatForever(autoreverses: true)) {
                 idlePulse = true

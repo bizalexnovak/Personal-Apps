@@ -141,39 +141,47 @@ struct MealListView: View {
         }
     }
 
-    /// Idle and listening share one layout: the mic graphic sits in the exact
-    /// same place and only the text + the controls below it change. Tapping the
-    /// mic (idle) starts recording; while listening the keyboard/suggestions/
-    /// switcher give way to Done (and a Cancel appears in the toolbar).
+    /// The mic is pinned to a fixed position (via absolute placement) so it does
+    /// NOT move between idle and listening — only the text and the controls at
+    /// the bottom change. Tapping the mic (idle) starts recording; while
+    /// listening the suggestions/switcher give way to Done, and it keeps pulsing.
     private func voiceLayout(listening: Bool, note: String? = nil) -> some View {
-        VStack(spacing: 20) {
-            Spacer()
-            VStack(spacing: 16) {
-                MicGraphic(audioLevel: listening ? speech.audioLevel : nil)
-                    .contentShape(Circle())
-                    .onTapGesture {
-                        if !listening { Task { await speech.restart() } }
-                    }
-                Text(micText(listening: listening, note: note))
-                    .font(listening && !speech.transcript.isEmpty ? .title3.weight(.medium) : .body)
-                    .foregroundStyle(listening && !speech.transcript.isEmpty ? .primary : .secondary)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal)
-                    .animation(.default, value: speech.transcript)
-            }
-            Spacer()
-            if listening {
-                Button("Done") { speech.finishListening() }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.large)
-            } else {
-                VStack(spacing: 16) {
-                    if !suggestions.isEmpty { suggestionsStrip }
-                    modeSwitcher
+        GeometryReader { geo in
+            let midX = geo.size.width / 2
+            let micY = geo.size.height * 0.40
+
+            MicGraphic(audioLevel: listening ? speech.audioLevel : nil)
+                .contentShape(Circle())
+                .onTapGesture {
+                    if !listening { Task { await speech.restart() } }
                 }
+                .position(x: midX, y: micY)
+
+            Text(micText(listening: listening, note: note))
+                .font(listening && !speech.transcript.isEmpty ? .title3.weight(.medium) : .body)
+                .foregroundStyle(listening && !speech.transcript.isEmpty ? .primary : .secondary)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: geo.size.width - 40)
+                .position(x: midX, y: micY + 128)
+                .animation(.default, value: speech.transcript)
+
+            // Bottom controls, anchored to the bottom independently of the mic.
+            VStack(spacing: 16) {
+                Spacer()
+                Group {
+                    if listening {
+                        Button("Done") { speech.finishListening() }
+                            .buttonStyle(.borderedProminent)
+                            .controlSize(.large)
+                    } else {
+                        if !suggestions.isEmpty { suggestionsStrip }
+                        modeSwitcher
+                    }
+                }
+                .padding(.bottom, 28)
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .padding(.bottom, 28)
     }
 
     private func micText(listening: Bool, note: String?) -> String {
