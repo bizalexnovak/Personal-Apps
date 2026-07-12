@@ -27,8 +27,14 @@ struct EditMealView: View {
 /// swap the matched USDA food, or tap the macro line to override values by hand.
 private struct FoodItemEditor: View {
     @Bindable var item: FoodItem
-    @State private var showSwapSheet = false
-    @State private var showOverrideSheet = false
+
+    // A single sheet driver — two separate `.sheet` modifiers on one view make
+    // SwiftUI flash-dismiss the first presentation, so both go through one.
+    private enum ActiveSheet: Identifiable {
+        case swap, macros
+        var id: Int { self == .swap ? 0 : 1 }
+    }
+    @State private var activeSheet: ActiveSheet?
 
     // Portion slider: absolute against a baseline (1× = the item as it was when
     // the editor opened / was last manually changed). Typing or dragging scales
@@ -94,7 +100,7 @@ private struct FoodItemEditor: View {
             ))
 
             Button {
-                showOverrideSheet = true
+                activeSheet = .macros
             } label: {
                 HStack(spacing: 12) {
                     macroValue("kcal", item.calories)
@@ -109,7 +115,7 @@ private struct FoodItemEditor: View {
             .buttonStyle(.plain)
 
             Button("Swap matched food…") {
-                showSwapSheet = true
+                activeSheet = .swap
             }
             .font(.subheadline)
 
@@ -125,11 +131,13 @@ private struct FoodItemEditor: View {
             }
         }
         .onAppear { reanchor() }
-        .sheet(isPresented: $showSwapSheet) {
-            FoodSwapView(item: item, onApply: reanchor)
-        }
-        .sheet(isPresented: $showOverrideSheet) {
-            MacroOverrideSheet(item: item, onApply: reanchor)
+        .sheet(item: $activeSheet) { sheet in
+            switch sheet {
+            case .swap:
+                FoodSwapView(item: item, onApply: reanchor)
+            case .macros:
+                MacroOverrideSheet(item: item, onApply: reanchor)
+            }
         }
     }
 
