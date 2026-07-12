@@ -150,10 +150,15 @@ struct MealListView: View {
             let midX = geo.size.width / 2
             let micY = geo.size.height * 0.40
 
+            // The mic is a toggle: tap to start listening, tap again to stop.
             MicGraphic(audioLevel: listening ? speech.audioLevel : nil)
                 .contentShape(Circle())
                 .onTapGesture {
-                    if !listening { Task { await speech.restart() } }
+                    if listening {
+                        speech.finishListening()
+                    } else {
+                        Task { await speech.restart() }
+                    }
                 }
                 .position(x: midX, y: micY)
 
@@ -166,21 +171,18 @@ struct MealListView: View {
                 .animation(.default, value: speech.transcript)
 
             // Bottom controls, anchored to the bottom independently of the mic.
-            VStack(spacing: 16) {
-                Spacer()
-                Group {
-                    if listening {
-                        Button("Done") { speech.finishListening() }
-                            .buttonStyle(.borderedProminent)
-                            .controlSize(.large)
-                    } else {
+            // While listening they simply disappear — tapping the mic again stops.
+            if !listening {
+                VStack(spacing: 16) {
+                    Spacer()
+                    Group {
                         if !suggestions.isEmpty { suggestionsStrip }
                         modeSwitcher
                     }
+                    .padding(.bottom, 28)
                 }
-                .padding(.bottom, 28)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
 

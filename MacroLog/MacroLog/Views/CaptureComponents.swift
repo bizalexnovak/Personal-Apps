@@ -12,36 +12,33 @@ struct MicGraphic: View {
     /// nil = idle; non-nil = listening. Either way it keeps a gentle pulse; a
     /// non-nil level adds live audio reactivity on top.
     var audioLevel: Double?
-    @State private var idlePulse = false
-
-    private var outerScale: CGFloat {
-        (idlePulse ? 1.08 : 0.94) + CGFloat(audioLevel ?? 0) * 0.5
-    }
-    private var midScale: CGFloat {
-        (idlePulse ? 1.04 : 0.97) + CGFloat(audioLevel ?? 0) * 0.3
-    }
 
     var body: some View {
-        ZStack {
-            Circle().fill(accent.opacity(0.15))
-                .frame(width: 180, height: 180)
-                .scaleEffect(outerScale)
-            Circle().fill(accent.opacity(0.22))
-                .frame(width: 132, height: 132)
-                .scaleEffect(midScale)
-            Circle().fill(accent)
-                .frame(width: 104, height: 104)
-            Image(systemName: "mic.fill")
-                .font(.system(size: 42, weight: .semibold))
-                .foregroundStyle(.white)
-        }
-        .frame(width: 184, height: 184)
-        .animation(.easeOut(duration: 0.12), value: audioLevel)
-        .onAppear {
-            withAnimation(.easeInOut(duration: 1.1).repeatForever(autoreverses: true)) {
-                idlePulse = true
+        // Time-driven pulse (TimelineView) instead of a repeatForever state
+        // animation: audio-level updates were cancelling that animation after
+        // a moment. Deriving the pulse from the clock every frame can't stop.
+        TimelineView(.animation) { context in
+            let t = context.date.timeIntervalSinceReferenceDate
+            let pulse = (sin(t * 2 * .pi / 2.2) + 1) / 2 // 0…1 over ~2.2 s
+            let level = CGFloat(audioLevel ?? 0)
+            let outerScale = 0.94 + 0.14 * pulse + level * 0.5
+            let midScale = 0.97 + 0.07 * pulse + level * 0.3
+
+            ZStack {
+                Circle().fill(accent.opacity(0.15))
+                    .frame(width: 180, height: 180)
+                    .scaleEffect(outerScale)
+                Circle().fill(accent.opacity(0.22))
+                    .frame(width: 132, height: 132)
+                    .scaleEffect(midScale)
+                Circle().fill(accent)
+                    .frame(width: 104, height: 104)
+                Image(systemName: "mic.fill")
+                    .font(.system(size: 42, weight: .semibold))
+                    .foregroundStyle(.white)
             }
         }
+        .frame(width: 184, height: 184)
     }
 }
 
