@@ -23,10 +23,12 @@ struct MealSuggestion: Identifiable, Equatable {
 }
 
 enum MealSuggestions {
-    /// Build suggestions from logged history: group identical items
-    /// (name + quantity + unit), keep only real repeats (logged ≥ 2 times),
-    /// and rank by how often they appear, then recency. `meals` should be
-    /// newest-first so the first item seen per group is the most recent.
+    /// Build suggestions from logged history: group by food (name + unit,
+    /// ignoring quantity so "2 eggs" and "3 eggs" count as the same food),
+    /// keep only real repeats (logged ≥ 2 times, across any days), and rank by
+    /// how often they appear, then recency. `meals` should be newest-first so
+    /// the first item seen per group is the most recent — its quantity/macros
+    /// become the one-tap re-log values.
     static func compute(from meals: [Meal], limit: Int = 6) -> [MealSuggestion] {
         struct Bucket { var suggestion: MealSuggestion; var lastSeen: Date }
         var buckets: [String: Bucket] = [:]
@@ -35,7 +37,7 @@ enum MealSuggestions {
             for item in meal.items {
                 let name = item.name.trimmingCharacters(in: .whitespaces)
                 guard !name.isEmpty else { continue }
-                let key = "\(name.lowercased())|\(item.quantity)|\(item.unit.lowercased())"
+                let key = "\(name.lowercased())|\(item.unit.lowercased())"
                 if var existing = buckets[key] {
                     existing.suggestion.count += 1
                     buckets[key] = existing

@@ -6,12 +6,13 @@ import Foundation
 /// control is symmetric: +0.5 doubles-ish, -0.5 halves-ish, and 1× sits dead
 /// centre instead of being skewed by a linear 0.25…4 range.
 enum PortionScale {
-    /// Slider spans 1/maxFactor× … maxFactor× (e.g. 0.25× … 4×).
-    static let maxFactor: Double = 4
+    /// Slider spans 1/maxFactor× … maxFactor× (0.1× … 10×).
+    static let maxFactor: Double = 10
     static var minFactor: Double { 1 / maxFactor }
 
-    /// Snap points the slider is magnetic toward (and the tick marks shown).
-    static let detents: [Double] = [0.25, 0.5, 1, 2, 3, 4]
+    /// Snap points the slider is magnetic toward (and the tick marks shown):
+    /// ½×, 1× (default), 2×, 5×, 10×.
+    static let detents: [Double] = [0.5, 1, 2, 5, 10]
 
     static func factor(for position: Double) -> Double {
         pow(maxFactor, position)

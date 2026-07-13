@@ -78,6 +78,8 @@ struct ProfileSettingsView: View {
     @AppStorage(BodyKeys.activity) private var activityRaw = ActivityLevel.moderate.rawValue
 
     @FocusState private var fieldFocused: Bool
+    @State private var showHeightPicker = false
+    @State private var showWeightPicker = false
 
     // Height split into feet + inches, both writing back to heightInches.
     private var feet: Binding<Double> {
@@ -106,20 +108,8 @@ struct ProfileSettingsView: View {
             }
 
             Section {
-                HStack {
-                    Text("Height")
-                    Spacer()
-                    numberField("ft", value: feet, width: 52)
-                    Text("ft").foregroundStyle(.secondary)
-                    numberField("in", value: inches, width: 52)
-                    Text("in").foregroundStyle(.secondary)
-                }
-                LabeledContent("Weight") {
-                    HStack(spacing: 4) {
-                        numberField("lb", value: $weightPounds, width: 72)
-                        Text("lb").foregroundStyle(.secondary)
-                    }
-                }
+                heightRow
+                weightRow
                 LabeledContent("Age") {
                     HStack(spacing: 4) {
                         numberField("yr", value: $age, width: 72)
@@ -149,6 +139,56 @@ struct ProfileSettingsView: View {
         .navigationTitle("Profile")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear(perform: migrateLegacyName)
+    }
+
+    // MARK: Height / weight wheel pickers
+
+    private var heightLabel: String {
+        "\(Int(feet.wrappedValue)) ft \(Int(inchesRemainder.rounded())) in"
+    }
+
+    private var heightRow: some View {
+        let feetInt = Binding(
+            get: { Int(feet.wrappedValue) },
+            set: { feet.wrappedValue = Double($0) }
+        )
+        let inchesInt = Binding(
+            get: { Int(inchesRemainder.rounded()) },
+            set: { inches.wrappedValue = Double($0) }
+        )
+        return DisclosureGroup(isExpanded: $showHeightPicker) {
+            HStack(spacing: 0) {
+                Picker("Feet", selection: feetInt) {
+                    ForEach(1...8, id: \.self) { Text("\($0) ft").tag($0) }
+                }
+                .pickerStyle(.wheel)
+                .frame(maxWidth: .infinity)
+                Picker("Inches", selection: inchesInt) {
+                    ForEach(0...11, id: \.self) { Text("\($0) in").tag($0) }
+                }
+                .pickerStyle(.wheel)
+                .frame(maxWidth: .infinity)
+            }
+            .frame(height: 130)
+        } label: {
+            LabeledContent("Height", value: heightLabel)
+        }
+    }
+
+    private var weightRow: some View {
+        let weightInt = Binding(
+            get: { Int(weightPounds.rounded()) },
+            set: { weightPounds = Double($0) }
+        )
+        return DisclosureGroup(isExpanded: $showWeightPicker) {
+            Picker("Weight", selection: weightInt) {
+                ForEach(50...600, id: \.self) { Text("\($0) lb").tag($0) }
+            }
+            .pickerStyle(.wheel)
+            .frame(height: 130)
+        } label: {
+            LabeledContent("Weight", value: weightPounds > 0 ? "\(Int(weightPounds.rounded())) lb" : "—")
+        }
     }
 
     /// One-time split of the old single "name" field into first/last.

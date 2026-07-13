@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// The portion-adjust control: a slider that snaps toward ½× / 1× / 2× / 3× /
-/// 4× (with tick marks), plus a text field to type an exact multiplier. Driven
+/// The portion-adjust control: a slider that snaps toward ½× / 1× / 2× / 5× /
+/// 10× (with tick marks), plus a text field to type an exact multiplier. Driven
 /// by a `factor` binding whose setter applies the scaling — so the same control
 /// works on the review card (absolute vs. a baseline) and the meal editor.
 struct PortionSliderView: View {

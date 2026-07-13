@@ -94,10 +94,36 @@ struct MacroProvider: AppIntentTimelineProvider {
     }
 
     func timeline(for configuration: SelectMetricIntent, in context: Context) async -> Timeline<MacroEntry> {
-        let entry = MacroEntry(date: .now, snapshot: WidgetDataStore.read() ?? .empty, metric: configuration.metric)
-        // The app reloads on data changes; this is a fallback refresh.
-        let next = Calendar.current.date(byAdding: .minute, value: 30, to: .now) ?? .now
-        return Timeline(entries: [entry], policy: .after(next))
+        let cal = Calendar.current
+        let now = Date()
+        let stored = WidgetDataStore.read() ?? .empty
+        let metric = configuration.metric
+
+        // If the stored snapshot is from a previous day (app hasn't been opened
+        // yet today), show zeros immediately instead of yesterday's totals.
+        let todaySnapshot = cal.isDate(stored.date, inSameDayAs: now)
+            ? stored
+            : stored.clearedForNewDay(date: cal.startOfDay(for: now))
+        var entries = [MacroEntry(date: now, snapshot: todaySnapshot, metric: metric)]
+
+        // Queue a reset entry exactly at the next midnight so the widget rolls
+        // over to a clean day on its own, even if the app is never opened.
+        if let nextMidnight = cal.nextDate(
+            after: now,
+            matching: DateComponents(hour: 0, minute: 0, second: 0),
+            matchingPolicy: .nextTime
+        ) {
+            entries.append(MacroEntry(
+                date: nextMidnight,
+                snapshot: stored.clearedForNewDay(date: nextMidnight),
+                metric: metric
+            ))
+            return Timeline(entries: entries, policy: .after(nextMidnight))
+        }
+
+        // Fallback: the app reloads on data changes; refresh in 30 min otherwise.
+        let next = cal.date(byAdding: .minute, value: 30, to: now) ?? now
+        return Timeline(entries: entries, policy: .after(next))
     }
 }
 

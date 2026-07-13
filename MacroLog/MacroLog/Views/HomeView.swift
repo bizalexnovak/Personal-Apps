@@ -115,6 +115,9 @@ struct HomeView: View {
                                     Text("\(Int(meal.totalCalories.rounded())) kcal · \(meal.timestamp, format: .dateTime.hour().minute())")
                                         .font(.caption)
                                         .foregroundStyle(.secondary)
+                                    Text(macroSummary(for: meal))
+                                        .font(.caption2.monospacedDigit())
+                                        .foregroundStyle(.secondary)
                                 }
                             }
                         }
@@ -198,6 +201,19 @@ struct HomeView: View {
         guard let shifted = cal.date(byAdding: .day, value: delta, to: selectedDate) else { return }
         let today = cal.startOfDay(for: .now)
         selectedDate = min(cal.startOfDay(for: shifted), today)
+    }
+
+    /// Protein / carbs / fat (and water, if any) totals for a meal row.
+    private func macroSummary(for meal: Meal) -> String {
+        var parts = [
+            "P \(Int(meal.totalProtein.rounded()))g",
+            "C \(Int(meal.totalCarbs.rounded()))g",
+            "F \(Int(meal.totalFat.rounded()))g",
+        ]
+        if meal.waterOunces > 0 {
+            parts.append("\(Int(meal.waterOunces.rounded())) oz water")
+        }
+        return parts.joined(separator: " · ")
     }
 
     private func deleteMeals(_ offsets: IndexSet) {

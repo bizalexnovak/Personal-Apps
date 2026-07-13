@@ -22,6 +22,17 @@ struct DayNutritionSnapshot: Codable, Equatable {
         calories: 0, protein: 0, carbs: 0, fat: 0, water: 0,
         calorieTarget: 2000, proteinTarget: 150, carbTarget: 250, fatTarget: 70, waterTarget: 64
     )
+
+    /// A copy zeroed for a fresh day: consumed totals reset to 0, targets kept.
+    /// Used by the widget to roll over at midnight without waiting for the app.
+    func clearedForNewDay(date: Date) -> DayNutritionSnapshot {
+        DayNutritionSnapshot(
+            date: date,
+            calories: 0, protein: 0, carbs: 0, fat: 0, water: 0,
+            calorieTarget: calorieTarget, proteinTarget: proteinTarget,
+            carbTarget: carbTarget, fatTarget: fatTarget, waterTarget: waterTarget
+        )
+    }
 }
 
 /// Read/write the snapshot through the shared App Group so the app and the

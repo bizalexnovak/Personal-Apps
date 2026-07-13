@@ -100,13 +100,18 @@ private struct FoodItemEditor: View {
             TextField("Name", text: $item.name)
                 .textFieldStyle(.roundedBorder)
 
-            HStack {
-                TextField("Quantity", value: quantityBinding, format: .number)
-                    .keyboardType(.decimalPad)
-                    .frame(maxWidth: 80)
-                    .textFieldStyle(.roundedBorder)
-                TextField("Unit", text: $item.unit)
-                    .textFieldStyle(.roundedBorder)
+            // Quantity has +/- steppers for quick count changes (e.g. bumping
+            // "6 strips of bacon" to 7) while still allowing tap-to-type. The
+            // macros rescale with the count; they aren't stepped directly.
+            Stepper(value: quantityBinding, in: 0...9999, step: 1) {
+                HStack {
+                    TextField("Quantity", value: quantityBinding, format: .number)
+                        .keyboardType(.decimalPad)
+                        .frame(maxWidth: 70)
+                        .textFieldStyle(.roundedBorder)
+                    TextField("Unit", text: $item.unit)
+                        .textFieldStyle(.roundedBorder)
+                }
             }
 
             PortionSliderView(factor: Binding(
