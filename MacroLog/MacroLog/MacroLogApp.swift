@@ -23,6 +23,7 @@ struct ContentView: View {
     @State private var keyboardVisible = false
     /// Ticks so Auto re-evaluates day/night across the 7am / 7pm boundaries.
     @State private var now = Date()
+    @Environment(\.scenePhase) private var scenePhase
 
     @AppStorage(ThemeKeys.appearance) private var appearanceRaw = AppearanceMode.dark.rawValue
     @AppStorage(ThemeKeys.appAccent) private var colorAppAccent = ""
@@ -94,6 +95,13 @@ struct ContentView: View {
         .environment(\.metricPalette, palette)
         .preferredColorScheme(resolvedScheme)
         .onReceive(Timer.publish(every: 60, on: .main, in: .common).autoconnect()) { now = $0 }
+        // Re-evaluate the end-of-day reminder as the app backgrounds/foregrounds
+        // so it reflects the latest totals and time of day.
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .background || phase == .active {
+                ReminderManager.refresh()
+            }
+        }
         // Dismiss any open keyboard when moving between tabs.
         .onChange(of: hub.selectedTab) { _, _ in
             UIApplication.shared.sendAction(

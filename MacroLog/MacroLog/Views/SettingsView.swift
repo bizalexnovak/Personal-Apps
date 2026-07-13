@@ -26,6 +26,11 @@ struct SettingsView: View {
                     Label("Appearance", systemImage: "paintpalette")
                 }
                 NavigationLink {
+                    RemindersSettingsView()
+                } label: {
+                    Label("Reminders", systemImage: "bell")
+                }
+                NavigationLink {
                     APIKeysSettingsView()
                 } label: {
                     Label("API keys", systemImage: "key.fill")
@@ -377,6 +382,84 @@ struct AppearanceSettingsView: View {
             ),
             supportsOpacity: false
         )
+    }
+}
+
+// MARK: - Reminders
+
+/// An optional end-of-day nudge if the day's goals aren't met, at a time you
+/// pick. The notification is (re)scheduled whenever totals change or the app
+/// backgrounds — see ReminderManager — so it only fires when you're short.
+struct RemindersSettingsView: View {
+    @Environment(\.appBackground) private var appBackground
+    @AppStorage(ReminderKeys.enabled) private var enabled = false
+    @AppStorage(ReminderKeys.hour) private var hour = ReminderKeys.defaultHour
+    @AppStorage(ReminderKeys.minute) private var minute = ReminderKeys.defaultMinute
+
+    @State private var showDenied = false
+
+    /// Maps the stored hour/minute to a Date for the picker and back on edit.
+    private var timeBinding: Binding<Date> {
+        Binding(
+            get: {
+                var comps = DateComponents()
+                comps.hour = hour
+                comps.minute = minute
+                return Calendar.current.date(from: comps) ?? Date()
+            },
+            set: { newValue in
+                let comps = Calendar.current.dateComponents([.hour, .minute], from: newValue)
+                hour = comps.hour ?? ReminderKeys.defaultHour
+                minute = comps.minute ?? ReminderKeys.defaultMinute
+                ReminderManager.refresh()
+            }
+        )
+    }
+
+    var body: some View {
+        Form {
+            Section {
+                Toggle("End-of-day reminder", isOn: $enabled)
+                    .onChange(of: enabled) { _, isOn in
+                        if isOn {
+                            Task {
+                                let granted = await ReminderManager.requestAuthorization()
+                                if granted {
+                                    ReminderManager.refresh()
+                                } else {
+                                    enabled = false
+                                    showDenied = true
+                                }
+                            }
+                        } else {
+                            ReminderManager.refresh() // cancels the pending reminder
+                        }
+                    }
+
+                if enabled {
+                    DatePicker(
+                        "Time",
+                        selection: timeBinding,
+                        displayedComponents: .hourAndMinute
+                    )
+                }
+            } footer: {
+                Text("If your calories, protein, and water goals aren't met by this time, MacroLog sends a reminder to wrap up the day. Nothing is sent once you've hit them.")
+            }
+        }
+        .appBackground(appBackground)
+        .navigationTitle("Reminders")
+        .navigationBarTitleDisplayMode(.inline)
+        .alert("Notifications are off", isPresented: $showDenied) {
+            Button("Open Settings") {
+                if let url = URL(string: UIApplication.openSettingsURLString) {
+                    UIApplication.shared.open(url)
+                }
+            }
+            Button("Not now", role: .cancel) {}
+        } message: {
+            Text("Turn on notifications for MacroLog in Settings to get end-of-day reminders.")
+        }
     }
 }
 

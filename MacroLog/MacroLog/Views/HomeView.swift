@@ -47,6 +47,9 @@ struct HomeView: View {
     private func refreshWidget() {
         WidgetDataStore.write(todaySnapshot)
         WidgetCenter.shared.reloadAllTimelines()
+        // The reminder is only queued for today when goals aren't met yet, so
+        // re-evaluate it whenever the day's totals change.
+        ReminderManager.refresh()
     }
 
     private var sortedDayMeals: [Meal] {
