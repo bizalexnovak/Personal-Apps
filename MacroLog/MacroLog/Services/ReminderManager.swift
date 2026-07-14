@@ -167,10 +167,13 @@ enum ReminderManager {
                 snapshot = snapshot.clearedForNewDay(date: cal.startOfDay(for: Date()))
             }
 
+            // Shared budget so several rules can't blow through iOS's cap of
+            // 64 pending notifications (kept under it for headroom).
+            var budget = 60
             for rule in rules {
                 switch rule.kind {
-                case .daily: scheduleDaily(rule, snapshot: snapshot, center: center)
-                case .recurring: scheduleRecurring(rule, center: center)
+                case .daily: scheduleDaily(rule, snapshot: snapshot, center: center, budget: &budget)
+                case .recurring: scheduleRecurring(rule, center: center, budget: &budget)
                 }
             }
         }
@@ -178,58 +181,70 @@ enum ReminderManager {
 
     // MARK: Once a day (goal-aware)
 
+    /// Schedules today (skipped when the goal is already met or the time has
+    /// passed) plus the next six days, so daily reminders keep firing even if
+    /// the app isn't opened for a while; every refresh re-extends the window.
     private static func scheduleDaily(
-        _ rule: ReminderRule, snapshot: DayNutritionSnapshot, center: UNUserNotificationCenter
+        _ rule: ReminderRule, snapshot: DayNutritionSnapshot,
+        center: UNUserNotificationCenter, budget: inout Int
     ) {
         let cal = Calendar.current
         let now = Date()
         var comps = cal.dateComponents([.year, .month, .day], from: now)
         comps.hour = rule.hour
         comps.minute = rule.minute
-        guard var fireDate = cal.date(from: comps) else { return }
-
-        // Fire today only if the time is still ahead and the goal isn't met;
-        // otherwise queue tomorrow's reminder as a fallback.
-        let firesToday = fireDate > now && !goalMet(rule.metric, snapshot)
-        if !firesToday {
-            fireDate = cal.date(byAdding: .day, value: 1, to: fireDate) ?? fireDate
-        }
+        guard let todayFire = cal.date(from: comps) else { return }
 
         let custom = rule.trimmedCustomMessage
-        let content = UNMutableNotificationContent()
-        content.title = title(for: rule.metric)
-        content.body = custom.isEmpty
-            ? (firesToday ? shortfallBody(rule.metric, snapshot) : rule.metric.defaultBody)
-            : custom
-        content.sound = .default
+        for dayOffset in 0..<7 {
+            guard budget > 0 else { return }
+            guard let fireDate = cal.date(byAdding: .day, value: dayOffset, to: todayFire) else { continue }
+            if dayOffset == 0 {
+                guard fireDate > now, !goalMet(rule.metric, snapshot) else { continue }
+            }
 
-        let triggerComps = cal.dateComponents([.year, .month, .day, .hour, .minute], from: fireDate)
-        center.add(UNNotificationRequest(
-            identifier: "\(identifierPrefix)reminder.\(rule.id.uuidString)",
-            content: content,
-            trigger: UNCalendarNotificationTrigger(dateMatching: triggerComps, repeats: false)
-        ))
+            let content = UNMutableNotificationContent()
+            content.title = title(for: rule.metric)
+            content.body = custom.isEmpty
+                ? (dayOffset == 0 ? shortfallBody(rule.metric, snapshot) : rule.metric.defaultBody)
+                : custom
+            content.sound = .default
+
+            let triggerComps = cal.dateComponents([.year, .month, .day, .hour, .minute], from: fireDate)
+            center.add(UNNotificationRequest(
+                identifier: "\(identifierPrefix)reminder.\(rule.id.uuidString).day\(dayOffset)",
+                content: content,
+                trigger: UNCalendarNotificationTrigger(dateMatching: triggerComps, repeats: false)
+            ))
+            budget -= 1
+        }
     }
 
     // MARK: Recurring (interval within a waking-hours window)
 
-    private static func scheduleRecurring(_ rule: ReminderRule, center: UNUserNotificationCenter) {
+    private static func scheduleRecurring(
+        _ rule: ReminderRule, center: UNUserNotificationCenter, budget: inout Int
+    ) {
+        let day = 24 * 60
         let start = rule.startHour * 60 + rule.startMinute
         let end = rule.endHour * 60 + rule.endMinute
         let interval = max(rule.intervalMinutes, 15)
+        // A stop before the start means the window crosses midnight
+        // (e.g. 10 PM – 6 AM for night shifts).
+        let windowMinutes = end >= start ? end - start : end - start + day
 
         // The day's fire times, each as a daily-repeating calendar trigger so
-        // they fire even if the app is never opened. Capped so several rules
-        // can't blow through iOS's 64 pending-notification limit.
+        // they fire even if the app is never opened.
         var slots: [Int] = []
-        var minuteOfDay = start
-        while minuteOfDay <= max(start, end), slots.count < 20 {
-            slots.append(minuteOfDay)
-            minuteOfDay += interval
+        var offset = 0
+        while offset <= windowMinutes, slots.count < 20 {
+            slots.append((start + offset) % day)
+            offset += interval
         }
 
         let custom = rule.trimmedCustomMessage
         for (index, slot) in slots.enumerated() {
+            guard budget > 0 else { return }
             let content = UNMutableNotificationContent()
             content.title = title(for: rule.metric)
             content.body = custom.isEmpty ? rule.metric.defaultBody : custom
@@ -242,6 +257,7 @@ enum ReminderManager {
                     repeats: true
                 )
             ))
+            budget -= 1
         }
     }
 

@@ -81,8 +81,12 @@ private struct FoodItemEditor: View {
         Binding {
             item.quantity
         } set: { newValue in
+            // A zero quantity is never meaningful (and would strand the item's
+            // macros at their old values) — ignore attempts to reach it, e.g.
+            // stepping "−" from 1, so the value stays where it was.
+            guard newValue > 0 else { return }
             let old = item.quantity
-            if old > 0, newValue > 0 {
+            if old > 0 {
                 let factor = newValue / old
                 item.calories *= factor
                 item.protein *= factor

@@ -89,21 +89,25 @@ struct MacroProvider: AppIntentTimelineProvider {
         MacroEntry(date: .now, snapshot: .empty, metric: .calories)
     }
 
+    /// The stored snapshot, zeroed if it's from a previous day (the app hasn't
+    /// been opened yet today) so we never show yesterday's totals.
+    private func currentSnapshot(now: Date = .now) -> DayNutritionSnapshot {
+        let cal = Calendar.current
+        let stored = WidgetDataStore.read() ?? .empty
+        return cal.isDate(stored.date, inSameDayAs: now)
+            ? stored
+            : stored.clearedForNewDay(date: cal.startOfDay(for: now))
+    }
+
     func snapshot(for configuration: SelectMetricIntent, in context: Context) async -> MacroEntry {
-        MacroEntry(date: .now, snapshot: WidgetDataStore.read() ?? .empty, metric: configuration.metric)
+        MacroEntry(date: .now, snapshot: currentSnapshot(), metric: configuration.metric)
     }
 
     func timeline(for configuration: SelectMetricIntent, in context: Context) async -> Timeline<MacroEntry> {
         let cal = Calendar.current
         let now = Date()
-        let stored = WidgetDataStore.read() ?? .empty
         let metric = configuration.metric
-
-        // If the stored snapshot is from a previous day (app hasn't been opened
-        // yet today), show zeros immediately instead of yesterday's totals.
-        let todaySnapshot = cal.isDate(stored.date, inSameDayAs: now)
-            ? stored
-            : stored.clearedForNewDay(date: cal.startOfDay(for: now))
+        let todaySnapshot = currentSnapshot(now: now)
         var entries = [MacroEntry(date: now, snapshot: todaySnapshot, metric: metric)]
 
         // Queue a reset entry exactly at the next midnight so the widget rolls
@@ -115,7 +119,7 @@ struct MacroProvider: AppIntentTimelineProvider {
         ) {
             entries.append(MacroEntry(
                 date: nextMidnight,
-                snapshot: stored.clearedForNewDay(date: nextMidnight),
+                snapshot: todaySnapshot.clearedForNewDay(date: nextMidnight),
                 metric: metric
             ))
             return Timeline(entries: entries, policy: .after(nextMidnight))

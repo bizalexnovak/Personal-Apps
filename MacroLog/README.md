@@ -53,7 +53,7 @@ a mini menu (Voice / Scan / AI / Type) that jumps to the Log tab in the chosen
 mode. Siri (**"Log meal in MacroLog"**, **"Log drink in MacroLog"**, **"Scan a
 label in MacroLog"**) opens the same flow modally via `CaptureView`. Items can
 be renamed and portion-scaled with a **`PortionSliderView`** — a slider that
-snaps toward ½× / 1× / 2× / 3× / 4× (with tick marks) plus a **type-in field**
+snaps toward ½× / 1× / 2× / 5× / 10× (with tick marks) plus a **type-in field**
 for an exact multiplier — on the review card and in the meal editor. Everything
 shows the review inline — no separate review screen and no "here's what I heard"
 step. The review's **Date** row (defaults to today) back-dates a meal to a

@@ -144,16 +144,20 @@ struct ProfileSettingsView: View {
     // MARK: Height / weight wheel pickers
 
     private var heightLabel: String {
-        "\(Int(feet.wrappedValue)) ft \(Int(inchesRemainder.rounded())) in"
+        guard heightInches > 0 else { return "—" }
+        return "\(Int(feet.wrappedValue)) ft \(min(Int(inchesRemainder.rounded()), 11)) in"
     }
 
+    // The wheel bindings clamp into the pickers' ranges so an unset value (0)
+    // or legacy fractional inches never leave the wheel without a valid
+    // selection; nothing is written back until the user actually scrolls.
     private var heightRow: some View {
         let feetInt = Binding(
-            get: { Int(feet.wrappedValue) },
+            get: { min(max(Int(feet.wrappedValue), 1), 8) },
             set: { feet.wrappedValue = Double($0) }
         )
         let inchesInt = Binding(
-            get: { Int(inchesRemainder.rounded()) },
+            get: { min(max(Int(inchesRemainder.rounded()), 0), 11) },
             set: { inches.wrappedValue = Double($0) }
         )
         return DisclosureGroup(isExpanded: $showHeightPicker) {
@@ -177,7 +181,7 @@ struct ProfileSettingsView: View {
 
     private var weightRow: some View {
         let weightInt = Binding(
-            get: { Int(weightPounds.rounded()) },
+            get: { min(max(Int(weightPounds.rounded()), 50), 600) },
             set: { weightPounds = Double($0) }
         )
         return DisclosureGroup(isExpanded: $showWeightPicker) {
@@ -435,7 +439,9 @@ struct RemindersSettingsView: View {
     @State private var rules: [ReminderRule] = []
     @State private var editorTarget: EditorTarget?
     @State private var showDenied = false
-    @State private var loaded = false
+    /// What's currently on disk — persist only when `rules` actually diverges,
+    /// so opening the screen never rewrites or re-prompts for anything.
+    @State private var savedRules: [ReminderRule] = []
 
     private enum EditorTarget: Identifiable {
         case new
@@ -475,13 +481,15 @@ struct RemindersSettingsView: View {
         .navigationTitle("Reminders")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
-            guard !loaded else { return }
+            guard savedRules.isEmpty, rules.isEmpty else { return }
             rules = ReminderRulesStore.load()
-            loaded = true
+            savedRules = rules
         }
         .onChange(of: rules) { _, _ in
-            guard loaded else { return }
-            persist()
+            guard rules != savedRules else { return }
+            savedRules = rules
+            ReminderRulesStore.save(rules)
+            ReminderManager.refresh()
         }
         .sheet(item: $editorTarget) { target in
             switch target {
@@ -521,8 +529,14 @@ struct RemindersSettingsView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .contentShape(Rectangle())
             .onTapGesture { editorTarget = .edit(rule.wrappedValue) }
-            Toggle("Enabled", isOn: rule.isEnabled)
-                .labelsHidden()
+            Toggle("Enabled", isOn: Binding(
+                get: { rule.wrappedValue.isEnabled },
+                set: { isOn in
+                    rule.wrappedValue.isEnabled = isOn
+                    if isOn { ensureAuthorized() }
+                }
+            ))
+            .labelsHidden()
         }
     }
 
@@ -532,15 +546,17 @@ struct RemindersSettingsView: View {
         } else {
             rules.append(rule)
         }
+        if rule.isEnabled { ensureAuthorized() }
     }
 
-    private func persist() {
-        ReminderRulesStore.save(rules)
-        ReminderManager.refresh()
-        guard rules.contains(where: \.isEnabled) else { return }
+    /// Ask for notification permission — only ever off the back of an explicit
+    /// user action (enabling or saving a reminder), never from just looking.
+    private func ensureAuthorized() {
         Task {
             let granted = await ReminderManager.requestAuthorization()
-            if !granted { showDenied = true }
+            if !granted {
+                await MainActor.run { showDenied = true }
+            }
         }
     }
 }
@@ -604,7 +620,7 @@ private struct ReminderEditorView: View {
                 } footer: {
                     Text(rule.kind == .daily
                         ? "Fires at this time — unless that goal is already met for the day."
-                        : "Repeats on this interval every day, only between Start and Stop. Set them around your sleep.")
+                        : "Repeats on this interval every day, only between Start and Stop — set them around your sleep. A Stop before the Start wraps past midnight (e.g. 10 PM–6 AM).")
                 }
 
                 Section {

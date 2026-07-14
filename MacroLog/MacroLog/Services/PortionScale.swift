@@ -50,13 +50,9 @@ enum PortionScale {
         return String(format: "%.2f", rounded)
     }
 
-    /// Short tick label for a detent ("½", "1", "2").
+    /// Short tick label for a detent ("½", "1", "10").
     static func tickLabel(_ factor: Double) -> String {
-        switch factor {
-        case 0.25: return "¼"
-        case 0.5: return "½"
-        default: return numberText(factor)
-        }
+        factor == 0.5 ? "½" : numberText(factor)
     }
 
     /// Compact multiplier label: "1×", "1.5×", "0.67×".
