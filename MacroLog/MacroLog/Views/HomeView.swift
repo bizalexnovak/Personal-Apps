@@ -109,15 +109,13 @@ struct HomeView: View {
                             NavigationLink {
                                 EditMealView(meal: meal)
                             } label: {
-                                VStack(alignment: .leading, spacing: 2) {
+                                VStack(alignment: .leading, spacing: 3) {
                                     Text(meal.displayName)
                                         .lineLimit(2)
                                     Text("\(Int(meal.totalCalories.rounded())) kcal · \(meal.timestamp, format: .dateTime.hour().minute())")
                                         .font(.caption)
                                         .foregroundStyle(.secondary)
-                                    Text(macroSummary(for: meal))
-                                        .font(.caption2.monospacedDigit())
-                                        .foregroundStyle(.secondary)
+                                    macroChips(for: meal)
                                 }
                             }
                         }
@@ -203,17 +201,53 @@ struct HomeView: View {
         selectedDate = min(cal.startOfDay(for: shifted), today)
     }
 
-    /// Protein / carbs / fat (and water, if any) totals for a meal row.
-    private func macroSummary(for meal: Meal) -> String {
-        var parts = [
-            "P \(Int(meal.totalProtein.rounded()))g",
-            "C \(Int(meal.totalCarbs.rounded()))g",
-            "F \(Int(meal.totalFat.rounded()))g",
-        ]
-        if meal.waterOunces > 0 {
-            parts.append("\(Int(meal.waterOunces.rounded())) oz water")
+    /// Per-meal macro totals as small colored chips (matching the app's metric
+    /// palette). Water-only meals skip the all-zero P/C/F chips and just show
+    /// the water amount.
+    @ViewBuilder
+    private func macroChips(for meal: Meal) -> some View {
+        let water = meal.waterOunces
+        let hasMacros = meal.totalCalories > 0 || meal.totalProtein > 0
+            || meal.totalCarbs > 0 || meal.totalFat > 0
+        HStack(spacing: 5) {
+            if hasMacros || water == 0 {
+                macroChip("P", meal.totalProtein, palette.protein)
+                macroChip("C", meal.totalCarbs, palette.carbs)
+                macroChip("F", meal.totalFat, palette.fat)
+            }
+            if water > 0 {
+                waterChip(water)
+            }
         }
-        return parts.joined(separator: " · ")
+        .padding(.top, 1)
+    }
+
+    private func macroChip(_ label: String, _ value: Double, _ color: Color) -> some View {
+        HStack(spacing: 3) {
+            Text(label)
+                .font(.caption2.weight(.bold))
+                .foregroundStyle(color)
+            Text("\(Int(value.rounded()))g")
+                .font(.caption2.monospacedDigit().weight(.medium))
+                .foregroundStyle(.secondary)
+        }
+        .padding(.horizontal, 7)
+        .padding(.vertical, 3)
+        .background(Capsule().fill(color.opacity(0.12)))
+    }
+
+    private func waterChip(_ ounces: Double) -> some View {
+        HStack(spacing: 3) {
+            Image(systemName: "drop.fill")
+                .font(.system(size: 8))
+                .foregroundStyle(palette.water)
+            Text("\(Int(ounces.rounded())) oz")
+                .font(.caption2.monospacedDigit().weight(.medium))
+                .foregroundStyle(.secondary)
+        }
+        .padding(.horizontal, 7)
+        .padding(.vertical, 3)
+        .background(Capsule().fill(palette.water.opacity(0.12)))
     }
 
     private func deleteMeals(_ offsets: IndexSet) {

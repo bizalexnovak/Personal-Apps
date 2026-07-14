@@ -427,69 +427,70 @@ struct AppearanceSettingsView: View {
 
 // MARK: - Reminders
 
-/// An optional end-of-day nudge if the day's goals aren't met, at a time you
-/// pick. The notification is (re)scheduled whenever totals change or the app
-/// backgrounds — see ReminderManager — so it only fires when you're short.
+/// Goal reminders: any number of once-a-day (goal-aware) or recurring
+/// (interval within a waking-hours window) notifications, each with an
+/// optional custom message. Scheduling lives in ReminderManager.
 struct RemindersSettingsView: View {
     @Environment(\.appBackground) private var appBackground
-    @AppStorage(ReminderKeys.enabled) private var enabled = false
-    @AppStorage(ReminderKeys.hour) private var hour = ReminderKeys.defaultHour
-    @AppStorage(ReminderKeys.minute) private var minute = ReminderKeys.defaultMinute
-
+    @State private var rules: [ReminderRule] = []
+    @State private var editorTarget: EditorTarget?
     @State private var showDenied = false
+    @State private var loaded = false
 
-    /// Maps the stored hour/minute to a Date for the picker and back on edit.
-    private var timeBinding: Binding<Date> {
-        Binding(
-            get: {
-                var comps = DateComponents()
-                comps.hour = hour
-                comps.minute = minute
-                return Calendar.current.date(from: comps) ?? Date()
-            },
-            set: { newValue in
-                let comps = Calendar.current.dateComponents([.hour, .minute], from: newValue)
-                hour = comps.hour ?? ReminderKeys.defaultHour
-                minute = comps.minute ?? ReminderKeys.defaultMinute
-                ReminderManager.refresh()
+    private enum EditorTarget: Identifiable {
+        case new
+        case edit(ReminderRule)
+        var id: String {
+            switch self {
+            case .new: return "new"
+            case .edit(let rule): return rule.id.uuidString
             }
-        )
+        }
     }
 
     var body: some View {
-        Form {
+        List {
             Section {
-                Toggle("End-of-day reminder", isOn: $enabled)
-                    .onChange(of: enabled) { _, isOn in
-                        if isOn {
-                            Task {
-                                let granted = await ReminderManager.requestAuthorization()
-                                if granted {
-                                    ReminderManager.refresh()
-                                } else {
-                                    enabled = false
-                                    showDenied = true
-                                }
-                            }
-                        } else {
-                            ReminderManager.refresh() // cancels the pending reminder
-                        }
-                    }
-
-                if enabled {
-                    DatePicker(
-                        "Time",
-                        selection: timeBinding,
-                        displayedComponents: .hourAndMinute
-                    )
+                if rules.isEmpty {
+                    Text("No reminders yet — add one below.")
+                        .foregroundStyle(.secondary)
                 }
+                ForEach($rules) { $rule in
+                    ruleRow($rule)
+                }
+                .onDelete { rules.remove(atOffsets: $0) }
             } footer: {
-                Text("If your calories, protein, and water goals aren't met by this time, MacroLog sends a reminder to wrap up the day. Nothing is sent once you've hit them.")
+                Text("Once-a-day reminders are skipped when that goal is already met. Recurring ones repeat on their interval, but only between their start and stop times — so nights stay quiet.")
+            }
+
+            Section {
+                Button {
+                    editorTarget = .new
+                } label: {
+                    Label("Add reminder", systemImage: "plus")
+                }
             }
         }
         .appBackground(appBackground)
         .navigationTitle("Reminders")
         .navigationBarTitleDisplayMode(.inline)
+        .onAppear {
+            guard !loaded else { return }
+            rules = ReminderRulesStore.load()
+            loaded = true
+        }
+        .onChange(of: rules) { _, _ in
+            guard loaded else { return }
+            persist()
+        }
+        .sheet(item: $editorTarget) { target in
+            switch target {
+            case .new:
+                ReminderEditorView(rule: ReminderRule(), title: "New Reminder") { upsert($0) }
+            case .edit(let rule):
+                ReminderEditorView(rule: rule, title: "Edit Reminder") { upsert($0) }
+            }
+        }
         .alert("Notifications are off", isPresented: $showDenied) {
             Button("Open Settings") {
                 if let url = URL(string: UIApplication.openSettingsURLString) {
@@ -498,8 +499,153 @@ struct RemindersSettingsView: View {
             }
             Button("Not now", role: .cancel) {}
         } message: {
-            Text("Turn on notifications for MacroLog in Settings to get end-of-day reminders.")
+            Text("Turn on notifications for MacroLog in Settings to get reminders.")
         }
+    }
+
+    /// Name + schedule (tap to edit) with an enable toggle on the right.
+    private func ruleRow(_ rule: Binding<ReminderRule>) -> some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                Label(rule.wrappedValue.metric.title, systemImage: rule.wrappedValue.metric.icon)
+                Text(rule.wrappedValue.scheduleSummary)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                if !rule.wrappedValue.trimmedCustomMessage.isEmpty {
+                    Text("\u{201C}\(rule.wrappedValue.trimmedCustomMessage)\u{201D}")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                        .lineLimit(1)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+            .onTapGesture { editorTarget = .edit(rule.wrappedValue) }
+            Toggle("Enabled", isOn: rule.isEnabled)
+                .labelsHidden()
+        }
+    }
+
+    private func upsert(_ rule: ReminderRule) {
+        if let index = rules.firstIndex(where: { $0.id == rule.id }) {
+            rules[index] = rule
+        } else {
+            rules.append(rule)
+        }
+    }
+
+    private func persist() {
+        ReminderRulesStore.save(rules)
+        ReminderManager.refresh()
+        guard rules.contains(where: \.isEnabled) else { return }
+        Task {
+            let granted = await ReminderManager.requestAuthorization()
+            if !granted { showDenied = true }
+        }
+    }
+}
+
+/// Create/edit one reminder: goal, once-a-day vs recurring schedule, and an
+/// optional custom message (blank = the default shown as the placeholder).
+private struct ReminderEditorView: View {
+    @State var rule: ReminderRule
+    let title: String
+    var onSave: (ReminderRule) -> Void
+    @Environment(\.dismiss) private var dismiss
+
+    private static let intervals: [(minutes: Int, label: String)] = [
+        (30, "30 minutes"), (60, "Hour"), (90, "90 minutes"),
+        (120, "2 hours"), (180, "3 hours"), (240, "4 hours"), (360, "6 hours"),
+    ]
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Remind me about") {
+                    Picker("Goal", selection: $rule.metric) {
+                        ForEach(ReminderMetric.allCases) { metric in
+                            Label(metric.title, systemImage: metric.icon).tag(metric)
+                        }
+                    }
+                }
+
+                Section {
+                    Picker("Repeats", selection: $rule.kind) {
+                        Text("Once a day").tag(ReminderRule.Kind.daily)
+                        Text("Recurring").tag(ReminderRule.Kind.recurring)
+                    }
+                    .pickerStyle(.segmented)
+
+                    if rule.kind == .daily {
+                        DatePicker(
+                            "Time",
+                            selection: time($rule.hour, $rule.minute),
+                            displayedComponents: .hourAndMinute
+                        )
+                    } else {
+                        Picker("Every", selection: $rule.intervalMinutes) {
+                            ForEach(Self.intervals, id: \.minutes) { interval in
+                                Text(interval.label).tag(interval.minutes)
+                            }
+                        }
+                        DatePicker(
+                            "Start",
+                            selection: time($rule.startHour, $rule.startMinute),
+                            displayedComponents: .hourAndMinute
+                        )
+                        DatePicker(
+                            "Stop",
+                            selection: time($rule.endHour, $rule.endMinute),
+                            displayedComponents: .hourAndMinute
+                        )
+                    }
+                } header: {
+                    Text("Schedule")
+                } footer: {
+                    Text(rule.kind == .daily
+                        ? "Fires at this time — unless that goal is already met for the day."
+                        : "Repeats on this interval every day, only between Start and Stop. Set them around your sleep.")
+                }
+
+                Section {
+                    TextField(rule.metric.defaultBody, text: $rule.customMessage, axis: .vertical)
+                        .lineLimit(2...4)
+                } header: {
+                    Text("Message")
+                } footer: {
+                    Text("Leave blank to use the default shown above. Once-a-day reminders using the default show your live shortfall (e.g. \u{201C}still 24 oz of water short\u{201D}).")
+                }
+            }
+            .navigationTitle(title)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") {
+                        onSave(rule)
+                        dismiss()
+                    }
+                }
+            }
+        }
+    }
+
+    /// Maps an hour/minute pair to a Date for DatePicker and back on edit.
+    private func time(_ hour: Binding<Int>, _ minute: Binding<Int>) -> Binding<Date> {
+        Binding(
+            get: {
+                Calendar.current.date(
+                    from: DateComponents(hour: hour.wrappedValue, minute: minute.wrappedValue)
+                ) ?? .now
+            },
+            set: { newDate in
+                let comps = Calendar.current.dateComponents([.hour, .minute], from: newDate)
+                hour.wrappedValue = comps.hour ?? 0
+                minute.wrappedValue = comps.minute ?? 0
+            }
+        )
     }
 }
 
