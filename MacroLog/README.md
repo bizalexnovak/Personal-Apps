@@ -139,9 +139,10 @@ nav bar step **back and forward through days** (never into the future; a
 calendar** to jump straight to any past day. For the selected day it shows
 **calories vs. goal as a bar**, then **protein / carbs / fat / water as
 circular progress rings** (consumed in the centre, goal underneath), a **"When
-you ate & drank" hourly chart** (calories and water, as two side-by-side bars,
-by the clock hour you logged them), and that day's **meals — tap to edit
-(including the logged date & time), swipe to delete**.
+you ate & drank" hourly chart** (calories and water as two side-by-side bars by
+the clock hour, each drawn as that hour's share of its daily goal so both read
+on one axis), and that day's **meals — tap to edit (including the logged date &
+time), swipe to delete**.
 
 ### Water & trends
 

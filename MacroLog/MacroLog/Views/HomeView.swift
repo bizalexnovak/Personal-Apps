@@ -101,7 +101,7 @@ struct HomeView: View {
                     } header: {
                         Text("When you ate & drank")
                     } footer: {
-                        Text("Calories (kcal) and water (oz) by the hour you logged them.")
+                        Text("Each bar is that hour's share of your daily calorie or water goal.")
                     }
 
                     Section("Meals") {
@@ -258,9 +258,10 @@ struct HomeView: View {
 
     // MARK: Hourly chart
 
-    /// Calories (food) and ounces (water) binned to the hour they were logged,
-    /// as two series so drinks show up on the timeline even though they carry no
-    /// calories. Only non-zero bins are emitted.
+    /// Food (calories) and water (ounces) binned to the hour they were logged,
+    /// each expressed as a fraction of its own daily goal so the two series sit
+    /// on one comparable axis — a big drink reads as tall as a big meal instead
+    /// of a sliver next to the calorie bars. Only non-zero bins are emitted.
     private var hourlyIntake: [IntakeBin] {
         let cal = Calendar.current
         let startOfDay = cal.startOfDay(for: selectedDate)
@@ -270,8 +271,12 @@ struct HomeView: View {
             let time = cal.date(byAdding: .hour, value: hour, to: startOfDay) ?? startOfDay
             let calories = hourMeals.reduce(0) { $0 + $1.totalCalories }
             let water = hourMeals.reduce(0) { $0 + $1.waterOunces }
-            if calories > 0 { bins.append(IntakeBin(time: time, series: .food, amount: calories)) }
-            if water > 0 { bins.append(IntakeBin(time: time, series: .water, amount: water)) }
+            if calories > 0, calorieTarget > 0 {
+                bins.append(IntakeBin(time: time, series: .food, amount: calories / calorieTarget))
+            }
+            if water > 0, waterTarget > 0 {
+                bins.append(IntakeBin(time: time, series: .water, amount: water / waterTarget))
+            }
         }
         return bins.sorted { $0.time < $1.time }
     }
@@ -282,7 +287,7 @@ struct HomeView: View {
         return Chart(hourlyIntake) { bin in
             BarMark(
                 x: .value("Time", bin.time, unit: .hour),
-                y: .value("Amount", bin.amount)
+                y: .value("Share of goal", bin.amount)
             )
             .foregroundStyle(by: .value("Logged", bin.series.rawValue))
             .position(by: .value("Logged", bin.series.rawValue))
@@ -298,6 +303,9 @@ struct HomeView: View {
                 AxisGridLine()
                 AxisValueLabel(format: .dateTime.hour())
             }
+        }
+        .chartYAxis {
+            AxisMarks(format: .percent)
         }
         .frame(height: 170)
         .padding(.vertical, 4)
@@ -372,8 +380,9 @@ private struct MacroRing: View {
     }
 }
 
-/// One series' amount logged in a single clock hour, for the intake timeline
-/// chart. `series` groups the bar (food calories vs. water ounces).
+/// One series' contribution in a single clock hour, for the intake timeline
+/// chart. `series` groups the bar (food vs. water); `amount` is that hour's
+/// share of the series' daily goal (0…1+), so both plot on one axis.
 struct IntakeBin: Identifiable {
     enum Series: String { case food = "Food", water = "Water" }
     var time: Date
