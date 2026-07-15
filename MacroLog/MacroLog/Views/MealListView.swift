@@ -79,7 +79,7 @@ struct MealListView: View {
             MealReviewView(coordinator: coordinator, onSaved: reset)
                 .transition(.move(edge: .bottom).combined(with: .opacity))
         } else if coordinator.isWorking {
-            AnalyzingView(text: analyzingText)
+            AnalyzingView(text: coordinator.workingText)
         } else if coordinator.pendingLabel != nil {
             nameStep
         } else {
@@ -100,14 +100,6 @@ struct MealListView: View {
             case .dish:
                 dishPhase
             }
-        }
-    }
-
-    private var analyzingText: String {
-        switch mode {
-        case .dish: return "Estimating from your photo…"
-        case .scan where coordinator.pendingLabel == nil: return "Reading the label…"
-        default: return "Analyzing your meal…"
         }
     }
 
@@ -183,9 +175,9 @@ struct MealListView: View {
 
     private func micText(listening: Bool, note: String?) -> String {
         if listening {
-            return speech.transcript.isEmpty ? "Listening… describe what you ate" : speech.transcript
+            return speech.transcript.isEmpty ? "Listening… describe what you consumed" : speech.transcript
         }
-        return note ?? "Tap and describe what you ate."
+        return note ?? "Tap and describe what you consumed."
     }
 
     private var dishPhase: some View {
@@ -337,7 +329,7 @@ struct MealListView: View {
         NavigationStack {
             Form {
                 Section {
-                    TextField("Describe what you ate…", text: $typedText, axis: .vertical)
+                    TextField("Describe what you consumed…", text: $typedText, axis: .vertical)
                         .lineLimit(3...6)
                 } footer: {
                     Text("Example: \u{201C}two eggs, a slice of toast, and a coffee with milk.\u{201D}")

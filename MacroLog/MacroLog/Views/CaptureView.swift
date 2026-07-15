@@ -87,7 +87,7 @@ struct CaptureView: View {
     @ViewBuilder
     private var captureContent: some View {
         if coordinator.isWorking {
-            AnalyzingView(scanning: mode == .scan)
+            AnalyzingView(text: coordinator.workingText)
         } else if isNamingLabel {
             nameStep
         } else {
@@ -117,7 +117,7 @@ struct CaptureView: View {
         case .idle, .requestingPermission:
             ProgressView("Getting the microphone ready…")
         case .listening:
-            listening(prompt: "Listening… describe what you ate", subtitle: nil, showSkip: false)
+            listening(prompt: "Listening… describe what you consumed", subtitle: nil, showSkip: false)
         case .captured:
             AnalyzingView(scanning: false)
         case .denied(let message):

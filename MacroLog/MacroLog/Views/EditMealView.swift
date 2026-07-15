@@ -18,6 +18,16 @@ struct EditMealView: View {
     var body: some View {
         List {
             Section {
+                DatePicker(
+                    "Logged",
+                    selection: $meal.timestamp,
+                    displayedComponents: [.date, .hourAndMinute]
+                )
+            } header: {
+                Text("Date & time")
+            }
+
+            Section {
                 Text(meal.rawText)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)

@@ -62,9 +62,25 @@ final class MealCaptureCoordinator: ObservableObject {
         var items: [ReviewItem]
     }
 
+    /// What the coordinator is currently doing while `isWorking`, so the UI can
+    /// show the right status text regardless of which capture mode is selected
+    /// (typing a meal while the Log tab happens to be in Scan mode must still
+    /// say "Analyzing your meal…", not "Reading the label…").
+    enum WorkKind { case parsingText, readingLabel, estimatingDish }
+
     @Published var review: ReviewSession?
     @Published private(set) var isWorking = false
+    @Published private(set) var workKind: WorkKind = .parsingText
     @Published var errorMessage: String?
+
+    /// Status text for the analyzing spinner, driven by the in-flight operation.
+    var workingText: String {
+        switch workKind {
+        case .parsingText: return "Analyzing your meal…"
+        case .readingLabel: return "Reading the label…"
+        case .estimatingDish: return "Estimating from your photo…"
+        }
+    }
     /// The day the meal under review will be saved to. Defaults to now; the
     /// review screen lets the user back-date it to a previous day.
     @Published var logDate = Date()
@@ -92,6 +108,7 @@ final class MealCaptureCoordinator: ObservableObject {
     func begin(text: String, in context: ModelContext) async {
         guard !isCapturing else { return }
         self.context = context
+        workKind = .parsingText
         isWorking = true
         logDate = Date()
         MatchDebugLog.shared.record(transcript: text)
@@ -161,6 +178,7 @@ final class MealCaptureCoordinator: ObservableObject {
     func beginFromLabel(imageData: Data, in context: ModelContext) async {
         guard !isCapturing else { return }
         self.context = context
+        workKind = .readingLabel
         isWorking = true
         logDate = Date()
 
@@ -215,6 +233,7 @@ final class MealCaptureCoordinator: ObservableObject {
     func beginFromDishPhoto(imageData: Data, in context: ModelContext) async {
         guard !isCapturing else { return }
         self.context = context
+        workKind = .estimatingDish
         isWorking = true
         logDate = Date()
 

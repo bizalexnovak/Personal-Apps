@@ -99,9 +99,9 @@ struct HomeView: View {
                     Section {
                         hourlyChart
                     } header: {
-                        Text("When you ate")
+                        Text("When you ate & drank")
                     } footer: {
-                        Text("Calories by the hour you logged them.")
+                        Text("Calories (kcal) and water (oz) by the hour you logged them.")
                     }
 
                     Section("Meals") {
@@ -258,31 +258,40 @@ struct HomeView: View {
 
     // MARK: Hourly chart
 
-    /// Calories binned to the hour they were logged.
-    private var hourlyCalories: [HourBin] {
+    /// Calories (food) and ounces (water) binned to the hour they were logged,
+    /// as two series so drinks show up on the timeline even though they carry no
+    /// calories. Only non-zero bins are emitted.
+    private var hourlyIntake: [IntakeBin] {
         let cal = Calendar.current
         let startOfDay = cal.startOfDay(for: selectedDate)
         let grouped = Dictionary(grouping: dayMeals) { cal.component(.hour, from: $0.timestamp) }
-        return grouped.map { hour, hourMeals in
-            HourBin(
-                time: cal.date(byAdding: .hour, value: hour, to: startOfDay) ?? startOfDay,
-                calories: hourMeals.reduce(0) { $0 + $1.totalCalories }
-            )
+        var bins: [IntakeBin] = []
+        for (hour, hourMeals) in grouped {
+            let time = cal.date(byAdding: .hour, value: hour, to: startOfDay) ?? startOfDay
+            let calories = hourMeals.reduce(0) { $0 + $1.totalCalories }
+            let water = hourMeals.reduce(0) { $0 + $1.waterOunces }
+            if calories > 0 { bins.append(IntakeBin(time: time, series: .food, amount: calories)) }
+            if water > 0 { bins.append(IntakeBin(time: time, series: .water, amount: water)) }
         }
-        .sorted { $0.time < $1.time }
+        return bins.sorted { $0.time < $1.time }
     }
 
     private var hourlyChart: some View {
         let startOfDay = Calendar.current.startOfDay(for: selectedDate)
         let endOfDay = startOfDay.addingTimeInterval(24 * 3600)
-        return Chart(hourlyCalories) { bin in
+        return Chart(hourlyIntake) { bin in
             BarMark(
                 x: .value("Time", bin.time, unit: .hour),
-                y: .value("Calories", bin.calories)
+                y: .value("Amount", bin.amount)
             )
-            .foregroundStyle(palette.calories)
+            .foregroundStyle(by: .value("Logged", bin.series.rawValue))
+            .position(by: .value("Logged", bin.series.rawValue))
             .cornerRadius(3)
         }
+        .chartForegroundStyleScale([
+            IntakeBin.Series.food.rawValue: palette.calories,
+            IntakeBin.Series.water.rawValue: palette.water,
+        ])
         .chartXScale(domain: startOfDay ... endOfDay)
         .chartXAxis {
             AxisMarks(values: .stride(by: .hour, count: 6)) { _ in
@@ -363,9 +372,12 @@ private struct MacroRing: View {
     }
 }
 
-/// Calories logged in one clock hour, for the intake timeline chart.
-struct HourBin: Identifiable {
+/// One series' amount logged in a single clock hour, for the intake timeline
+/// chart. `series` groups the bar (food calories vs. water ounces).
+struct IntakeBin: Identifiable {
+    enum Series: String { case food = "Food", water = "Water" }
     var time: Date
-    var calories: Double
-    var id: Date { time }
+    var series: Series
+    var amount: Double
+    var id: String { "\(time.timeIntervalSince1970)-\(series.rawValue)" }
 }
