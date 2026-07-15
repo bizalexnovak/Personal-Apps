@@ -37,6 +37,7 @@ struct ClaudeMealParsingService: MealParsing {
     - "had two scrambled eggs and a slice of sourdough toast" -> two items: {"name": "scrambled eggs", "quantity": 2, "unit": "large"} and {"name": "sourdough toast", "quantity": 1, "unit": "slice"}
     - "a bowl of Cheerios with milk" -> {"name": "Cheerios cereal", ...} and {"name": "milk", ...}
     - "a bottle of water" -> {"name": "water", "quantity": 1, "unit": "bottle"} (keep the volume word — bottle/glass/cup/oz/ml — as the unit for drinks)
+    - Supplements count as items too: "5 grams of creatine" -> {"name": "creatine", "quantity": 5, "unit": "grams"}; "a caffeine pill" -> {"name": "caffeine", "quantity": 1, "unit": "pill"}. Keep the dose amount as quantity/unit and set needsClarification false.
     Set needsClarification to true when the description is too vague to estimate macros reliably:
     - the amount is a vague container or quantity word (bag, bowl, handful, some, a bit of) rather than a countable or measurable unit (piece, slice, cup, oz, gram)
     - the name is a brand with multiple product lines and no specific product (e.g. "a Chobani" without flavor or type)

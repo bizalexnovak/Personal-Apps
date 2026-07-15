@@ -170,18 +170,24 @@ grams of protein, 60 grams of carbs, 25 grams of fat" — those are used directl
 instead of a USDA match (calories derived from the macros if you don't say a
 calorie number).
 
-### Micronutrients
+### Micronutrients, caffeine & supplements
 
 Beyond the four headline macros, each entry also records **micronutrients** —
 the fat breakdown (saturated / trans / mono- / polyunsaturated), the carb
-breakdown (fiber / total & added sugars), plus cholesterol, sodium, potassium,
-calcium, iron, and vitamins A/C/D. These come from USDA FoodData Central (which
-returns them per food) and from scanned labels, and they **scale with the
-portion** just like the macros. They're deliberately kept off Home and the
-Trends chart — recorded quietly with every entry and viewable, read-only, under
-**Micronutrients** in the meal editor (`Micronutrients` is stored on each
-`FoodItem` as JSON, so more fields can be added later without a schema
-migration).
+breakdown (fiber / total & added sugars), cholesterol, sodium, potassium,
+minerals (calcium, iron, magnesium, zinc, phosphorus, copper, manganese,
+selenium), vitamins (A, C, D, E, K, B1/B2/B3/B6/B12, folate), plus **caffeine**
+and **creatine**. These come from USDA FoodData Central (which returns them per
+food — coffee and energy drinks carry their caffeine), from scanned nutrition
+*and supplement* facts labels, and they **scale with the portion** just like
+the macros. Bare supplements can be logged directly — "5 g of creatine" or "a
+caffeine pill" skips USDA (a food search would mismatch them) and records the
+dose as a zero-calorie entry (`SupplementConversion`). Kept off the Trends
+chart, they're viewable read-only in two places: per item under
+**Micronutrients** in the meal editor, and summed for the day in a collapsed
+**Micronutrients** section at the bottom of the Today tab (`Micronutrients` is
+stored on each `FoodItem` as JSON, so more fields can be added later without a
+schema migration).
 
 ### Recommended goals from body metrics
 

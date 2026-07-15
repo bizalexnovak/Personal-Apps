@@ -22,17 +22,47 @@ struct Micronutrients: Codable, Equatable, Hashable {
     var cholesterol: Double?
     var sodium: Double?
     var potassium: Double?
-    // Minerals (mg)
+    // Minerals (mg unless noted)
     var calcium: Double?
     var iron: Double?
+    var magnesium: Double?
+    var zinc: Double?
+    var phosphorus: Double?
+    var copper: Double?
+    var manganese: Double?
+    var selenium: Double?  // mcg
     // Vitamins
     var vitaminA: Double?   // mcg RAE
     var vitaminC: Double?   // mg
     var vitaminD: Double?   // mcg
+    var vitaminE: Double?   // mg
+    var vitaminK: Double?   // mcg
+    var thiamin: Double?    // B1, mg
+    var riboflavin: Double? // B2, mg
+    var niacin: Double?     // B3, mg
+    var vitaminB6: Double?  // mg
+    var folate: Double?     // mcg
+    var vitaminB12: Double? // mcg
+    // Stimulants & supplements
+    var caffeine: Double?   // mg
+    var creatine: Double?   // g — not in USDA data; captured from supplement
+                            // labels or logged directly ("5 g of creatine")
 
     static let empty = Micronutrients()
 
     var isEmpty: Bool { Self.fields.allSatisfy { self[keyPath: $0.keyPath] == nil } }
+
+    /// Field-wise sum, for daily totals: a value recorded on either side is
+    /// added (nil = 0 there); fields recorded on neither side stay nil.
+    func adding(_ other: Micronutrients) -> Micronutrients {
+        var copy = self
+        for field in Self.fields {
+            if let value = other[keyPath: field.keyPath] {
+                copy[keyPath: field.keyPath] = (copy[keyPath: field.keyPath] ?? 0) + value
+            }
+        }
+        return copy
+    }
 
     /// Scale every recorded value by a factor (portion changes), leaving
     /// unrecorded (nil) fields nil.
@@ -80,8 +110,25 @@ extension Micronutrients {
         .init(label: "Potassium", unit: "mg", keyPath: \.potassium, usdaIDs: [1092]),
         .init(label: "Calcium", unit: "mg", keyPath: \.calcium, usdaIDs: [1087]),
         .init(label: "Iron", unit: "mg", keyPath: \.iron, usdaIDs: [1089]),
+        .init(label: "Magnesium", unit: "mg", keyPath: \.magnesium, usdaIDs: [1090]),
+        .init(label: "Zinc", unit: "mg", keyPath: \.zinc, usdaIDs: [1095]),
+        .init(label: "Phosphorus", unit: "mg", keyPath: \.phosphorus, usdaIDs: [1091]),
+        .init(label: "Copper", unit: "mg", keyPath: \.copper, usdaIDs: [1098]),
+        .init(label: "Manganese", unit: "mg", keyPath: \.manganese, usdaIDs: [1101]),
+        .init(label: "Selenium", unit: "mcg", keyPath: \.selenium, usdaIDs: [1103]),
         .init(label: "Vitamin A", unit: "mcg", keyPath: \.vitaminA, usdaIDs: [1106]),
         .init(label: "Vitamin C", unit: "mg", keyPath: \.vitaminC, usdaIDs: [1162]),
         .init(label: "Vitamin D", unit: "mcg", keyPath: \.vitaminD, usdaIDs: [1114]),
+        .init(label: "Vitamin E", unit: "mg", keyPath: \.vitaminE, usdaIDs: [1109]),
+        .init(label: "Vitamin K", unit: "mcg", keyPath: \.vitaminK, usdaIDs: [1185]),
+        .init(label: "Thiamin (B1)", unit: "mg", keyPath: \.thiamin, usdaIDs: [1165]),
+        .init(label: "Riboflavin (B2)", unit: "mg", keyPath: \.riboflavin, usdaIDs: [1166]),
+        .init(label: "Niacin (B3)", unit: "mg", keyPath: \.niacin, usdaIDs: [1167]),
+        .init(label: "Vitamin B6", unit: "mg", keyPath: \.vitaminB6, usdaIDs: [1175]),
+        .init(label: "Folate", unit: "mcg", keyPath: \.folate, usdaIDs: [1190, 1177]),
+        .init(label: "Vitamin B12", unit: "mcg", keyPath: \.vitaminB12, usdaIDs: [1178]),
+        .init(label: "Caffeine", unit: "mg", keyPath: \.caffeine, usdaIDs: [1057]),
+        // No FDC nutrient number — creatine comes from labels or direct logging.
+        .init(label: "Creatine", unit: "g", keyPath: \.creatine, usdaIDs: []),
     ]
 }

@@ -35,6 +35,7 @@ struct HomeView: View {
         var carbs = 0.0
         var fat = 0.0
         var water = 0.0
+        var micros = Micronutrients.empty
         var bins: [IntakeBin] = []
     }
 
@@ -53,6 +54,9 @@ struct HomeView: View {
             agg.carbs += t.carbs
             agg.fat += t.fat
             agg.water += t.waterOunces
+            for item in meal.items {
+                agg.micros = agg.micros.adding(item.micros)
+            }
             let hour = cal.component(.hour, from: meal.timestamp)
             if t.calories > 0 { hourFood[hour, default: 0] += t.calories }
             if t.waterOunces > 0 { hourWater[hour, default: 0] += t.waterOunces }
@@ -154,6 +158,16 @@ struct HomeView: View {
                             }
                         }
                         .onDelete { deleteMeals($0, from: day.meals) }
+                    }
+
+                    // The day's summed micronutrient record (vitamins,
+                    // minerals, caffeine, creatine…), collapsed by default.
+                    if !day.micros.isEmpty {
+                        Section {
+                            MicronutrientDisclosure(micros: day.micros)
+                        } footer: {
+                            Text("Everything recorded on this day's entries, summed.")
+                        }
                     }
                 }
             }

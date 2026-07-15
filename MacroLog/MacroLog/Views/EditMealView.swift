@@ -340,10 +340,11 @@ private struct MacroOverrideSheet: View {
     }
 }
 
-/// Read-only read-out of an item's recorded micronutrients (fat/carb breakdown,
-/// minerals, vitamins). Collapsed by default — this detail is captured with each
-/// entry but intentionally kept out of the way.
-private struct MicronutrientDisclosure: View {
+/// Read-only read-out of recorded micronutrients (fat/carb breakdown, minerals,
+/// vitamins, caffeine…). Collapsed by default — this detail is captured with
+/// each entry but intentionally kept out of the way. Shared between the meal
+/// editor (one item) and the Today tab (the whole day's totals).
+struct MicronutrientDisclosure: View {
     let micros: Micronutrients
 
     var body: some View {

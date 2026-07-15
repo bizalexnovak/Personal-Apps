@@ -141,6 +141,16 @@ final class MealCaptureCoordinator: ObservableObject {
                 ))
                 continue
             }
+            // Bare supplements (creatine, caffeine pills) also skip USDA — a
+            // food search would mismatch them; the value goes on the
+            // micronutrient record instead.
+            if let supplement = SupplementConversion.match(for: request) {
+                items.append(ReviewItem(
+                    request: request, match: supplement,
+                    clarificationQuestion: nil, options: [], status: .needsReview
+                ))
+                continue
+            }
             // Explicit macros spoken by the user win over any USDA lookup.
             if let spoken = Self.explicitMacroMatch(for: request) {
                 items.append(ReviewItem(

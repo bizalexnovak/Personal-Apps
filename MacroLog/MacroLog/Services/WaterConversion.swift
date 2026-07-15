@@ -43,3 +43,69 @@ enum WaterConversion {
         isWater(item.name) ? ounces(quantity: item.quantity, unit: item.unit) : 0
     }
 }
+
+/// Zero-calorie supplements logged directly ("5 g of creatine", "a caffeine
+/// pill") — like water, these skip USDA entirely: a food search would match
+/// them to nonsense, and their value lives in the micronutrient record.
+enum SupplementConversion {
+    private static func tokens(_ name: String) -> Set<String> {
+        Set(name.lowercased().split(whereSeparator: { !$0.isLetter }).map(String.init))
+    }
+
+    /// A ready-made match when the item is a bare supplement, else nil.
+    static func match(for request: FoodItemRequest) -> NutritionMatch? {
+        let words = tokens(request.name)
+        if words.contains("creatine") {
+            let grams = creatineGrams(quantity: request.quantity, unit: request.unit)
+            var micros = Micronutrients()
+            micros.creatine = grams
+            return NutritionMatch(
+                matchedDescription: "Creatine · \(trimmed(grams)) g",
+                calories: 0, protein: 0, carbs: 0, fat: 0,
+                confidence: MatchConfidence.high,
+                micros: micros
+            )
+        }
+        // "caffeine pill"/"200 mg of caffeine" — but not e.g. "caffeine-free coke".
+        if words.contains("caffeine"), !words.contains("free") {
+            let mg = caffeineMilligrams(quantity: request.quantity, unit: request.unit)
+            var micros = Micronutrients()
+            micros.caffeine = mg
+            return NutritionMatch(
+                matchedDescription: "Caffeine · \(trimmed(mg)) mg",
+                calories: 0, protein: 0, carbs: 0, fat: 0,
+                confidence: MatchConfidence.high,
+                micros: micros
+            )
+        }
+        return nil
+    }
+
+    /// Grams of creatine for a quantity + unit. A scoop/serving is the common
+    /// 5 g dose; unknown units also default to 5 g each.
+    static func creatineGrams(quantity: Double, unit: String) -> Double {
+        switch normalized(unit) {
+        case "g", "gram", "grams": return quantity
+        case "mg", "milligram", "milligrams": return quantity / 1000
+        default: return quantity * 5 // scoop, serving, dose…
+        }
+    }
+
+    /// Milligrams of caffeine for a quantity + unit. Pills/tablets default to
+    /// the common 200 mg dose; unknown units too.
+    static func caffeineMilligrams(quantity: Double, unit: String) -> Double {
+        switch normalized(unit) {
+        case "mg", "milligram", "milligrams": return quantity
+        case "g", "gram", "grams": return quantity * 1000
+        default: return quantity * 200 // pill, tablet, capsule, serving…
+        }
+    }
+
+    private static func normalized(_ unit: String) -> String {
+        unit.lowercased().trimmingCharacters(in: .whitespaces)
+    }
+
+    private static func trimmed(_ value: Double) -> String {
+        value == value.rounded() ? "\(Int(value))" : String(format: "%.1f", value)
+    }
+}
