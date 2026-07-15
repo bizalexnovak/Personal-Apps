@@ -305,7 +305,7 @@ struct HomeView: View {
             }
         }
         .chartYAxis {
-            AxisMarks(format: .percent)
+            AxisMarks(format: FloatingPointFormatStyle<Double>.Percent())
         }
         .frame(height: 170)
         .padding(.vertical, 4)
