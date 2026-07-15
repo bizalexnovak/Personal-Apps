@@ -21,8 +21,14 @@ struct MealListView: View {
     @State private var typedText = ""
     @State private var showDishCamera = false
     @State private var lastQuickAdd: String?
+    /// Cached quick-add chips. Computing them scans the whole history (with a
+    /// JSON decode per unique item), so it runs only when the data changes or
+    /// the Log tab is revisited — not on every body evaluation.
+    @State private var suggestions: [MealSuggestion] = []
 
-    private var suggestions: [MealSuggestion] { MealSuggestions.compute(from: meals) }
+    private func refreshSuggestions() {
+        suggestions = MealSuggestions.compute(from: meals)
+    }
 
     var body: some View {
         NavigationStack {
@@ -47,8 +53,15 @@ struct MealListView: View {
         // where the flag is already set before this view exists).
         .onAppear {
             mode = hub.logMode
+            refreshSuggestions()
             consumeAutoStartVoice()
             consumeOpenType()
+        }
+        // Meals array changes on insert/delete; item-level edits (done on the
+        // Today tab) are picked up when the user switches back to this tab.
+        .onChange(of: meals) { _, _ in refreshSuggestions() }
+        .onChange(of: hub.selectedTab) { _, tab in
+            if tab == AppTab.log { refreshSuggestions() }
         }
         .onChange(of: hub.logMode) { _, newMode in
             mode = newMode

@@ -26,27 +26,30 @@ struct HistoryView: View {
 
     // MARK: Derived data
 
+    /// Per-day totals for the selected range, built in one pass over the
+    /// history (one `meal.totals` per meal instead of five separate reduces).
+    /// Computed ONCE per body evaluation and passed down — the chart, the day
+    /// count, and every average chip previously each recomputed this whole
+    /// aggregation, costing ~14 full-history scans per render.
     private var daysInRange: [DayTotals] {
-        let inRange: [Meal]
-        if let days = range.days {
-            let start = Calendar.current.startOfDay(for: Date().addingTimeInterval(-Double(days - 1) * 86_400))
-            inRange = meals.filter { $0.timestamp >= start }
-        } else {
-            inRange = meals
+        let cal = Calendar.current
+        let start = range.days.map {
+            cal.startOfDay(for: Date().addingTimeInterval(-Double($0 - 1) * 86_400))
         }
-        let grouped = Dictionary(grouping: inRange) { Calendar.current.startOfDay(for: $0.timestamp) }
-        return grouped
-            .map { date, dayMeals in
-                DayTotals(
-                    date: date,
-                    calories: dayMeals.reduce(0) { $0 + $1.totalCalories },
-                    protein: dayMeals.reduce(0) { $0 + $1.totalProtein },
-                    carbs: dayMeals.reduce(0) { $0 + $1.totalCarbs },
-                    fat: dayMeals.reduce(0) { $0 + $1.totalFat },
-                    water: dayMeals.reduce(0) { $0 + $1.waterOunces }
-                )
-            }
-            .sorted { $0.date < $1.date }
+        var byDay: [Date: DayTotals] = [:]
+        for meal in meals {
+            if let start, meal.timestamp < start { continue }
+            let day = cal.startOfDay(for: meal.timestamp)
+            let t = meal.totals
+            var totals = byDay[day] ?? DayTotals(date: day, calories: 0, protein: 0, carbs: 0, fat: 0, water: 0)
+            totals.calories += t.calories
+            totals.protein += t.protein
+            totals.carbs += t.carbs
+            totals.fat += t.fat
+            totals.water += t.waterOunces
+            byDay[day] = totals
+        }
+        return byDay.values.sorted { $0.date < $1.date }
     }
 
     private func target(_ metric: Metric) -> Double {
@@ -68,7 +71,7 @@ struct HistoryView: View {
     /// One (metric, bucket, percent-of-goal) point. For ranges longer than a
     /// month, days are averaged into weekly/monthly buckets so the line stays
     /// readable — the percent is the average day in that bucket vs. its goal.
-    private var chartPoints: [MetricPoint] {
+    private func chartPoints(from daysInRange: [DayTotals]) -> [MetricPoint] {
         let buckets = Dictionary(grouping: daysInRange) { bucketStart($0.date) }
         return buckets.flatMap { start, days -> [MetricPoint] in
             visibleMetrics.map { metric in
@@ -80,17 +83,16 @@ struct HistoryView: View {
         .sorted { $0.date < $1.date }
     }
 
-    private var loggedDayCount: Int { daysInRange.count }
-
-    private func average(_ metric: Metric) -> Double {
-        guard loggedDayCount > 0 else { return 0 }
-        return daysInRange.reduce(0) { $0 + $1.value(metric) } / Double(loggedDayCount)
+    private func average(_ metric: Metric, over days: [DayTotals]) -> Double {
+        guard !days.isEmpty else { return 0 }
+        return days.reduce(0) { $0 + $1.value(metric) } / Double(days.count)
     }
 
     // MARK: Body
 
     var body: some View {
-        NavigationStack {
+        let days = daysInRange
+        return NavigationStack {
             List {
                 Section {
                     Picker("Range", selection: $range) {
@@ -98,7 +100,7 @@ struct HistoryView: View {
                     }
                     .pickerStyle(.segmented)
 
-                    if daysInRange.isEmpty {
+                    if days.isEmpty {
                         ContentUnavailableView(
                             "No data in this range",
                             systemImage: "chart.xyaxis.line",
@@ -113,12 +115,12 @@ struct HistoryView: View {
                             )
                             .frame(height: 240)
                         } else {
-                            trendChart
+                            trendChart(points: chartPoints(from: days))
                         }
-                        metricSelector
+                        metricSelector(days: days)
                     }
                 } footer: {
-                    if !daysInRange.isEmpty {
+                    if !days.isEmpty {
                         Text("Each line is that nutrient as a percent of your daily goal (dashed line = 100%). Tap a nutrient to show or hide it; the number is its average per day. Tap a day on the Today tab to see and edit its meals.")
                     }
                 }
@@ -133,7 +135,7 @@ struct HistoryView: View {
 
     // MARK: Chart
 
-    private var trendChart: some View {
+    private func trendChart(points: [MetricPoint]) -> some View {
         Chart {
             RuleMark(y: .value("Goal", 100))
                 .foregroundStyle(.secondary)
@@ -141,7 +143,7 @@ struct HistoryView: View {
                 .annotation(position: .top, alignment: .leading) {
                     Text("goal").font(.caption2).foregroundStyle(.secondary)
                 }
-            ForEach(chartPoints) { point in
+            ForEach(points) { point in
                 LineMark(
                     x: .value("Day", point.date, unit: .day),
                     y: .value("% of goal", point.percent)
@@ -167,9 +169,9 @@ struct HistoryView: View {
 
     // MARK: Metric selector (also the legend + averages)
 
-    private var metricSelector: some View {
+    private func metricSelector(days: [DayTotals]) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Average per day · \(range.averageCaption) · \(loggedDayCount) logged day\(loggedDayCount == 1 ? "" : "s")")
+            Text("Average per day · \(range.averageCaption) · \(days.count) logged day\(days.count == 1 ? "" : "s")")
                 .font(.caption2)
                 .foregroundStyle(.secondary)
             LazyVGrid(
@@ -178,14 +180,14 @@ struct HistoryView: View {
                 spacing: 8
             ) {
                 ForEach(Metric.allCases) { metric in
-                    metricChip(metric)
+                    metricChip(metric, days: days)
                 }
             }
         }
         .padding(.vertical, 4)
     }
 
-    private func metricChip(_ metric: Metric) -> some View {
+    private func metricChip(_ metric: Metric, days: [DayTotals]) -> some View {
         let on = selectedMetrics.contains(metric)
         let color = palette.color(for: metric)
         return Button {
@@ -200,7 +202,7 @@ struct HistoryView: View {
                     Text(metric.title)
                         .font(.caption2)
                         .foregroundStyle(on ? .primary : .secondary)
-                    Text("\(Int(average(metric).rounded())) \(metric.unit)")
+                    Text("\(Int(average(metric, over: days).rounded())) \(metric.unit)")
                         .font(.caption.monospacedDigit().weight(.medium))
                         .foregroundStyle(on ? .primary : .secondary)
                 }

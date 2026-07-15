@@ -23,6 +23,21 @@ final class Meal {
     /// Fluid ounces of water in this meal (water items only).
     var waterOunces: Double { items.reduce(0) { $0 + WaterConversion.ounces(for: $1) } }
 
+    /// All five totals in a single pass over the items. The aggregation screens
+    /// (Today, Trends, the widget snapshot) sum many meals per render — use this
+    /// there instead of five separate per-total passes.
+    var totals: MealTotals {
+        var t = MealTotals()
+        for item in items {
+            t.calories += item.calories
+            t.protein += item.protein
+            t.carbs += item.carbs
+            t.fat += item.fat
+            t.waterOunces += WaterConversion.ounces(for: item)
+        }
+        return t
+    }
+
     /// Food-only summary for the meal lists: the item names joined naturally
     /// ("chicken and green beans", "eggs, toast and bacon") — not the raw
     /// transcript or a "Scanned label: …" prefix. Falls back to rawText only
@@ -93,4 +108,13 @@ final class FoodItem {
 enum MatchConfidence {
     static let high = "high"
     static let low = "low"
+}
+
+/// A meal's five running totals, accumulated in one pass (see `Meal.totals`).
+struct MealTotals {
+    var calories = 0.0
+    var protein = 0.0
+    var carbs = 0.0
+    var fat = 0.0
+    var waterOunces = 0.0
 }

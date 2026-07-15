@@ -15,23 +15,26 @@ enum WaterConversion {
         return tokens.contains("water") && !tokens.contains("melon")
     }
 
+    /// Ounces per unit keyword. Built once — this lookup runs per item in every
+    /// day/trend aggregation pass.
+    private static let perUnit: [String: Double] = [
+        "oz": 1, "ounce": 1, "ounces": 1,
+        "fl oz": 1, "floz": 1, "fluid ounce": 1, "fluid ounces": 1,
+        "ml": 0.033814, "milliliter": 0.033814, "milliliters": 0.033814,
+        "l": 33.814, "liter": 33.814, "liters": 33.814, "litre": 33.814, "litres": 33.814,
+        "cup": 8, "cups": 8,
+        "glass": 8, "glasses": 8,
+        "bottle": 16, "bottles": 16,              // default bottle size
+        "can": 12, "cans": 12,
+        "pint": 16, "pints": 16,
+        "quart": 32, "quarts": 32,
+        "gallon": 128, "gallons": 128,
+    ]
+
     /// Fluid ounces for a quantity + volume unit. Unknown units fall back to a
     /// single glass (8 oz), a reasonable single serving.
     static func ounces(quantity: Double, unit: String) -> Double {
         let u = unit.lowercased().trimmingCharacters(in: .whitespaces)
-        let perUnit: [String: Double] = [
-            "oz": 1, "ounce": 1, "ounces": 1,
-            "fl oz": 1, "floz": 1, "fluid ounce": 1, "fluid ounces": 1,
-            "ml": 0.033814, "milliliter": 0.033814, "milliliters": 0.033814,
-            "l": 33.814, "liter": 33.814, "liters": 33.814, "litre": 33.814, "litres": 33.814,
-            "cup": 8, "cups": 8,
-            "glass": 8, "glasses": 8,
-            "bottle": 16, "bottles": 16,              // default bottle size
-            "can": 12, "cans": 12,
-            "pint": 16, "pints": 16,
-            "quart": 32, "quarts": 32,
-            "gallon": 128, "gallons": 128,
-        ]
         return quantity * (perUnit[u] ?? 8)
     }
 

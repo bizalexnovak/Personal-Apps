@@ -82,8 +82,9 @@ previous day.
 - **Type**: the keyboard button (or the "+" menu's Type) routes through the same flow.
 
 **Quick add.** The Log tab's idle screen shows one-tap chips for items you log
-often (`MealSuggestions` groups history by name + quantity + unit and keeps
-repeats logged ≥ 2×, e.g. "24 oz water", "Chobani greek yogurt"). Tapping a chip
+often (`MealSuggestions` groups history by name + unit and keeps repeats
+logged ≥ 2×, ranked by frequency, e.g. "24 oz water", "Chobani greek
+yogurt"). Tapping a chip
 re-logs a copy with its last-known macros and micronutrients immediately — no
 parsing or lookup.
 

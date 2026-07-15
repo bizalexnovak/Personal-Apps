@@ -21,24 +21,76 @@ struct HomeView: View {
     @State private var selectedDate = Calendar.current.startOfDay(for: .now)
     @State private var showDatePicker = false
 
-    private var dayMeals: [Meal] {
-        meals.filter { Calendar.current.isDate($0.timestamp, inSameDayAs: selectedDate) }
-    }
-
     private var isToday: Bool { Calendar.current.isDateInToday(selectedDate) }
 
+    /// Everything the diary shows for the selected day — totals, the meals
+    /// (newest first), and the hourly chart bins — gathered in ONE pass over
+    /// the query results. Computed once per body evaluation; the previous
+    /// per-metric computed properties each re-filtered the whole history,
+    /// costing ~8 full scans per render.
+    private struct DayAggregate {
+        var meals: [Meal] = []
+        var calories = 0.0
+        var protein = 0.0
+        var carbs = 0.0
+        var fat = 0.0
+        var water = 0.0
+        var bins: [IntakeBin] = []
+    }
+
+    private var dayAggregate: DayAggregate {
+        let cal = Calendar.current
+        let startOfDay = cal.startOfDay(for: selectedDate)
+        var agg = DayAggregate()
+        var hourFood: [Int: Double] = [:]
+        var hourWater: [Int: Double] = [:]
+        // The query is newest-first, so appending preserves that order.
+        for meal in meals where cal.isDate(meal.timestamp, inSameDayAs: selectedDate) {
+            agg.meals.append(meal)
+            let t = meal.totals
+            agg.calories += t.calories
+            agg.protein += t.protein
+            agg.carbs += t.carbs
+            agg.fat += t.fat
+            agg.water += t.waterOunces
+            let hour = cal.component(.hour, from: meal.timestamp)
+            if t.calories > 0 { hourFood[hour, default: 0] += t.calories }
+            if t.waterOunces > 0 { hourWater[hour, default: 0] += t.waterOunces }
+        }
+        var bins: [IntakeBin] = []
+        if calorieTarget > 0 {
+            for (hour, kcal) in hourFood {
+                let time = cal.date(byAdding: .hour, value: hour, to: startOfDay) ?? startOfDay
+                bins.append(IntakeBin(time: time, series: .food, amount: kcal / calorieTarget))
+            }
+        }
+        if waterTarget > 0 {
+            for (hour, oz) in hourWater {
+                let time = cal.date(byAdding: .hour, value: hour, to: startOfDay) ?? startOfDay
+                bins.append(IntakeBin(time: time, series: .water, amount: oz / waterTarget))
+            }
+        }
+        agg.bins = bins.sorted { $0.time < $1.time }
+        return agg
+    }
+
     /// Today's totals + targets for the home-screen widget (always today, not
-    /// the browsed day).
+    /// the browsed day). Single pass over today's meals.
     private var todaySnapshot: DayNutritionSnapshot {
         let cal = Calendar.current
-        let todays = meals.filter { cal.isDateInToday($0.timestamp) }
+        var t = MealTotals()
+        for meal in meals where cal.isDateInToday(meal.timestamp) {
+            let m = meal.totals
+            t.calories += m.calories
+            t.protein += m.protein
+            t.carbs += m.carbs
+            t.fat += m.fat
+            t.waterOunces += m.waterOunces
+        }
         return DayNutritionSnapshot(
             date: cal.startOfDay(for: .now),
-            calories: todays.reduce(0) { $0 + $1.totalCalories },
-            protein: todays.reduce(0) { $0 + $1.totalProtein },
-            carbs: todays.reduce(0) { $0 + $1.totalCarbs },
-            fat: todays.reduce(0) { $0 + $1.totalFat },
-            water: todays.reduce(0) { $0 + $1.waterOunces },
+            calories: t.calories, protein: t.protein, carbs: t.carbs, fat: t.fat,
+            water: t.waterOunces,
             calorieTarget: calorieTarget, proteinTarget: proteinTarget,
             carbTarget: carbTarget, fatTarget: fatTarget, waterTarget: waterTarget
         )
@@ -52,42 +104,31 @@ struct HomeView: View {
         ReminderManager.refresh()
     }
 
-    private var sortedDayMeals: [Meal] {
-        dayMeals.sorted { $0.timestamp > $1.timestamp }
-    }
-
-    // MARK: Totals
-
-    private var calories: Double { dayMeals.reduce(0) { $0 + $1.totalCalories } }
-    private var protein: Double { dayMeals.reduce(0) { $0 + $1.totalProtein } }
-    private var carbs: Double { dayMeals.reduce(0) { $0 + $1.totalCarbs } }
-    private var fat: Double { dayMeals.reduce(0) { $0 + $1.totalFat } }
-    private var water: Double { dayMeals.reduce(0) { $0 + $1.waterOunces } }
-
     // MARK: Body
 
     var body: some View {
-        NavigationStack {
+        let day = dayAggregate
+        return NavigationStack {
             List {
                 Section {
                     MacroProgressRow(
                         label: "Calories", unit: "kcal", color: palette.calories,
-                        value: calories, target: calorieTarget
+                        value: day.calories, target: calorieTarget
                     )
                     HStack(alignment: .top, spacing: 8) {
                         MacroRing(label: "Protein", unit: "g", color: palette.protein,
-                                  value: protein, target: proteinTarget)
+                                  value: day.protein, target: proteinTarget)
                         MacroRing(label: "Carbs", unit: "g", color: palette.carbs,
-                                  value: carbs, target: carbTarget)
+                                  value: day.carbs, target: carbTarget)
                         MacroRing(label: "Fat", unit: "g", color: palette.fat,
-                                  value: fat, target: fatTarget)
+                                  value: day.fat, target: fatTarget)
                         MacroRing(label: "Water", unit: "oz", color: palette.water,
-                                  value: water, target: waterTarget)
+                                  value: day.water, target: waterTarget)
                     }
                     .padding(.vertical, 4)
                 }
 
-                if dayMeals.isEmpty {
+                if day.meals.isEmpty {
                     ContentUnavailableView(
                         isToday ? "Nothing logged today" : "Nothing logged this day",
                         systemImage: "fork.knife",
@@ -97,7 +138,7 @@ struct HomeView: View {
                     )
                 } else {
                     Section {
-                        hourlyChart
+                        hourlyChart(bins: day.bins)
                     } header: {
                         Text("When you ate & drank")
                     } footer: {
@@ -105,21 +146,14 @@ struct HomeView: View {
                     }
 
                     Section("Meals") {
-                        ForEach(sortedDayMeals) { meal in
+                        ForEach(day.meals) { meal in
                             NavigationLink {
                                 EditMealView(meal: meal)
                             } label: {
-                                VStack(alignment: .leading, spacing: 3) {
-                                    Text(meal.displayName)
-                                        .lineLimit(2)
-                                    Text("\(Int(meal.totalCalories.rounded())) kcal · \(meal.timestamp, format: .dateTime.hour().minute())")
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                    macroChips(for: meal)
-                                }
+                                mealRow(meal)
                             }
                         }
-                        .onDelete(perform: deleteMeals)
+                        .onDelete { deleteMeals($0, from: day.meals) }
                     }
                 }
             }
@@ -201,22 +235,34 @@ struct HomeView: View {
         selectedDate = min(cal.startOfDay(for: shifted), today)
     }
 
+    /// One diary row: name, calories + time, and the macro chips — all from a
+    /// single pass over the meal's items.
+    private func mealRow(_ meal: Meal) -> some View {
+        let t = meal.totals
+        return VStack(alignment: .leading, spacing: 3) {
+            Text(meal.displayName)
+                .lineLimit(2)
+            Text("\(Int(t.calories.rounded())) kcal · \(meal.timestamp, format: .dateTime.hour().minute())")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            macroChips(for: t)
+        }
+    }
+
     /// Per-meal macro totals as small colored chips (matching the app's metric
     /// palette). Water-only meals skip the all-zero P/C/F chips and just show
     /// the water amount.
     @ViewBuilder
-    private func macroChips(for meal: Meal) -> some View {
-        let water = meal.waterOunces
-        let hasMacros = meal.totalCalories > 0 || meal.totalProtein > 0
-            || meal.totalCarbs > 0 || meal.totalFat > 0
+    private func macroChips(for t: MealTotals) -> some View {
+        let hasMacros = t.calories > 0 || t.protein > 0 || t.carbs > 0 || t.fat > 0
         HStack(spacing: 5) {
-            if hasMacros || water == 0 {
-                macroChip("P", meal.totalProtein, palette.protein)
-                macroChip("C", meal.totalCarbs, palette.carbs)
-                macroChip("F", meal.totalFat, palette.fat)
+            if hasMacros || t.waterOunces == 0 {
+                macroChip("P", t.protein, palette.protein)
+                macroChip("C", t.carbs, palette.carbs)
+                macroChip("F", t.fat, palette.fat)
             }
-            if water > 0 {
-                waterChip(water)
+            if t.waterOunces > 0 {
+                waterChip(t.waterOunces)
             }
         }
         .padding(.top, 1)
@@ -250,41 +296,22 @@ struct HomeView: View {
         .background(Capsule().fill(palette.water.opacity(0.12)))
     }
 
-    private func deleteMeals(_ offsets: IndexSet) {
+    private func deleteMeals(_ offsets: IndexSet, from dayMeals: [Meal]) {
         for index in offsets {
-            modelContext.delete(sortedDayMeals[index])
+            modelContext.delete(dayMeals[index])
         }
     }
 
     // MARK: Hourly chart
 
-    /// Food (calories) and water (ounces) binned to the hour they were logged,
-    /// each expressed as a fraction of its own daily goal so the two series sit
-    /// on one comparable axis — a big drink reads as tall as a big meal instead
-    /// of a sliver next to the calorie bars. Only non-zero bins are emitted.
-    private var hourlyIntake: [IntakeBin] {
-        let cal = Calendar.current
-        let startOfDay = cal.startOfDay(for: selectedDate)
-        let grouped = Dictionary(grouping: dayMeals) { cal.component(.hour, from: $0.timestamp) }
-        var bins: [IntakeBin] = []
-        for (hour, hourMeals) in grouped {
-            let time = cal.date(byAdding: .hour, value: hour, to: startOfDay) ?? startOfDay
-            let calories = hourMeals.reduce(0) { $0 + $1.totalCalories }
-            let water = hourMeals.reduce(0) { $0 + $1.waterOunces }
-            if calories > 0, calorieTarget > 0 {
-                bins.append(IntakeBin(time: time, series: .food, amount: calories / calorieTarget))
-            }
-            if water > 0, waterTarget > 0 {
-                bins.append(IntakeBin(time: time, series: .water, amount: water / waterTarget))
-            }
-        }
-        return bins.sorted { $0.time < $1.time }
-    }
-
-    private var hourlyChart: some View {
+    /// Food calories and water ounces per hour, each as a fraction of its own
+    /// daily goal so the two series sit on one comparable axis — a big drink
+    /// reads as tall as a big meal instead of a sliver next to the calorie
+    /// bars. The bins are built in `dayAggregate`'s single pass.
+    private func hourlyChart(bins: [IntakeBin]) -> some View {
         let startOfDay = Calendar.current.startOfDay(for: selectedDate)
         let endOfDay = startOfDay.addingTimeInterval(24 * 3600)
-        return Chart(hourlyIntake) { bin in
+        return Chart(bins) { bin in
             BarMark(
                 x: .value("Time", bin.time, unit: .hour),
                 y: .value("Share of goal", bin.amount)

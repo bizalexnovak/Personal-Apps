@@ -2,6 +2,13 @@ import AVFoundation
 import Foundation
 import Speech
 
+/// Last audio level forwarded to the main actor. Kept outside the controller
+/// (which is @MainActor) so it carries no actor isolation — it's only ever
+/// read/written on the mic tap's serial dispatch queue.
+private final class SentLevelBox {
+    var value: Double = -1
+}
+
 /// Owns the mic + speech-recognition session for CaptureView: requests
 /// permissions, streams live partial transcripts, exposes an audio level for
 /// the pulsing indicator, and auto-stops after ~2 s of silence.
@@ -101,10 +108,18 @@ final class SpeechCaptureController: ObservableObject {
             let format = inputNode.outputFormat(forBus: 0)
             inputNode.removeTap(onBus: 0)
             // The tap runs on an audio thread — capture `request` locally and
-            // hop to the main actor only for the published level.
+            // hop to the main actor only for the published level. The level is
+            // quantized to 0.05 steps and unchanged values are dropped at the
+            // source: buffers arrive ~45×/s and every publish re-renders the
+            // observing capture screen, so silence would otherwise spam the
+            // main thread with no visible change. (`lastSent` is only touched
+            // on the tap's serial queue.)
+            let lastSent = SentLevelBox()
             inputNode.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak self] buffer, _ in
                 request.append(buffer)
-                let level = SpeechCaptureController.rmsLevel(of: buffer)
+                let level = (SpeechCaptureController.rmsLevel(of: buffer) * 20).rounded() / 20
+                guard level != lastSent.value else { return }
+                lastSent.value = level
                 Task { @MainActor [weak self] in self?.audioLevel = level }
             }
             audioEngine.prepare()
