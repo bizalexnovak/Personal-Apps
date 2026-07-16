@@ -172,7 +172,10 @@ struct MealListView: View {
                 .font(listening && !speech.transcript.isEmpty ? .title3.weight(.medium) : .body)
                 .foregroundStyle(listening && !speech.transcript.isEmpty ? .primary : .secondary)
                 .multilineTextAlignment(.center)
-                .frame(maxWidth: geo.size.width - 40)
+                // Clamped: transient layout passes can report a width under
+                // 40 pt, and a negative maxWidth trips SwiftUI's "Invalid
+                // frame dimension" warning.
+                .frame(maxWidth: max(0, geo.size.width - 40))
                 .position(x: midX, y: micY + 128)
                 .animation(.default, value: speech.transcript)
 
