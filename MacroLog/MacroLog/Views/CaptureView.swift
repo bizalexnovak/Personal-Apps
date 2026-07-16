@@ -98,7 +98,7 @@ struct CaptureView: View {
                     Task { await coordinator.beginFromLabel(imageData: data, in: modelContext) }
                 })
             case .text:
-                AnalyzingView(scanning: false)
+                AnalyzingView(text: MealCaptureCoordinator.WorkKind.parsingText.text)
             }
         }
     }
@@ -119,7 +119,7 @@ struct CaptureView: View {
         case .listening:
             listening(prompt: "Listening… describe what you consumed", subtitle: nil, showSkip: false)
         case .captured:
-            AnalyzingView(scanning: false)
+            AnalyzingView(text: MealCaptureCoordinator.WorkKind.parsingText.text)
         case .denied(let message):
             CaptureProblemView(message: message, systemImage: "mic.slash.fill") {
                 Button("Open Settings") {

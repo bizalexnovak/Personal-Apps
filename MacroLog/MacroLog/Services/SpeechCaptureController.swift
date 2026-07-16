@@ -229,9 +229,13 @@ final class SpeechCaptureController: ObservableObject {
         "granola", "avocado toast", "sourdough", "bagel", "tortilla",
         "quinoa", "brown rice", "white rice", "sweet potato", "edamame",
         "hummus", "peanut butter", "almond butter",
+        // Supplements (logged directly, so mis-transcription breaks the flow)
+        "creatine", "creatine monohydrate", "caffeine", "caffeine pill",
+        "multivitamin", "pre-workout", "electrolytes",
         // Units & amounts
         "ounce", "ounces", "tablespoon", "tablespoons", "teaspoon", "teaspoons",
         "cup", "cups", "slice", "slices", "piece", "pieces", "handful",
-        "serving", "servings", "grams", "scoop", "scoops", "container", "packet",
+        "serving", "servings", "grams", "milligrams", "scoop", "scoops",
+        "container", "packet", "pill", "pills", "tablet", "capsule", "capsules",
     ]
 }

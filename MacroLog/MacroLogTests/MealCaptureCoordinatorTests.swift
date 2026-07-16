@@ -336,6 +336,45 @@ final class MealCaptureCoordinatorTests: XCTestCase {
         XCTAssertNotEqual(item.match?.calories, 999, "spoken numbers must override the USDA match")
     }
 
+    func testBareSupplementSkipsLookupAndRecordsDose() async throws {
+        let context = try makeContext()
+        // Empty nutrition matches — a bare supplement must not need USDA.
+        let coordinator = makeCoordinator(parsed: [FoodItemRequest(name: "creatine", quantity: 5, unit: "grams")])
+
+        await coordinator.begin(text: "5 grams of creatine", in: context)
+        let item = try XCTUnwrap(coordinator.review?.items.first)
+        XCTAssertEqual(item.match?.calories, 0)
+        XCTAssertEqual(item.match?.micros.creatine ?? 0, 5, accuracy: 0.001)
+    }
+
+    func testExplicitMacrosBeatSupplementShortcut() async throws {
+        let context = try makeContext()
+        // A supplement-named item with user-stated macros keeps the stated
+        // numbers — the supplement shortcut must not zero them.
+        let request = FoodItemRequest(
+            name: "creatine", quantity: 1, unit: "serving",
+            calories: 40, protein: 0, carbs: 10, fat: 0
+        )
+        let coordinator = makeCoordinator(parsed: [request])
+
+        await coordinator.begin(text: "creatine, 40 calories, 10 grams of carbs", in: context)
+        let item = try XCTUnwrap(coordinator.review?.items.first)
+        XCTAssertEqual(item.match?.calories, 40)
+        XCTAssertEqual(item.match?.carbs, 10)
+    }
+
+    func testCaloricSupplementNamedFoodGoesToLookup() async throws {
+        let context = try makeContext()
+        let coordinator = makeCoordinator(
+            parsed: [FoodItemRequest(name: "creatine gummies", quantity: 3, unit: "pieces")],
+            matches: ["creatine gummies": match("Creatine gummies", kcal: 45)]
+        )
+
+        await coordinator.begin(text: "three creatine gummies", in: context)
+        let item = try XCTUnwrap(coordinator.review?.items.first)
+        XCTAssertEqual(item.match?.calories, 45, "real caloric products keep their looked-up calories")
+    }
+
     func testWaterEditSetsOunces() async throws {
         let context = try makeContext()
         let coordinator = makeCoordinator(parsed: [FoodItemRequest(name: "water", quantity: 1, unit: "glass")])

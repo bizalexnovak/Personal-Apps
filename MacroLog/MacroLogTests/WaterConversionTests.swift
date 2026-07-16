@@ -13,6 +13,13 @@ final class WaterConversionTests: XCTestCase {
         XCTAssertFalse(WaterConversion.isWater("chicken"))
     }
 
+    func testCaffeinatedWaterIsNotPlainWater() {
+        // Caffeinated waters carry a real caffeine content, so they go
+        // through USDA (which has it) instead of the plain-water shortcut.
+        XCTAssertFalse(WaterConversion.isWater("caffeine water"))
+        XCTAssertFalse(WaterConversion.isWater("caffeinated water"))
+    }
+
     func testVolumeUnitsConvertToOunces() {
         XCTAssertEqual(WaterConversion.ounces(quantity: 24, unit: "ounces"), 24, accuracy: 0.001)
         XCTAssertEqual(WaterConversion.ounces(quantity: 1, unit: "bottle"), 16, accuracy: 0.001)
@@ -41,5 +48,56 @@ final class WaterConversionTests: XCTestCase {
         ])
         XCTAssertEqual(meal.waterOunces, 16, accuracy: 0.001)
         XCTAssertEqual(meal.totalCalories, 280, accuracy: 0.001)
+    }
+}
+
+final class SupplementConversionTests: XCTestCase {
+    func testBareCreatineMatches() {
+        let match = SupplementConversion.match(
+            for: FoodItemRequest(name: "creatine", quantity: 5, unit: "grams")
+        )
+        XCTAssertEqual(match?.calories, 0)
+        XCTAssertEqual(match?.micros.creatine ?? 0, 5, accuracy: 0.001)
+    }
+
+    func testCreatineMonohydrateScoopMatches() {
+        let match = SupplementConversion.match(
+            for: FoodItemRequest(name: "creatine monohydrate", quantity: 1, unit: "scoop")
+        )
+        XCTAssertEqual(match?.micros.creatine ?? 0, 5, accuracy: 0.001)
+    }
+
+    func testCaffeinePillMatchesAtDefaultDose() {
+        let match = SupplementConversion.match(
+            for: FoodItemRequest(name: "caffeine pill", quantity: 1, unit: "pill")
+        )
+        XCTAssertEqual(match?.calories, 0)
+        XCTAssertEqual(match?.micros.caffeine ?? 0, 200, accuracy: 0.001)
+    }
+
+    func testCaloricProductsDoNotMatch() {
+        // Real foods that merely mention the supplement must keep their
+        // calories — they go through the normal lookup instead.
+        XCTAssertNil(SupplementConversion.match(
+            for: FoodItemRequest(name: "creatine gummies", quantity: 3, unit: "pieces")
+        ))
+        XCTAssertNil(SupplementConversion.match(
+            for: FoodItemRequest(name: "high caffeine energy drink", quantity: 1, unit: "can")
+        ))
+        XCTAssertNil(SupplementConversion.match(
+            for: FoodItemRequest(name: "caffeine free coke", quantity: 1, unit: "can")
+        ))
+    }
+
+    func testZeroDoseDoesNotMatch() {
+        XCTAssertNil(SupplementConversion.match(
+            for: FoodItemRequest(name: "creatine", quantity: 0, unit: "grams")
+        ))
+    }
+
+    func testDoseUnitConversions() {
+        XCTAssertEqual(SupplementConversion.creatineGrams(quantity: 5000, unit: "mg"), 5, accuracy: 0.001)
+        XCTAssertEqual(SupplementConversion.caffeineMilligrams(quantity: 100, unit: "mg"), 100, accuracy: 0.001)
+        XCTAssertEqual(SupplementConversion.caffeineMilligrams(quantity: 2, unit: "pills"), 400, accuracy: 0.001)
     }
 }

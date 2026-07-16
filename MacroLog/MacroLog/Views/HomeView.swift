@@ -45,51 +45,68 @@ struct HomeView: View {
         var agg = DayAggregate()
         var hourFood: [Int: Double] = [:]
         var hourWater: [Int: Double] = [:]
-        // The query is newest-first, so appending preserves that order.
+        // The query is newest-first, so appending preserves that order. One
+        // pass over each meal's items covers totals, micros, and hour bins.
         for meal in meals where cal.isDate(meal.timestamp, inSameDayAs: selectedDate) {
             agg.meals.append(meal)
-            let t = meal.totals
-            agg.calories += t.calories
-            agg.protein += t.protein
-            agg.carbs += t.carbs
-            agg.fat += t.fat
-            agg.water += t.waterOunces
+            var mealCalories = 0.0
+            var mealWater = 0.0
             for item in meal.items {
-                agg.micros = agg.micros.adding(item.micros)
+                mealCalories += item.calories
+                mealWater += WaterConversion.ounces(for: item)
+                agg.protein += item.protein
+                agg.carbs += item.carbs
+                agg.fat += item.fat
+                // Only items with stored data pay the JSON decode.
+                if item.microsData != nil {
+                    agg.micros = agg.micros.adding(item.micros)
+                }
             }
+            agg.calories += mealCalories
+            agg.water += mealWater
             let hour = cal.component(.hour, from: meal.timestamp)
-            if t.calories > 0 { hourFood[hour, default: 0] += t.calories }
-            if t.waterOunces > 0 { hourWater[hour, default: 0] += t.waterOunces }
+            if mealCalories > 0 { hourFood[hour, default: 0] += mealCalories }
+            if mealWater > 0 { hourWater[hour, default: 0] += mealWater }
         }
+        // Bars are normalized to the daily goal so food and water share one
+        // axis; a cleared/zero goal falls back to the default target instead
+        // of hiding the series (the old chart always drew logged intake).
+        let calDenominator = calorieTarget > 0 ? calorieTarget : 2000
+        let waterDenominator = waterTarget > 0 ? waterTarget : 64
         var bins: [IntakeBin] = []
-        if calorieTarget > 0 {
-            for (hour, kcal) in hourFood {
-                let time = cal.date(byAdding: .hour, value: hour, to: startOfDay) ?? startOfDay
-                bins.append(IntakeBin(time: time, series: .food, amount: kcal / calorieTarget))
-            }
+        for (hour, kcal) in hourFood {
+            let time = cal.date(byAdding: .hour, value: hour, to: startOfDay) ?? startOfDay
+            bins.append(IntakeBin(time: time, series: .food, amount: kcal / calDenominator))
         }
-        if waterTarget > 0 {
-            for (hour, oz) in hourWater {
-                let time = cal.date(byAdding: .hour, value: hour, to: startOfDay) ?? startOfDay
-                bins.append(IntakeBin(time: time, series: .water, amount: oz / waterTarget))
-            }
+        for (hour, oz) in hourWater {
+            let time = cal.date(byAdding: .hour, value: hour, to: startOfDay) ?? startOfDay
+            bins.append(IntakeBin(time: time, series: .water, amount: oz / waterDenominator))
         }
         agg.bins = bins.sorted { $0.time < $1.time }
         return agg
     }
 
     /// Today's totals + targets for the home-screen widget (always today, not
-    /// the browsed day). Single pass over today's meals.
-    private var todaySnapshot: DayNutritionSnapshot {
+    /// the browsed day). When the diary is showing today, the already-computed
+    /// aggregate is reused instead of re-scanning the whole history.
+    private func todaySnapshot(reusing day: DayAggregate?) -> DayNutritionSnapshot {
         let cal = Calendar.current
         var t = MealTotals()
-        for meal in meals where cal.isDateInToday(meal.timestamp) {
-            let m = meal.totals
-            t.calories += m.calories
-            t.protein += m.protein
-            t.carbs += m.carbs
-            t.fat += m.fat
-            t.waterOunces += m.waterOunces
+        if let day {
+            t.calories = day.calories
+            t.protein = day.protein
+            t.carbs = day.carbs
+            t.fat = day.fat
+            t.waterOunces = day.water
+        } else {
+            for meal in meals where cal.isDateInToday(meal.timestamp) {
+                let m = meal.totals
+                t.calories += m.calories
+                t.protein += m.protein
+                t.carbs += m.carbs
+                t.fat += m.fat
+                t.waterOunces += m.waterOunces
+            }
         }
         return DayNutritionSnapshot(
             date: cal.startOfDay(for: .now),
@@ -100,8 +117,8 @@ struct HomeView: View {
         )
     }
 
-    private func refreshWidget() {
-        WidgetDataStore.write(todaySnapshot)
+    private func refreshWidget(_ snapshot: DayNutritionSnapshot) {
+        WidgetDataStore.write(snapshot)
         WidgetCenter.shared.reloadAllTimelines()
         // The reminder is only queued for today when goals aren't met yet, so
         // re-evaluate it whenever the day's totals change.
@@ -112,6 +129,7 @@ struct HomeView: View {
 
     var body: some View {
         let day = dayAggregate
+        let snapshot = todaySnapshot(reusing: isToday ? day : nil)
         return NavigationStack {
             List {
                 Section {
@@ -172,8 +190,8 @@ struct HomeView: View {
                 }
             }
             .appBackground(appBackground)
-            .onAppear { refreshWidget() }
-            .onChange(of: todaySnapshot) { _, _ in refreshWidget() }
+            .onAppear { refreshWidget(snapshot) }
+            .onChange(of: snapshot) { _, newValue in refreshWidget(newValue) }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {

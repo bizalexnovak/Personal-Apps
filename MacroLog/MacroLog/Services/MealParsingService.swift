@@ -124,8 +124,8 @@ struct ClaudeMealParsingService: MealParsing {
             .replacingOccurrences(of: "\n", with: " ")
             .trimmingCharacters(in: .whitespaces)
 
-        // Leading first-person verbs: "I ate/drank/had/have/got a ..."
-        let verbPattern = #"^(?:i\s+)?(?:ate|drank|had|have|got|grabbed|made|ordered|consumed)\s+"#
+        // Leading first-person verbs: "I ate/drank/had/took/have/got a ..."
+        let verbPattern = #"^(?:i\s+)?(?:ate|drank|had|have|got|grabbed|made|ordered|consumed|took|take|taken)\s+"#
         name = replacingFirstMatch(in: name, pattern: verbPattern, with: "")
 
         // Leading "<amount> <container> of": "one can of", "a glass of",

@@ -66,7 +66,20 @@ final class MealCaptureCoordinator: ObservableObject {
     /// show the right status text regardless of which capture mode is selected
     /// (typing a meal while the Log tab happens to be in Scan mode must still
     /// say "Analyzing your meal…", not "Reading the label…").
-    enum WorkKind { case parsingText, readingLabel, estimatingDish }
+    enum WorkKind {
+        case parsingText, readingLabel, estimatingDish, saving
+
+        /// The ONE mapping from operation to spinner text — every status
+        /// string the capture flow shows comes from here.
+        var text: String {
+            switch self {
+            case .parsingText: return "Analyzing your meal…"
+            case .readingLabel: return "Reading the label…"
+            case .estimatingDish: return "Estimating from your photo…"
+            case .saving: return "Saving…"
+            }
+        }
+    }
 
     @Published var review: ReviewSession?
     @Published private(set) var isWorking = false
@@ -74,13 +87,7 @@ final class MealCaptureCoordinator: ObservableObject {
     @Published var errorMessage: String?
 
     /// Status text for the analyzing spinner, driven by the in-flight operation.
-    var workingText: String {
-        switch workKind {
-        case .parsingText: return "Analyzing your meal…"
-        case .readingLabel: return "Reading the label…"
-        case .estimatingDish: return "Estimating from your photo…"
-        }
-    }
+    var workingText: String { workKind.text }
     /// The day the meal under review will be saved to. Defaults to now; the
     /// review screen lets the user back-date it to a previous day.
     @Published var logDate = Date()
@@ -124,39 +131,29 @@ final class MealCaptureCoordinator: ObservableObject {
 
         var items: [ReviewItem] = []
         for request in requests {
+            // Explicit macros spoken by the user win over EVERY shortcut and
+            // lookup — checked first so "creatine gummies, 150 calories" keeps
+            // its stated numbers instead of being zeroed by a name match.
+            if let spoken = Self.explicitMacroMatch(for: request) {
+                items.append(Self.directItem(request, spoken))
+                continue
+            }
+            // Bare supplements (creatine, caffeine pills) skip USDA — a food
+            // search would mismatch them; the dose goes on the micronutrient
+            // record instead.
+            if let supplement = SupplementConversion.match(for: request) {
+                items.append(Self.directItem(request, supplement))
+                continue
+            }
             // Water is tracked in ounces, not macros — skip USDA entirely and
             // give it a 0-calorie confirmed-able match.
             if WaterConversion.isWater(request.name) {
                 let oz = WaterConversion.ounces(quantity: request.quantity, unit: request.unit)
-                items.append(ReviewItem(
-                    request: request,
-                    match: NutritionMatch(
-                        matchedDescription: "Water · \(Int(oz.rounded())) oz",
-                        calories: 0, protein: 0, carbs: 0, fat: 0,
-                        confidence: MatchConfidence.high
-                    ),
-                    clarificationQuestion: nil,
-                    options: [],
-                    status: .needsReview
-                ))
-                continue
-            }
-            // Bare supplements (creatine, caffeine pills) also skip USDA — a
-            // food search would mismatch them; the value goes on the
-            // micronutrient record instead.
-            if let supplement = SupplementConversion.match(for: request) {
-                items.append(ReviewItem(
-                    request: request, match: supplement,
-                    clarificationQuestion: nil, options: [], status: .needsReview
-                ))
-                continue
-            }
-            // Explicit macros spoken by the user win over any USDA lookup.
-            if let spoken = Self.explicitMacroMatch(for: request) {
-                items.append(ReviewItem(
-                    request: request, match: spoken,
-                    clarificationQuestion: nil, options: [], status: .needsReview
-                ))
+                items.append(Self.directItem(request, NutritionMatch(
+                    matchedDescription: "Water · \(Int(oz.rounded())) oz",
+                    calories: 0, protein: 0, carbs: 0, fat: 0,
+                    confidence: MatchConfidence.high
+                )))
                 continue
             }
             let hints = Self.clarificationHints(for: request)
@@ -313,6 +310,15 @@ final class MealCaptureCoordinator: ObservableObject {
         }
     }
 
+    /// A review card for an item resolved without USDA (explicit macros,
+    /// supplement dose, water) — one construction site for all three paths.
+    private static func directItem(_ request: FoodItemRequest, _ match: NutritionMatch) -> ReviewItem {
+        ReviewItem(
+            request: request, match: match,
+            clarificationQuestion: nil, options: [], status: .needsReview
+        )
+    }
+
     /// A match built from macros the user spoke; missing calories are derived
     /// from protein/carbs/fat (4/4/9). Returns nil if no macro was given.
     static func explicitMacroMatch(for request: FoodItemRequest) -> NutritionMatch? {
@@ -404,6 +410,7 @@ final class MealCaptureCoordinator: ObservableObject {
     /// the lookup for it. The card returns to needs-review with new macros.
     func chooseOption(_ itemID: UUID, option: ClarificationOption) async {
         guard let context, review != nil else { return }
+        workKind = .parsingText // a text-based re-lookup, whatever mode captured it
         isWorking = true
         let newRequest = FoodItemRequest(name: option.name, quantity: option.quantity, unit: option.unit)
         let match = await resolveMatch(for: newRequest, in: context)
@@ -448,6 +455,7 @@ final class MealCaptureCoordinator: ObservableObject {
 
     func saveAll() async {
         guard canSaveAll, let context, let session = review else { return }
+        workKind = .saving
         isWorking = true
         defer { isWorking = false }
         let entries = session.items.compactMap { item in

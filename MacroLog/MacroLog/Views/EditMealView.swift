@@ -18,9 +18,12 @@ struct EditMealView: View {
     var body: some View {
         List {
             Section {
+                // Capped at now: the Today diary can't navigate into the
+                // future, so a future-dated meal would become unreachable.
                 DatePicker(
                     "Logged",
                     selection: $meal.timestamp,
+                    in: ...Date(),
                     displayedComponents: [.date, .hourAndMinute]
                 )
             } header: {
@@ -351,7 +354,7 @@ struct MicronutrientDisclosure: View {
         DisclosureGroup("Micronutrients") {
             let recorded = micros.recorded
             if recorded.isEmpty {
-                Text("None recorded for this item.")
+                Text("None recorded.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             } else {

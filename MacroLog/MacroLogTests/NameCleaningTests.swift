@@ -7,6 +7,7 @@ final class NameCleaningTests: XCTestCase {
         XCTAssertEqual(ClaudeMealParsingService.cleanName("I drank one can of celsius"), "celsius")
         XCTAssertEqual(ClaudeMealParsingService.cleanName("I ate a bowl of oatmeal"), "oatmeal")
         XCTAssertEqual(ClaudeMealParsingService.cleanName("had two slices of sourdough"), "sourdough")
+        XCTAssertEqual(ClaudeMealParsingService.cleanName("I took creatine"), "creatine")
     }
 
     func testLeavesCleanProductNamesUntouched() {

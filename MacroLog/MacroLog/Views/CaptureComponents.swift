@@ -142,10 +142,10 @@ struct ListeningView: View {
 }
 
 /// Spinner + status text while parsing / reading a label / estimating a dish.
+/// The text always comes from MealCaptureCoordinator.WorkKind — the single
+/// operation→string mapping — so different screens can't drift apart.
 struct AnalyzingView: View {
     var text: String
-    init(text: String) { self.text = text }
-    init(scanning: Bool) { self.text = scanning ? "Reading the label…" : "Analyzing your meal…" }
 
     var body: some View {
         VStack(spacing: 14) {

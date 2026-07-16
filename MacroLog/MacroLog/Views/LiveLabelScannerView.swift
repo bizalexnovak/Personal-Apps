@@ -150,8 +150,10 @@ final class LabelScannerViewController: UIViewController, AVCaptureVideoDataOutp
         }
         let text = lines.joined(separator: " ").lowercased()
 
-        // "Nutrition Facts" (the panel header) is decisive — grab it right away.
-        if text.contains("nutrition facts") || text.contains("nutrition fact") {
+        // "Nutrition Facts" / "Supplement Facts" (the panel header) is
+        // decisive — grab it right away.
+        if text.contains("nutrition facts") || text.contains("nutrition fact")
+            || text.contains("supplement facts") || text.contains("supplement fact") {
             handOff(pixelBuffer)
             return
         }
@@ -169,6 +171,7 @@ final class LabelScannerViewController: UIViewController, AVCaptureVideoDataOutp
 
     /// Heuristic: at least two independent label signals so a random word
     /// doesn't trigger a capture, but common panels fire on the first frame.
+    /// Covers supplement facts panels too (vitamins, creatine, caffeine, %DV).
     static func looksLikeLabel(_ text: String) -> Bool {
         let signals = [
             text.contains("calorie"),
@@ -179,6 +182,8 @@ final class LabelScannerViewController: UIViewController, AVCaptureVideoDataOutp
             text.contains("carbohydrate") || text.contains("dietary fiber") || text.contains("total sugars"),
             text.contains("protein"),
             text.contains("added sugars") || text.contains("includes"),
+            text.contains("supplement") || text.contains("creatine") || text.contains("caffeine"),
+            text.contains("vitamin") || text.contains("calcium") || text.contains("magnesium"),
         ].filter { $0 }.count
         return signals >= 2
     }

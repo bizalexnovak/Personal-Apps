@@ -1,6 +1,13 @@
 import Foundation
 import SwiftData
 
+/// Shared coders for FoodItem.microsData — the getter runs in per-render
+/// aggregation loops, so it shouldn't allocate a fresh JSONDecoder per call.
+private enum MicrosCoding {
+    static let decoder = JSONDecoder()
+    static let encoder = JSONEncoder()
+}
+
 @Model
 final class Meal {
     @Attribute(.unique) var id: UUID
@@ -75,12 +82,12 @@ final class FoodItem {
     var micros: Micronutrients {
         get {
             guard let microsData,
-                  let decoded = try? JSONDecoder().decode(Micronutrients.self, from: microsData)
+                  let decoded = try? MicrosCoding.decoder.decode(Micronutrients.self, from: microsData)
             else { return .empty }
             return decoded
         }
         set {
-            microsData = newValue.isEmpty ? nil : (try? JSONEncoder().encode(newValue))
+            microsData = newValue.isEmpty ? nil : (try? MicrosCoding.encoder.encode(newValue))
         }
     }
 

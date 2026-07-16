@@ -57,9 +57,13 @@ struct MealListView: View {
             consumeAutoStartVoice()
             consumeOpenType()
         }
-        // Meals array changes on insert/delete; item-level edits (done on the
-        // Today tab) are picked up when the user switches back to this tab.
-        .onChange(of: meals) { _, _ in refreshSuggestions() }
+        // Recompute only while this tab is visible — changes made elsewhere
+        // (deletes on Today, item-level edits, which don't even fire the meals
+        // onChange because @Model equality is by identity) are all picked up
+        // by the unconditional refresh when the user switches back to Log.
+        .onChange(of: meals) { _, _ in
+            if hub.selectedTab == AppTab.log { refreshSuggestions() }
+        }
         .onChange(of: hub.selectedTab) { _, tab in
             if tab == AppTab.log { refreshSuggestions() }
         }
@@ -133,7 +137,9 @@ struct MealListView: View {
                 .buttonStyle(.borderedProminent)
             }
         case .captured:
-            AnalyzingView(text: "Analyzing your meal…")
+            // Parsing is about to start but hasn't set workKind yet — a voice
+            // capture always feeds the text parser, so use that kind directly.
+            AnalyzingView(text: MealCaptureCoordinator.WorkKind.parsingText.text)
         case .failed(let message):
             voiceLayout(listening: false, note: message)
         case .idle:
