@@ -110,6 +110,7 @@ struct ClaudeLabelScanningService: LabelScanning {
 
         var request = URLRequest(url: URL(string: "https://api.anthropic.com/v1/messages")!)
         request.httpMethod = "POST"
+        request.timeoutInterval = 30 // image upload; fail fast in dead zones
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
         request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")

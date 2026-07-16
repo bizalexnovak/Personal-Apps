@@ -336,6 +336,29 @@ final class MealCaptureCoordinatorTests: XCTestCase {
         XCTAssertNotEqual(item.match?.calories, 999, "spoken numbers must override the USDA match")
     }
 
+    func testOfflineParseFallbackStillCreatesEntries() async throws {
+        let context = try makeContext()
+        // The Claude API is unreachable — the on-device parser takes over and
+        // water resolves fully offline, so the entry can be created and saved.
+        let coordinator = MealCaptureCoordinator()
+        coordinator.parser = OfflineMealParser()
+        coordinator.logger = MealLoggingService(
+            parser: OfflineMealParser(),
+            nutrition: MockNutritionLookup(matches: [:])
+        )
+
+        await coordinator.begin(text: "24 oz of water", in: context)
+        XCTAssertNotNil(coordinator.notice, "user is told parsing happened on device")
+        let item = try XCTUnwrap(coordinator.review?.items.first)
+        XCTAssertEqual(item.request.name, "water")
+        XCTAssertNotNil(item.match, "water resolves without any network")
+
+        coordinator.confirm(item.id)
+        await coordinator.saveAll()
+        let meal = try XCTUnwrap(try savedMeals(in: context).first)
+        XCTAssertEqual(meal.waterOunces, 24, accuracy: 0.01)
+    }
+
     func testBareSupplementSkipsLookupAndRecordsDose() async throws {
         let context = try makeContext()
         // Empty nutrition matches — a bare supplement must not need USDA.

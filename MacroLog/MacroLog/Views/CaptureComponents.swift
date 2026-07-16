@@ -236,6 +236,12 @@ struct MealReviewView: View {
                             .foregroundStyle(.secondary)
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
+                    if let notice = coordinator.notice {
+                        Label(notice, systemImage: "wifi.slash")
+                            .font(.footnote)
+                            .foregroundStyle(.orange)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
                     if !(coordinator.review?.items.isEmpty ?? true) {
                         HStack {
                             Label("Date", systemImage: "calendar")

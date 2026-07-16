@@ -99,6 +99,13 @@ final class SpeechCaptureController: ObservableObject {
 
             let request = SFSpeechAudioBufferRecognitionRequest()
             request.shouldReportPartialResults = true
+            // Keep transcription working with zero signal: force on-device
+            // recognition when the locale supports it. Server recognition
+            // simply fails offline, and modern on-device dictation is strong —
+            // contextualStrings still apply.
+            if recognizer.supportsOnDeviceRecognition {
+                request.requiresOnDeviceRecognition = true
+            }
             // Bias recognition toward food/brand vocabulary the acoustic model
             // otherwise mangles ("Chobani" → "show bunny").
             request.contextualStrings = Self.foodVocabulary

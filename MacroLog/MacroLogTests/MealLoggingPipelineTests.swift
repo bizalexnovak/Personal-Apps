@@ -9,6 +9,13 @@ struct MockMealParser: MealParsing {
     func parse(_ mealText: String) async throws -> [FoodItemRequest] { result }
 }
 
+/// Simulates the Claude API being unreachable (dead zone / airplane mode).
+struct OfflineMealParser: MealParsing {
+    func parse(_ mealText: String) async throws -> [FoodItemRequest] {
+        throw URLError(.notConnectedToInternet)
+    }
+}
+
 struct MockNutritionLookup: NutritionLookup {
     var matches: [String: NutritionMatch]
 

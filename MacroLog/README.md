@@ -88,6 +88,18 @@ yogurt"). Tapping a chip
 re-logs a copy with its last-known macros and micronutrients immediately — no
 parsing or lookup.
 
+**Offline / bad reception.** Logging never requires a connection. Speech
+recognition runs **on device** (when the locale supports it), and if the
+Claude parse can't reach the network the transcript is parsed by an on-device
+fallback (`LocalMealParser`) instead — water, bare supplements, spoken macro
+numbers, and previously-corrected foods (`RememberedMatchStore`) all resolve
+fully offline; anything else appears as an unmatched card you complete by hand
+with **Edit** (typed macros save normally). A banner on the review screen says
+when this happened. Quick add always works offline. Network calls fail fast
+(12–30 s timeouts instead of the 60 s system default), so a dead zone means a
+quick fallback, not a hanging spinner. Label scanning and dish photos do need
+the network (the image goes to Claude vision).
+
 The captured transcript (or label) runs through Claude parsing and USDA lookups
 in place (brief loading state), then the **same screen** transitions to review:
 the transcript collapses to a small reference line and one card animates in per

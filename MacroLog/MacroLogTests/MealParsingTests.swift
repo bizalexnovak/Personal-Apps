@@ -65,3 +65,64 @@ final class MealParsingTests: XCTestCase {
         XCTAssertNil(items[0].options)
     }
 }
+
+/// The on-device fallback parser used when the Claude API is unreachable.
+final class LocalMealParserTests: XCTestCase {
+    func testQuantityUnitAndName() {
+        let items = LocalMealParser.parse("24 oz of water")
+        XCTAssertEqual(items.count, 1)
+        XCTAssertEqual(items[0].name, "water")
+        XCTAssertEqual(items[0].quantity, 24, accuracy: 0.001)
+        XCTAssertEqual(items[0].unit, "oz")
+    }
+
+    func testNumberWordsAndContainers() {
+        let items = LocalMealParser.parse("a bottle of water")
+        XCTAssertEqual(items[0].name, "water")
+        XCTAssertEqual(items[0].quantity, 1, accuracy: 0.001)
+        XCTAssertEqual(items[0].unit, "bottle")
+    }
+
+    func testBareSupplementParses() {
+        let items = LocalMealParser.parse("5 grams of creatine")
+        XCTAssertEqual(items[0].name, "creatine")
+        XCTAssertEqual(items[0].quantity, 5, accuracy: 0.001)
+        XCTAssertEqual(items[0].unit, "grams")
+    }
+
+    func testSplitsOnCommasAndAnd() {
+        let items = LocalMealParser.parse("two eggs and a slice of toast")
+        XCTAssertEqual(items.count, 2)
+        XCTAssertEqual(items[0].name, "eggs")
+        XCTAssertEqual(items[0].quantity, 2, accuracy: 0.001)
+        XCTAssertEqual(items[1].name, "toast")
+        XCTAssertEqual(items[1].unit, "slice")
+    }
+
+    func testSpokenMacrosAttachToTheirItem() {
+        let items = LocalMealParser.parse("chicken, 300 calories and 30 grams of protein")
+        XCTAssertEqual(items.count, 1)
+        XCTAssertEqual(items[0].name, "chicken")
+        XCTAssertEqual(items[0].calories, 300)
+        XCTAssertEqual(items[0].protein, 30)
+        XCTAssertTrue(items[0].hasExplicitMacros)
+    }
+
+    func testStripsLeadingVerbs() {
+        let items = LocalMealParser.parse("I drank a glass of water")
+        XCTAssertEqual(items[0].name, "water")
+        XCTAssertEqual(items[0].unit, "glass")
+    }
+
+    func testNeverReturnsEmptyForNonEmptyText() {
+        let items = LocalMealParser.parse("something unusual")
+        XCTAssertEqual(items.count, 1)
+        XCTAssertEqual(items[0].name, "something unusual")
+        XCTAssertEqual(items[0].quantity, 1, accuracy: 0.001)
+        XCTAssertEqual(items[0].unit, "serving")
+    }
+
+    func testEmptyTextReturnsNothing() {
+        XCTAssertTrue(LocalMealParser.parse("   ").isEmpty)
+    }
+}

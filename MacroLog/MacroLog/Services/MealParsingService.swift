@@ -56,6 +56,10 @@ struct ClaudeMealParsingService: MealParsing {
 
         var request = URLRequest(url: URL(string: "https://api.anthropic.com/v1/messages")!)
         request.httpMethod = "POST"
+        // Fail fast in dead zones — the coordinator falls back to on-device
+        // parsing instead of leaving the user staring at a spinner for the
+        // 60 s system default.
+        request.timeoutInterval = 20
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
         request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
@@ -124,9 +128,7 @@ struct ClaudeMealParsingService: MealParsing {
             .replacingOccurrences(of: "\n", with: " ")
             .trimmingCharacters(in: .whitespaces)
 
-        // Leading first-person verbs: "I ate/drank/had/took/have/got a ..."
-        let verbPattern = #"^(?:i\s+)?(?:ate|drank|had|have|got|grabbed|made|ordered|consumed|took|take|taken)\s+"#
-        name = replacingFirstMatch(in: name, pattern: verbPattern, with: "")
+        name = stripLeadingVerbs(name)
 
         // Leading "<amount> <container> of": "one can of", "a glass of",
         // "2 slices of", "a bowl of". Leaves "greek yogurt", "Celsius energy
@@ -143,6 +145,13 @@ struct ClaudeMealParsingService: MealParsing {
         return trimmed.isEmpty ? raw.trimmingCharacters(in: .whitespaces) : trimmed
     }
 
+    /// Leading first-person verbs: "I ate/drank/had/took/have/got a ...".
+    /// Shared with LocalMealParser so both strip the same lead-ins.
+    static func stripLeadingVerbs(_ text: String) -> String {
+        let verbPattern = #"^(?:i\s+)?(?:ate|drank|had|have|got|grabbed|made|ordered|consumed|took|take|taken)\s+"#
+        return replacingFirstMatch(in: text, pattern: verbPattern, with: "")
+    }
+
     private static func replacingFirstMatch(in text: String, pattern: String, with replacement: String) -> String {
         guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else {
             return text
@@ -150,6 +159,139 @@ struct ClaudeMealParsingService: MealParsing {
         let range = NSRange(text.startIndex..., in: text)
         return regex.stringByReplacingMatches(in: text, options: [], range: range, withTemplate: replacement)
     }
+}
+
+// MARK: - Offline fallback parser
+
+/// On-device fallback used when the Claude API is unreachable (no signal,
+/// airplane mode) so an entry can ALWAYS be created. Deliberately simple:
+/// each comma/"and" segment becomes one item with a quantity, a unit, and any
+/// spoken macro numbers. Water, bare supplements, spoken macros, and
+/// previously-corrected foods (RememberedMatchStore) then resolve fully
+/// offline in the coordinator; anything else appears as an unmatched card the
+/// user completes by hand with Edit. Compound names joined by "and"
+/// ("mac and cheese") do get split — an accepted tradeoff; the online parser
+/// handles those.
+enum LocalMealParser {
+    static func parse(_ text: String) -> [FoodItemRequest] {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return [] }
+
+        var items: [FoodItemRequest] = []
+        for segment in split(trimmed) {
+            guard let parsed = parseSegment(segment) else { continue }
+            if parsed.name.isEmpty {
+                // A macros-only segment ("…, 300 calories") belongs to the
+                // item before it.
+                guard parsed.hasExplicitMacros, var last = items.popLast() else { continue }
+                last.calories = parsed.calories ?? last.calories
+                last.protein = parsed.protein ?? last.protein
+                last.carbs = parsed.carbs ?? last.carbs
+                last.fat = parsed.fat ?? last.fat
+                items.append(last)
+            } else {
+                items.append(parsed)
+            }
+        }
+        // Never return nothing for non-empty text — fall back to one item
+        // carrying the whole phrase so the entry can still be created.
+        if items.isEmpty {
+            items = [FoodItemRequest(
+                name: ClaudeMealParsingService.cleanName(trimmed),
+                quantity: 1, unit: "serving"
+            )]
+        }
+        return items
+    }
+
+    private static func split(_ text: String) -> [String] {
+        text
+            .replacingOccurrences(of: #"\s+and\s+"#, with: ",", options: [.regularExpression, .caseInsensitive])
+            .split(whereSeparator: { $0 == "," || $0 == ";" })
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+    }
+
+    private static func parseSegment(_ raw: String) -> FoodItemRequest? {
+        var s = ClaudeMealParsingService.stripLeadingVerbs(
+            raw.trimmingCharacters(in: .whitespaces)
+        )
+
+        // Spoken numbers first, so "300" isn't mistaken for a quantity.
+        let calories = extractMacro(&s, pattern: #"(\d+(?:\.\d+)?)\s*(?:kcal|calories?|cals?)\b"#)
+        let protein = extractMacro(&s, pattern: #"(\d+(?:\.\d+)?)\s*(?:g|grams?)?\s*(?:of\s+)?protein\b"#)
+        let carbs = extractMacro(&s, pattern: #"(\d+(?:\.\d+)?)\s*(?:g|grams?)?\s*(?:of\s+)?carb(?:s|ohydrates?)?\b"#)
+        let fat = extractMacro(&s, pattern: #"(\d+(?:\.\d+)?)\s*(?:g|grams?)?\s*(?:of\s+)?fat\b"#)
+
+        // Leading "<amount> [unit] [of] <name>".
+        var quantity = 1.0
+        var unit = "serving"
+        let amountPattern = #"^(\d+(?:\.\d+)?|a|an|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|half|couple|few)\s+(.+)$"#
+        if let (qtyToken, rest) = firstMatch(in: s, pattern: amountPattern) {
+            quantity = Double(qtyToken) ?? numberWords[qtyToken.lowercased()] ?? 1
+            var remainder = rest
+            if let (unitToken, name) = firstMatch(in: remainder, pattern: #"^([a-z]+)\s+(?:of\s+)?(.+)$"#),
+               knownUnits.contains(unitToken.lowercased()) {
+                unit = unitToken.lowercased()
+                remainder = name
+            }
+            s = remainder
+        }
+
+        // Tidy what's left into a shelf-label name.
+        s = s.replacingOccurrences(of: #"^(?:with|about|around|roughly|of|and|a|an|the)\s+"#, with: "", options: [.regularExpression, .caseInsensitive])
+        s = s.replacingOccurrences(of: #"\s+(?:with|and|of|at|about)\s*$"#, with: "", options: [.regularExpression, .caseInsensitive])
+        s = s.split(separator: " ").joined(separator: " ")
+        let name = s.trimmingCharacters(in: CharacterSet(charactersIn: " ,.!?"))
+
+        if name.isEmpty, calories == nil, protein == nil, carbs == nil, fat == nil {
+            return nil
+        }
+        return FoodItemRequest(
+            name: name, quantity: quantity, unit: unit,
+            calories: calories, protein: protein, carbs: carbs, fat: fat
+        )
+    }
+
+    /// Pull the first match's number out of `text`, removing the matched
+    /// phrase so it doesn't leak into the item name.
+    private static func extractMacro(_ text: inout String, pattern: String) -> Double? {
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]),
+              let match = regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)),
+              let valueRange = Range(match.range(at: 1), in: text),
+              let fullRange = Range(match.range, in: text),
+              let value = Double(text[valueRange])
+        else { return nil }
+        text.removeSubrange(fullRange)
+        return value
+    }
+
+    private static func firstMatch(in text: String, pattern: String) -> (String, String)? {
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]),
+              let match = regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)),
+              match.numberOfRanges >= 3,
+              let first = Range(match.range(at: 1), in: text),
+              let second = Range(match.range(at: 2), in: text)
+        else { return nil }
+        return (String(text[first]), String(text[second]))
+    }
+
+    private static let numberWords: [String: Double] = [
+        "a": 1, "an": 1, "one": 1, "two": 2, "three": 3, "four": 4, "five": 5,
+        "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10, "eleven": 11,
+        "twelve": 12, "half": 0.5, "couple": 2, "few": 3,
+    ]
+
+    private static let knownUnits: Set<String> = [
+        "oz", "ounce", "ounces", "g", "gram", "grams", "mg", "milligram", "milligrams",
+        "cup", "cups", "glass", "glasses", "bottle", "bottles", "can", "cans",
+        "slice", "slices", "piece", "pieces", "scoop", "scoops", "serving", "servings",
+        "pill", "pills", "tablet", "tablets", "capsule", "capsules",
+        "ml", "milliliter", "milliliters", "l", "liter", "liters",
+        "tbsp", "tablespoon", "tablespoons", "tsp", "teaspoon", "teaspoons",
+        "bar", "bars", "packet", "packets", "bowl", "bowls", "handful", "handfuls",
+        "strip", "strips", "container", "containers", "bag", "bags",
+    ]
 }
 
 // MARK: - Anthropic Messages API wire types

@@ -85,6 +85,9 @@ final class MealCaptureCoordinator: ObservableObject {
     @Published private(set) var isWorking = false
     @Published private(set) var workKind: WorkKind = .parsingText
     @Published var errorMessage: String?
+    /// Non-blocking banner on the review screen (e.g. "no connection —
+    /// understood on device"), unlike errorMessage which is an alert.
+    @Published var notice: String?
 
     /// Status text for the analyzing spinner, driven by the in-flight operation.
     var workingText: String { workKind.text }
@@ -117,6 +120,7 @@ final class MealCaptureCoordinator: ObservableObject {
         self.context = context
         workKind = .parsingText
         isWorking = true
+        notice = nil
         logDate = Date()
         MatchDebugLog.shared.record(transcript: text)
 
@@ -124,9 +128,18 @@ final class MealCaptureCoordinator: ObservableObject {
         do {
             requests = try await parser.parse(text)
         } catch {
-            errorMessage = error.localizedDescription
-            isWorking = false
-            return
+            // No connection is not a dead end: parse on device instead, so an
+            // entry can always be created. Water, supplements, spoken macros,
+            // and remembered foods resolve fully offline; the rest become
+            // unmatched cards the user completes by hand.
+            if Self.isConnectivityError(error) {
+                requests = LocalMealParser.parse(text)
+                notice = "No connection — understood on device. Water and supplements log normally; tap Edit on anything unmatched to type its numbers."
+            } else {
+                errorMessage = error.localizedDescription
+                isWorking = false
+                return
+            }
         }
 
         var items: [ReviewItem] = []
@@ -310,6 +323,20 @@ final class MealCaptureCoordinator: ObservableObject {
         }
     }
 
+    /// True for errors that mean "the network is unreachable/unusable right
+    /// now" — the cue to fall back to on-device parsing rather than fail.
+    private static func isConnectivityError(_ error: Error) -> Bool {
+        guard let urlError = error as? URLError else { return false }
+        switch urlError.code {
+        case .notConnectedToInternet, .networkConnectionLost, .timedOut,
+             .cannotConnectToHost, .cannotFindHost, .dnsLookupFailed,
+             .dataNotAllowed, .internationalRoamingOff:
+            return true
+        default:
+            return false
+        }
+    }
+
     /// A review card for an item resolved without USDA (explicit macros,
     /// supplement dose, water) — one construction site for all three paths.
     private static func directItem(_ request: FoodItemRequest, _ match: NutritionMatch) -> ReviewItem {
@@ -444,6 +471,7 @@ final class MealCaptureCoordinator: ObservableObject {
         review = nil
         pendingLabel = nil
         isWorking = false
+        notice = nil
     }
 
     /// Search passthrough for the card's inline USDA search pane.
@@ -464,6 +492,7 @@ final class MealCaptureCoordinator: ObservableObject {
         do {
             try logger.saveResolved(entries, rawText: session.rawText, on: logDate, in: context)
             review = nil
+            notice = nil
         } catch {
             errorMessage = error.localizedDescription
         }

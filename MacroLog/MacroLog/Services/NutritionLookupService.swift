@@ -155,7 +155,11 @@ struct USDANutritionLookupService: NutritionLookup {
         ]
         // Never log the full URL — it carries the api_key.
         Self.usdaLogger.debug("USDA search query: \(query, privacy: .public)")
-        let (data, response) = try await session.data(from: components.url!)
+        // Short timeout: in bad reception a failed lookup just means an
+        // unmatched card the user can fill in by hand — better than hanging.
+        var request = URLRequest(url: components.url!)
+        request.timeoutInterval = 12
+        let (data, response) = try await session.data(for: request)
         if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
             let snippet = String(decoding: data.prefix(300), as: UTF8.self)
             Self.usdaLogger.error("USDA HTTP \(http.statusCode, privacy: .public): \(snippet, privacy: .public)")
@@ -206,7 +210,9 @@ struct USDANutritionLookupService: NutritionLookup {
     func fetchPortions(fdcId: Int) async throws -> [USDAPortion] {
         var components = URLComponents(string: "https://api.nal.usda.gov/fdc/v1/food/\(fdcId)")!
         components.queryItems = [URLQueryItem(name: "api_key", value: KeychainService.usdaKeyOrDemo)]
-        let (data, response) = try await session.data(from: components.url!)
+        var request = URLRequest(url: components.url!)
+        request.timeoutInterval = 12
+        let (data, response) = try await session.data(for: request)
         if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
             throw NutritionLookupError.httpError(status: http.statusCode)
         }
