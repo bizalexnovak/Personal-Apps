@@ -386,6 +386,23 @@ final class MealCaptureCoordinatorTests: XCTestCase {
         XCTAssertEqual(item.match?.carbs, 10)
     }
 
+    func testRecipeRoundTripKeepsMatchConfidence() throws {
+        let context = try makeContext()
+        // A dish-photo estimate is low confidence; saving it as a recipe and
+        // re-logging must not launder it into a "verified" entry.
+        let meal = Meal(rawText: "photo dish", items: [
+            FoodItem(name: "stew", quantity: 1, unit: "bowl",
+                     calories: 400, matchConfidence: MatchConfidence.low),
+        ])
+        context.insert(meal)
+        let recipe = Recipe.from(meal: meal, named: "Stew")
+        context.insert(recipe)
+
+        let relogged = recipe.makeMeal()
+        XCTAssertEqual(relogged.items.first?.matchConfidence, MatchConfidence.low)
+        XCTAssertEqual(relogged.items.first?.calories ?? 0, 400, accuracy: 0.001)
+    }
+
     func testCaloricSupplementNamedFoodGoesToLookup() async throws {
         let context = try makeContext()
         let coordinator = makeCoordinator(

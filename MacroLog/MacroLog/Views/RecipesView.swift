@@ -46,6 +46,7 @@ struct RecipesView: View {
             .alert("New recipe", isPresented: $showNamePrompt) {
                 TextField("Name", text: $newName)
                 Button("Create") { createRecipe() }
+                    .disabled(newName.trimmingCharacters(in: .whitespaces).isEmpty)
                 Button("Cancel", role: .cancel) {}
             } message: {
                 Text("Name it, then add the ingredients.")
@@ -70,8 +71,11 @@ struct RecipesView: View {
     }
 
     private func deleteRecipes(_ offsets: IndexSet) {
-        for index in offsets {
-            modelContext.delete(recipes[index])
+        // Capture the targets before deleting — removing from a live @Query
+        // array while indexing into it risks hitting shifted indices.
+        let targets = offsets.map { recipes[$0] }
+        for recipe in targets {
+            modelContext.delete(recipe)
         }
     }
 }
@@ -92,7 +96,7 @@ struct RecipeDetailView: View {
             }
 
             Section {
-                ForEach(recipe.ingredients) { ingredient in
+                ForEach(recipe.sortedIngredients) { ingredient in
                     ingredientRow(ingredient)
                 }
                 .onDelete(perform: deleteIngredients)
@@ -129,6 +133,11 @@ struct RecipeDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .sheet(isPresented: $showIngredientEditor) {
             IngredientEditorView { ingredient in
+                ingredient.sortOrder = recipe.nextSortOrder
+                // Insert explicitly before wiring the relationship — relying
+                // on relationship-cascade insert for an object appended to an
+                // already-persisted parent is flaky on some SwiftData builds.
+                modelContext.insert(ingredient)
                 recipe.ingredients.append(ingredient)
                 try? modelContext.save()
             }
@@ -145,8 +154,12 @@ struct RecipeDetailView: View {
     }
 
     private func deleteIngredients(_ offsets: IndexSet) {
-        for index in offsets {
-            modelContext.delete(recipe.ingredients[index])
+        // Offsets are positions in the SORTED array the ForEach displays —
+        // resolve against the same ordering, captured before any deletion.
+        let sorted = recipe.sortedIngredients
+        let targets = offsets.map { sorted[$0] }
+        for ingredient in targets {
+            modelContext.delete(ingredient)
         }
     }
 

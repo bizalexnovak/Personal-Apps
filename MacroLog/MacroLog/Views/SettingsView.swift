@@ -77,7 +77,6 @@ struct ProfileSettingsView: View {
     @AppStorage(BodyKeys.sex) private var sexRaw = BiologicalSex.male.rawValue
     @AppStorage(BodyKeys.activity) private var activityRaw = ActivityLevel.moderate.rawValue
 
-    @FocusState private var fieldFocused: Bool
     @State private var showHeightPicker = false
     @State private var showWeightPicker = false
 
@@ -101,10 +100,8 @@ struct ProfileSettingsView: View {
             Section("You") {
                 TextField("First name", text: $firstName)
                     .textContentType(.givenName)
-                    .focused($fieldFocused)
                 TextField("Last name", text: $lastName)
                     .textContentType(.familyName)
-                    .focused($fieldFocused)
             }
 
             Section {
@@ -203,7 +200,6 @@ struct ProfileSettingsView: View {
             .keyboardType(.decimalPad)
             .multilineTextAlignment(.trailing)
             .frame(maxWidth: width)
-            .focused($fieldFocused)
     }
 }
 
@@ -227,7 +223,6 @@ struct GoalsSettingsView: View {
     @AppStorage(BodyKeys.goal) private var goalRaw = GoalType.maintain.rawValue
 
     @State private var appliedMessageVisible = false
-    @FocusState private var fieldFocused: Bool
 
     private var sex: BiologicalSex { BiologicalSex(rawValue: sexRaw) ?? .male }
     private var activity: ActivityLevel { ActivityLevel(rawValue: activityRaw) ?? .moderate }
@@ -311,7 +306,6 @@ struct GoalsSettingsView: View {
                 .keyboardType(.decimalPad)
                 .multilineTextAlignment(.trailing)
                 .frame(maxWidth: 100)
-                .focused($fieldFocused)
         }
     }
 

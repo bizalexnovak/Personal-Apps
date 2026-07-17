@@ -125,4 +125,52 @@ final class LocalMealParserTests: XCTestCase {
     func testEmptyTextReturnsNothing() {
         XCTAssertTrue(LocalMealParser.parse("   ").isEmpty)
     }
+
+    func testLeadingMacrosAttachToTheNextItem() {
+        // Macros spoken before the item ("300 calories, chicken") must not
+        // be dropped — they park and attach to the next named item.
+        let items = LocalMealParser.parse("300 calories and chicken")
+        XCTAssertEqual(items.count, 1)
+        XCTAssertEqual(items[0].name, "chicken")
+        XCTAssertEqual(items[0].calories, 300)
+    }
+
+    func testSpelledOutMacroNumbers() {
+        let items = LocalMealParser.parse("chicken, eleven grams of protein")
+        XCTAssertEqual(items.count, 1)
+        XCTAssertEqual(items[0].name, "chicken")
+        XCTAssertEqual(items[0].protein, 11)
+    }
+
+    func testMacroKeywordInProductNameIsNotAMacro() {
+        // "2 protein bars" states a count, not a protein amount.
+        let items = LocalMealParser.parse("2 protein bars")
+        XCTAssertEqual(items.count, 1)
+        XCTAssertEqual(items[0].name, "protein bars")
+        XCTAssertEqual(items[0].quantity, 2, accuracy: 0.001)
+        XCTAssertNil(items[0].protein)
+    }
+
+    func testArticleBetweenAmountAndUnit() {
+        let items = LocalMealParser.parse("half a cup of rice")
+        XCTAssertEqual(items[0].name, "rice")
+        XCTAssertEqual(items[0].quantity, 0.5, accuracy: 0.001)
+        XCTAssertEqual(items[0].unit, "cup")
+    }
+
+    func testLargeVolumeWaterUnits() {
+        // pint/quart/gallon must be recognized so WaterConversion gets the
+        // real unit instead of its 8-oz "serving" fallback.
+        let items = LocalMealParser.parse("2 pints of water")
+        XCTAssertEqual(items[0].name, "water")
+        XCTAssertEqual(items[0].quantity, 2, accuracy: 0.001)
+        XCTAssertEqual(items[0].unit, "pints")
+    }
+
+    func testMacrosOnlyPhraseStillCreatesAnEntry() {
+        // The whole-phrase fallback carries parked macros instead of losing them.
+        let items = LocalMealParser.parse("300 calories")
+        XCTAssertEqual(items.count, 1)
+        XCTAssertEqual(items[0].calories, 300)
+    }
 }

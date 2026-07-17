@@ -67,8 +67,9 @@ previous day.
   listening / review pieces used by both the Log tab and the Siri screen.)
 - **Scan Label**: a **live scanner** (`LiveLabelScannerView`) reads the camera
   feed with on-device Vision text recognition and **auto-captures the frame as
-  soon as it recognizes a nutrition label** ("Nutrition Facts", "Calories",
-  "Serving…") — no shutter (tap to grab it manually as a fallback). That frame
+  soon as it recognizes a nutrition or supplement facts label** ("Nutrition
+  Facts", "Supplement Facts", "Calories", "Serving…", vitamin/creatine/caffeine
+  wording) — no shutter (tap to grab it manually as a fallback). That frame
   goes to Claude (vision) which reads calories/protein/carbs/fat, micronutrients,
   and serving size straight off the label; label data is authoritative, so USDA
   lookup is skipped. The product name is rarely on the facts panel, so right

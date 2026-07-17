@@ -70,6 +70,11 @@ enum SupplementConversion {
     /// monohydrate powder"). Anything else in the name ("creatine gummies",
     /// "creatine protein blend") means a real caloric product — those must go
     /// through the normal lookup so their calories aren't zeroed.
+    ///
+    /// Deliberate trade-off: branded phrasings ("Optimum Nutrition creatine")
+    /// also fall through to USDA rather than dose-guessing here — brand words
+    /// are unbounded, and a wrong zero-calorie guess is worse than a lookup.
+    /// Say the bare name ("5 grams of creatine") for direct dose logging.
     private static let creatineWords: Set<String> = [
         "creatine", "monohydrate", "micronized", "powder", "supplement",
         "scoop", "scoops", "unflavored", "unflavoured", "hcl",

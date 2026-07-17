@@ -67,7 +67,7 @@ final class MealCaptureCoordinator: ObservableObject {
     /// (typing a meal while the Log tab happens to be in Scan mode must still
     /// say "Analyzing your meal…", not "Reading the label…").
     enum WorkKind {
-        case parsingText, readingLabel, estimatingDish, saving
+        case parsingText, readingLabel, estimatingDish
 
         /// The ONE mapping from operation to spinner text — every status
         /// string the capture flow shows comes from here.
@@ -76,7 +76,6 @@ final class MealCaptureCoordinator: ObservableObject {
             case .parsingText: return "Analyzing your meal…"
             case .readingLabel: return "Reading the label…"
             case .estimatingDish: return "Estimating from your photo…"
-            case .saving: return "Saving…"
             }
         }
     }
@@ -134,7 +133,11 @@ final class MealCaptureCoordinator: ObservableObject {
             // unmatched cards the user completes by hand.
             if Self.isConnectivityError(error) {
                 requests = LocalMealParser.parse(text)
-                notice = "No connection — understood on device. Water and supplements log normally; tap Edit on anything unmatched to type its numbers."
+                // A timeout can be a slow-but-reachable server, not a dead
+                // zone — say so instead of claiming "no connection".
+                notice = (error as? URLError)?.code == .timedOut
+                    ? "Slow or no connection — understood on device instead. Double-check the numbers, or re-log later for a full parse."
+                    : "No connection — understood on device. Water and supplements log normally; tap Edit on anything unmatched to type its numbers."
             } else {
                 errorMessage = error.localizedDescription
                 isWorking = false
@@ -200,13 +203,18 @@ final class MealCaptureCoordinator: ObservableObject {
         self.context = context
         workKind = .readingLabel
         isWorking = true
+        notice = nil
         logDate = Date()
 
         let label: LabelNutrition
         do {
             label = try await labelScanner.scan(imageData: imageData)
         } catch {
-            errorMessage = error.localizedDescription
+            // Vision has no on-device fallback — but a dead zone shouldn't
+            // read as a mysterious failure; point at the paths that DO work.
+            errorMessage = Self.isConnectivityError(error)
+                ? "No connection — reading a label needs the internet. Voice and typing still work offline: say or type the label's numbers instead."
+                : error.localizedDescription
             isWorking = false
             return
         }
@@ -255,13 +263,16 @@ final class MealCaptureCoordinator: ObservableObject {
         self.context = context
         workKind = .estimatingDish
         isWorking = true
+        notice = nil
         logDate = Date()
 
         let dish: EstimatedDish
         do {
             dish = try await dishEstimator.estimate(imageData: imageData)
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = Self.isConnectivityError(error)
+                ? "No connection — dish estimates need the internet. Voice and typing still work offline."
+                : error.localizedDescription
             isWorking = false
             return
         }
@@ -325,12 +336,19 @@ final class MealCaptureCoordinator: ObservableObject {
 
     /// True for errors that mean "the network is unreachable/unusable right
     /// now" — the cue to fall back to on-device parsing rather than fail.
+    /// The TLS/certificate codes cover captive portals (hotel/plane Wi-Fi
+    /// that intercepts requests before login), which present as security
+    /// errors rather than no-connection errors.
     private static func isConnectivityError(_ error: Error) -> Bool {
         guard let urlError = error as? URLError else { return false }
         switch urlError.code {
         case .notConnectedToInternet, .networkConnectionLost, .timedOut,
              .cannotConnectToHost, .cannotFindHost, .dnsLookupFailed,
-             .dataNotAllowed, .internationalRoamingOff:
+             .dataNotAllowed, .internationalRoamingOff,
+             .secureConnectionFailed, .serverCertificateUntrusted,
+             .serverCertificateHasBadDate, .serverCertificateHasUnknownRoot,
+             .serverCertificateNotYetValid,
+             .appTransportSecurityRequiresSecureConnection:
             return true
         default:
             return false
@@ -483,7 +501,8 @@ final class MealCaptureCoordinator: ObservableObject {
 
     func saveAll() async {
         guard canSaveAll, let context, let session = review else { return }
-        workKind = .saving
+        // No workKind here: the review screen stays up for the whole save, so
+        // the AnalyzingView spinner (which reads workingText) never shows.
         isWorking = true
         defer { isWorking = false }
         let entries = session.items.compactMap { item in

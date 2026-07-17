@@ -35,6 +35,11 @@ final class SpeechCaptureController: ObservableObject {
     private var task: SFSpeechRecognitionTask?
     private var silenceTimer: Timer?
     private var lastSpeechAt = Date()
+    /// Set (sticky for this app run) after an on-device-only session errors
+    /// before hearing anything — the usual sign the locale claims on-device
+    /// support but the model assets were never downloaded. Subsequent sessions
+    /// use server-based recognition instead of failing forever.
+    private var preferServerRecognition = false
 
     /// Silence window after which listening auto-stops (once we've heard something).
     private let silenceCutoff: TimeInterval = 2.0
@@ -99,11 +104,15 @@ final class SpeechCaptureController: ObservableObject {
 
             let request = SFSpeechAudioBufferRecognitionRequest()
             request.shouldReportPartialResults = true
-            // Keep transcription working with zero signal: force on-device
+            // Keep transcription working with zero signal: prefer on-device
             // recognition when the locale supports it. Server recognition
             // simply fails offline, and modern on-device dictation is strong —
-            // contextualStrings still apply.
-            if recognizer.supportsOnDeviceRecognition {
+            // contextualStrings still apply. `supportsOnDeviceRecognition`
+            // only reports LOCALE capability, not whether the on-device model
+            // is actually downloaded — if an on-device session errors with
+            // nothing heard, `preferServerRecognition` is set and this app run
+            // falls back to server-based recognition (see handle(result:error:)).
+            if recognizer.supportsOnDeviceRecognition, !preferServerRecognition {
                 request.requiresOnDeviceRecognition = true
             }
             // Bias recognition toward food/brand vocabulary the acoustic model
@@ -161,6 +170,17 @@ final class SpeechCaptureController: ObservableObject {
             // Recognizer errors mid-stream: keep whatever we heard; only fail
             // if there's nothing to keep.
             if transcript.isEmpty {
+                // An on-device session that dies before hearing anything is
+                // usually a missing on-device model — retry once via server
+                // instead of showing "didn't catch that" forever. (If the
+                // device is offline too, the server session errors with
+                // requiresOnDeviceRecognition false and falls through to the
+                // normal failure below — no retry loop.)
+                if request?.requiresOnDeviceRecognition == true, !preferServerRecognition {
+                    preferServerRecognition = true
+                    Task { await restart() }
+                    return
+                }
                 cleanup()
                 state = .failed("Didn't catch that — try again.")
             } else {

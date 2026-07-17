@@ -147,9 +147,18 @@ struct ClaudeMealParsingService: MealParsing {
 
     /// Leading first-person verbs: "I ate/drank/had/took/have/got a ...".
     /// Shared with LocalMealParser so both strip the same lead-ins.
+    /// Compiled once — the offline parser calls this per segment.
+    private static let verbRegex = try! NSRegularExpression(
+        pattern: #"^(?:i\s+)?(?:ate|drank|had|have|got|grabbed|made|ordered|consumed|took|take|taken)\s+"#,
+        options: [.caseInsensitive]
+    )
+
     static func stripLeadingVerbs(_ text: String) -> String {
-        let verbPattern = #"^(?:i\s+)?(?:ate|drank|had|have|got|grabbed|made|ordered|consumed|took|take|taken)\s+"#
-        return replacingFirstMatch(in: text, pattern: verbPattern, with: "")
+        verbRegex.stringByReplacingMatches(
+            in: text, options: [],
+            range: NSRange(text.startIndex..., in: text),
+            withTemplate: ""
+        )
     }
 
     private static func replacingFirstMatch(in text: String, pattern: String, with replacement: String) -> String {
@@ -178,28 +187,54 @@ enum LocalMealParser {
         guard !trimmed.isEmpty else { return [] }
 
         var items: [FoodItemRequest] = []
+        // Macros spoken BEFORE any named item ("300 calories, chicken") park
+        // here and attach to the next named item instead of being dropped.
+        var pendingMacros: FoodItemRequest?
         for segment in split(trimmed) {
-            guard let parsed = parseSegment(segment) else { continue }
+            guard var parsed = parseSegment(segment) else { continue }
             if parsed.name.isEmpty {
-                // A macros-only segment ("…, 300 calories") belongs to the
-                // item before it.
-                guard parsed.hasExplicitMacros, var last = items.popLast() else { continue }
-                last.calories = parsed.calories ?? last.calories
-                last.protein = parsed.protein ?? last.protein
-                last.carbs = parsed.carbs ?? last.carbs
-                last.fat = parsed.fat ?? last.fat
-                items.append(last)
+                guard parsed.hasExplicitMacros else { continue }
+                if var last = items.popLast() {
+                    // "…, 300 calories" belongs to the item before it.
+                    last.calories = parsed.calories ?? last.calories
+                    last.protein = parsed.protein ?? last.protein
+                    last.carbs = parsed.carbs ?? last.carbs
+                    last.fat = parsed.fat ?? last.fat
+                    items.append(last)
+                } else {
+                    var pending = pendingMacros ?? FoodItemRequest(name: "", quantity: 1, unit: "serving")
+                    pending.calories = parsed.calories ?? pending.calories
+                    pending.protein = parsed.protein ?? pending.protein
+                    pending.carbs = parsed.carbs ?? pending.carbs
+                    pending.fat = parsed.fat ?? pending.fat
+                    pendingMacros = pending
+                }
             } else {
+                if let pending = pendingMacros {
+                    parsed.calories = parsed.calories ?? pending.calories
+                    parsed.protein = parsed.protein ?? pending.protein
+                    parsed.carbs = parsed.carbs ?? pending.carbs
+                    parsed.fat = parsed.fat ?? pending.fat
+                    pendingMacros = nil
+                }
                 items.append(parsed)
             }
         }
         // Never return nothing for non-empty text — fall back to one item
-        // carrying the whole phrase so the entry can still be created.
+        // carrying the whole phrase (plus any parked macros) so the entry can
+        // still be created.
         if items.isEmpty {
-            items = [FoodItemRequest(
+            var item = FoodItemRequest(
                 name: ClaudeMealParsingService.cleanName(trimmed),
                 quantity: 1, unit: "serving"
-            )]
+            )
+            if let pending = pendingMacros {
+                item.calories = pending.calories
+                item.protein = pending.protein
+                item.carbs = pending.carbs
+                item.fat = pending.fat
+            }
+            items = [item]
         }
         return items
     }
@@ -212,25 +247,52 @@ enum LocalMealParser {
             .filter { !$0.isEmpty }
     }
 
+    // Compiled once — a multi-segment parse otherwise recompiles each pattern
+    // dozens of times, synchronously on the main actor. Numbers accept both
+    // digits and spelled-out words ("eleven grams of protein").
+    private static let numberToken = #"(\d+(?:\.\d+)?|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)"#
+    private static let caloriesRegex = compiled(#"\#(numberToken)\s*(?:kcal|calories?|cals?)\b"#)
+    // Protein/carbs/fat REQUIRE a gram unit or "of" after the number —
+    // otherwise product names like "2 protein bars" or "a protein shake"
+    // would be misread as a stated macro and mangled.
+    private static let proteinRegex = compiled(#"\#(numberToken)(?:\s*(?:g|grams?)\b(?:\s+of)?|\s+of)\s+protein\b"#)
+    private static let carbsRegex = compiled(#"\#(numberToken)(?:\s*(?:g|grams?)\b(?:\s+of)?|\s+of)\s+carb(?:s|ohydrates?)?\b"#)
+    private static let fatRegex = compiled(#"\#(numberToken)(?:\s*(?:g|grams?)\b(?:\s+of)?|\s+of)\s+fat\b"#)
+    /// Quantities additionally accept articles and vague amounts ("a bottle
+    /// of water", "half a cup", "a couple slices") — macros deliberately don't.
+    private static let amountToken = #"(\d+(?:\.\d+)?|a|an|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|half|couple|few)"#
+    private static let amountRegex = compiled(#"^\#(amountToken)\s+(.+)$"#)
+    private static let unitRegex = compiled(#"^([a-z]+)\s+(?:of\s+)?(.+)$"#)
+
+    private static func compiled(_ pattern: String) -> NSRegularExpression {
+        // Patterns are compile-time constants; a failure here is a programmer
+        // error, not an input error.
+        try! NSRegularExpression(pattern: pattern, options: [.caseInsensitive])
+    }
+
     private static func parseSegment(_ raw: String) -> FoodItemRequest? {
         var s = ClaudeMealParsingService.stripLeadingVerbs(
             raw.trimmingCharacters(in: .whitespaces)
         )
 
         // Spoken numbers first, so "300" isn't mistaken for a quantity.
-        let calories = extractMacro(&s, pattern: #"(\d+(?:\.\d+)?)\s*(?:kcal|calories?|cals?)\b"#)
-        let protein = extractMacro(&s, pattern: #"(\d+(?:\.\d+)?)\s*(?:g|grams?)?\s*(?:of\s+)?protein\b"#)
-        let carbs = extractMacro(&s, pattern: #"(\d+(?:\.\d+)?)\s*(?:g|grams?)?\s*(?:of\s+)?carb(?:s|ohydrates?)?\b"#)
-        let fat = extractMacro(&s, pattern: #"(\d+(?:\.\d+)?)\s*(?:g|grams?)?\s*(?:of\s+)?fat\b"#)
+        let calories = extractMacro(&s, regex: Self.caloriesRegex)
+        let protein = extractMacro(&s, regex: Self.proteinRegex)
+        let carbs = extractMacro(&s, regex: Self.carbsRegex)
+        let fat = extractMacro(&s, regex: Self.fatRegex)
 
-        // Leading "<amount> [unit] [of] <name>".
+        // Leading "<amount> [article] [unit] [of] <name>".
         var quantity = 1.0
         var unit = "serving"
-        let amountPattern = #"^(\d+(?:\.\d+)?|a|an|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|half|couple|few)\s+(.+)$"#
-        if let (qtyToken, rest) = firstMatch(in: s, pattern: amountPattern) {
+        if let (qtyToken, rest) = firstMatch(in: s, regex: Self.amountRegex) {
             quantity = Double(qtyToken) ?? numberWords[qtyToken.lowercased()] ?? 1
-            var remainder = rest
-            if let (unitToken, name) = firstMatch(in: remainder, pattern: #"^([a-z]+)\s+(?:of\s+)?(.+)$"#),
+            // Skip an article between the amount and the unit so "half a cup
+            // of rice" resolves to 0.5 cup of rice, not "cup of rice".
+            var remainder = rest.replacingOccurrences(
+                of: #"^(?:a|an|the)\s+"#, with: "",
+                options: [.regularExpression, .caseInsensitive]
+            )
+            if let (unitToken, name) = firstMatch(in: remainder, regex: Self.unitRegex),
                knownUnits.contains(unitToken.lowercased()) {
                 unit = unitToken.lowercased()
                 remainder = name
@@ -253,22 +315,21 @@ enum LocalMealParser {
         )
     }
 
-    /// Pull the first match's number out of `text`, removing the matched
-    /// phrase so it doesn't leak into the item name.
-    private static func extractMacro(_ text: inout String, pattern: String) -> Double? {
-        guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]),
-              let match = regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)),
+    /// Pull the first match's number (digits or a spelled-out word) out of
+    /// `text`, removing the matched phrase so it doesn't leak into the name.
+    private static func extractMacro(_ text: inout String, regex: NSRegularExpression) -> Double? {
+        guard let match = regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)),
               let valueRange = Range(match.range(at: 1), in: text),
-              let fullRange = Range(match.range, in: text),
-              let value = Double(text[valueRange])
+              let fullRange = Range(match.range, in: text)
         else { return nil }
+        let token = String(text[valueRange])
+        guard let value = Double(token) ?? numberWords[token.lowercased()] else { return nil }
         text.removeSubrange(fullRange)
         return value
     }
 
-    private static func firstMatch(in text: String, pattern: String) -> (String, String)? {
-        guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]),
-              let match = regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)),
+    private static func firstMatch(in text: String, regex: NSRegularExpression) -> (String, String)? {
+        guard let match = regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)),
               match.numberOfRanges >= 3,
               let first = Range(match.range(at: 1), in: text),
               let second = Range(match.range(at: 2), in: text)
@@ -287,7 +348,8 @@ enum LocalMealParser {
         "cup", "cups", "glass", "glasses", "bottle", "bottles", "can", "cans",
         "slice", "slices", "piece", "pieces", "scoop", "scoops", "serving", "servings",
         "pill", "pills", "tablet", "tablets", "capsule", "capsules",
-        "ml", "milliliter", "milliliters", "l", "liter", "liters",
+        "ml", "milliliter", "milliliters", "l", "liter", "liters", "litre", "litres",
+        "pint", "pints", "quart", "quarts", "gallon", "gallons",
         "tbsp", "tablespoon", "tablespoons", "tsp", "teaspoon", "teaspoons",
         "bar", "bars", "packet", "packets", "bowl", "bowls", "handful", "handfuls",
         "strip", "strips", "container", "containers", "bag", "bags",

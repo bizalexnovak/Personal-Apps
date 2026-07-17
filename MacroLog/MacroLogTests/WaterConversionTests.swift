@@ -95,6 +95,18 @@ final class SupplementConversionTests: XCTestCase {
         ))
     }
 
+    func testBrandedSupplementNamesGoToLookupByDesign() {
+        // Brand words are unbounded, so branded/flavored phrasings fall
+        // through to the USDA lookup (which carries real data) instead of
+        // dose-guessing — documented trade-off, not an accident.
+        XCTAssertNil(SupplementConversion.match(
+            for: FoodItemRequest(name: "Optimum Nutrition creatine monohydrate", quantity: 1, unit: "scoop")
+        ))
+        XCTAssertNil(SupplementConversion.match(
+            for: FoodItemRequest(name: "caffeine gum", quantity: 1, unit: "piece")
+        ))
+    }
+
     func testDoseUnitConversions() {
         XCTAssertEqual(SupplementConversion.creatineGrams(quantity: 5000, unit: "mg"), 5, accuracy: 0.001)
         XCTAssertEqual(SupplementConversion.caffeineMilligrams(quantity: 100, unit: "mg"), 100, accuracy: 0.001)
