@@ -6,42 +6,79 @@ import SwiftData
 /// editor on the Today tab.
 struct RecipesView: View {
     @Query(sort: \Recipe.name) private var recipes: [Recipe]
+    @Query(sort: \Meal.timestamp, order: .reverse) private var meals: [Meal]
     @Environment(\.modelContext) private var modelContext
     @Environment(\.appBackground) private var appBackground
 
+    @AppStorage(TargetKeys.calories) private var calorieTarget = 2000.0
+    @AppStorage(TargetKeys.protein) private var proteinTarget = 150.0
+    @AppStorage(TargetKeys.carbs) private var carbTarget = 250.0
+    @AppStorage(TargetKeys.fat) private var fatTarget = 70.0
+
     @State private var showNamePrompt = false
     @State private var newName = ""
+    @State private var showSearch = false
+    /// Briefly flags the recipe just quick-logged, for the checkmark feedback.
+    @State private var justLoggedID: UUID?
+    /// Recomputed each time the tab is shown / data changes so the "now"
+    /// window and macro gaps stay current without churning on every render.
+    @State private var recommendations: [RecipeRecommendation] = []
 
     var body: some View {
         NavigationStack {
             List {
-                if recipes.isEmpty {
-                    ContentUnavailableView(
-                        "No recipes yet",
-                        systemImage: "book",
-                        description: Text("Create one with the + button, or open a meal on the Today tab and tap \u{201C}Save as recipe\u{201D}.")
-                    )
-                } else {
-                    ForEach(recipes) { recipe in
-                        NavigationLink {
-                            RecipeDetailView(recipe: recipe)
-                        } label: {
-                            recipeRow(recipe)
+                if !recommendations.isEmpty {
+                    Section {
+                        ForEach(recommendations) { rec in
+                            recommendationRow(rec)
                         }
+                    } header: {
+                        Text("Recommended for now")
+                    } footer: {
+                        Text("Ranked by time of day, how far you are from today\u{2019}s macro goals, and what you log most.")
                     }
-                    .onDelete(perform: deleteRecipes)
+                }
+
+                Section {
+                    if recipes.isEmpty {
+                        ContentUnavailableView(
+                            "No recipes yet",
+                            systemImage: "book",
+                            description: Text("Create one with the + button, search the web with the magnifying glass, or open a meal on the Today tab and tap \u{201C}Save as recipe\u{201D}.")
+                        )
+                    } else {
+                        ForEach(recipes) { recipe in
+                            NavigationLink {
+                                RecipeDetailView(recipe: recipe)
+                            } label: {
+                                recipeRow(recipe)
+                            }
+                        }
+                        .onDelete(perform: deleteRecipes)
+                    }
+                } header: {
+                    if !recipes.isEmpty { Text("All recipes") }
                 }
             }
             .appBackground(appBackground)
             .navigationTitle("Recipes")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button { showSearch = true } label: {
+                        Image(systemName: "magnifyingglass")
+                    }
+                    .accessibilityLabel("Search recipes online")
+                }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { newName = ""; showNamePrompt = true } label: {
                         Image(systemName: "plus")
                     }
                     .accessibilityLabel("New recipe")
                 }
+            }
+            .sheet(isPresented: $showSearch) {
+                RecipeSearchView()
             }
             .alert("New recipe", isPresented: $showNamePrompt) {
                 TextField("Name", text: $newName)
@@ -52,6 +89,59 @@ struct RecipesView: View {
                 Text("Name it, then add the ingredients.")
             }
         }
+        .onAppear(perform: refreshRecommendations)
+        // Re-rank when a meal is logged (macro gaps shift) or recipes change.
+        .onChange(of: meals) { _, _ in refreshRecommendations() }
+        .onChange(of: recipes) { _, _ in refreshRecommendations() }
+    }
+
+    private func refreshRecommendations() {
+        let calendar = Calendar.current
+        var intake = DayIntake.none
+        for meal in meals where calendar.isDateInToday(meal.timestamp) {
+            let t = meal.totals
+            intake.calories += t.calories
+            intake.protein += t.protein
+            intake.carbs += t.carbs
+            intake.fat += t.fat
+        }
+        let targets = MacroTargets(
+            calories: calorieTarget, protein: proteinTarget,
+            carbs: carbTarget, fat: fatTarget
+        )
+        recommendations = RecipeRecommender.recommend(
+            recipes: recipes, targets: targets, intake: intake, limit: 4
+        )
+    }
+
+    private func recommendationRow(_ rec: RecipeRecommendation) -> some View {
+        HStack(spacing: 12) {
+            NavigationLink {
+                RecipeDetailView(recipe: rec.recipe)
+            } label: {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(rec.recipe.name)
+                    Text(rec.reason)
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(Capsule().fill(.quaternary.opacity(0.6)))
+                    Text("\(Int(rec.recipe.totalCalories.rounded())) kcal · P \(Int(rec.recipe.totalProtein.rounded()))g · C \(Int(rec.recipe.totalCarbs.rounded()))g · F \(Int(rec.recipe.totalFat.rounded()))g")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            Button {
+                quickLog(rec.recipe)
+            } label: {
+                Image(systemName: justLoggedID == rec.recipe.id ? "checkmark.circle.fill" : "plus.circle.fill")
+                    .font(.title2)
+                    .foregroundStyle(justLoggedID == rec.recipe.id ? Color.green : Color.accentColor)
+            }
+            .buttonStyle(.borderless)
+            .accessibilityLabel("Log \(rec.recipe.name) now")
+        }
     }
 
     private func recipeRow(_ recipe: Recipe) -> some View {
@@ -60,6 +150,20 @@ struct RecipesView: View {
             Text("\(recipe.ingredients.count) ingredient\(recipe.ingredients.count == 1 ? "" : "s") · \(Int(recipe.totalCalories.rounded())) kcal")
                 .font(.caption)
                 .foregroundStyle(.secondary)
+        }
+    }
+
+    /// Log a recommended recipe straight to today and record the preference so
+    /// the recommender learns from it.
+    private func quickLog(_ recipe: Recipe) {
+        recipe.recordLogged()
+        modelContext.insert(recipe.makeMeal())
+        try? modelContext.save()
+        withAnimation { justLoggedID = recipe.id }
+        Task {
+            try? await Task.sleep(for: .seconds(1.6))
+            withAnimation { justLoggedID = nil }
+            refreshRecommendations() // reflect the new intake in the ranking
         }
     }
 
@@ -93,6 +197,19 @@ struct RecipeDetailView: View {
         List {
             Section("Name") {
                 TextField("Recipe name", text: $recipe.name)
+            }
+
+            Section {
+                Picker("Best for", selection: Binding(
+                    get: { recipe.slot },
+                    set: { recipe.slot = $0 }
+                )) {
+                    ForEach(MealSlot.allCases, id: \.self) { slot in
+                        Text(slot.label).tag(slot)
+                    }
+                }
+            } footer: {
+                Text("When this recipe fits — used to time recommendations.")
             }
 
             Section {
@@ -164,6 +281,7 @@ struct RecipeDetailView: View {
     }
 
     private func logAsMeal() {
+        recipe.recordLogged()
         modelContext.insert(recipe.makeMeal())
         try? modelContext.save()
         justLogged = true

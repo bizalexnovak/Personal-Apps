@@ -96,6 +96,9 @@ struct ContentView: View {
         .environment(\.metricPalette, palette)
         .preferredColorScheme(resolvedScheme)
         .onReceive(Timer.publish(every: 60, on: .main, in: .common).autoconnect()) { now = $0 }
+        // Seed the starter recipe library once, so the Recipes tab and its
+        // recommendations have something to show on a fresh install.
+        .task { RecipeSeed.seedIfNeeded(in: AppModelContainer.shared.mainContext) }
         // Re-evaluate the end-of-day reminder as the app backgrounds/foregrounds
         // so it reflects the latest totals and time of day.
         .onChange(of: scenePhase) { _, phase in

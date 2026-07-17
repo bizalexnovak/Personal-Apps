@@ -95,7 +95,30 @@ logged meal as a recipe from the meal editor ("Save as recipe"), or build one
 by hand (+ → name → add ingredients with their macros). Opening a recipe shows
 its ingredients and totals; **"Log this recipe today"** stamps a fresh copy
 into the diary as a normal meal. The meal editor also has **"Log this meal
-again today"** for one-off repeats without saving a recipe.
+again today"** for one-off repeats without saving a recipe. A **starter
+library** of common recipes (spread across breakfast/lunch/dinner/snack) is
+seeded once on first launch, so the tab is useful before you've saved anything.
+
+**Recommended for now.** The top of the Recipes tab ranks recipes for the
+current moment (`RecipeRecommender`) by three signals:
+
+- **Time of day** — breakfast-y recipes in the morning, dinners in the evening
+  (each recipe carries a *meal slot* you can change in its detail view).
+- **Macro gaps** — as the day fills in, recipes heavy in whatever macro is
+  furthest from its goal rise (short on protein but near your carb/fat goals →
+  protein-heavy recipes get promoted). At the start of the day, with nothing
+  logged, this is neutral and time of day leads.
+- **Preference** — recipes you log more often (and recently) drift up over
+  time, so the list learns your favourites.
+
+Each suggestion shows why ("Dinner · high protein") and has a one-tap log.
+
+**Recipe search.** The magnifying glass on the Recipes tab searches the web and
+imports a result as a recipe. It queries every configured provider at once:
+**TheMealDB** (free, always on, no key), plus **Spoonacular** and **Edamam**
+if you add their free API keys under Settings → API keys. Imports are scaled to
+a single serving; when a source doesn't include nutrition, each ingredient's
+macros are filled from the USDA lookup the app already uses.
 
 **Offline / bad reception.** Logging never requires a connection. Speech
 recognition runs **on device** (when the locale supports it), and if the

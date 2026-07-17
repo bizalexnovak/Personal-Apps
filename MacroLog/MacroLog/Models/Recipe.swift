@@ -1,6 +1,38 @@
 import Foundation
 import SwiftData
 
+/// Which part of the day a recipe suits, used by the recommender to surface
+/// breakfast-y recipes in the morning, dinners in the evening, etc. Stored on
+/// `Recipe` as a raw string so adding cases needs no schema migration.
+enum MealSlot: String, CaseIterable {
+    case breakfast, lunch, dinner, snack, any
+
+    var label: String {
+        switch self {
+        case .breakfast: return "Breakfast"
+        case .lunch: return "Lunch"
+        case .dinner: return "Dinner"
+        case .snack: return "Snack"
+        case .any: return "Any time"
+        }
+    }
+
+    /// The slot that best fits a given hour of the day. The gaps between the
+    /// three main meals (mid-afternoon, late night) fall to `snack`.
+    static func current(hour: Int) -> MealSlot {
+        switch hour {
+        case 5..<11: return .breakfast
+        case 11..<15: return .lunch
+        case 17..<22: return .dinner
+        default: return .snack
+        }
+    }
+
+    static func current(_ date: Date = .now, calendar: Calendar = .current) -> MealSlot {
+        current(hour: calendar.component(.hour, from: date))
+    }
+}
+
 /// A saved, reusable meal template: a named list of ingredients with known
 /// macros/micros. Logging a recipe stamps a fresh `Meal` copy into the diary —
 /// the recipe itself never appears in the diary or the day's totals.
@@ -9,14 +41,38 @@ final class Recipe {
     @Attribute(.unique) var id: UUID
     var name: String
     var createdAt: Date
+    /// `MealSlot.rawValue` — which part of the day this recipe suits. Drives
+    /// the time-of-day component of the recommender. Defaults to `any`.
+    var mealSlot: String = MealSlot.any.rawValue
+    /// How many times this recipe has been logged, and when last — the
+    /// preference signal the recommender uses to learn favourites over time.
+    var timesLogged: Int = 0
+    var lastLoggedAt: Date?
     @Relationship(deleteRule: .cascade, inverse: \RecipeIngredient.recipe)
     var ingredients: [RecipeIngredient]
 
-    init(id: UUID = UUID(), name: String, createdAt: Date = .now, ingredients: [RecipeIngredient] = []) {
+    init(
+        id: UUID = UUID(), name: String, createdAt: Date = .now,
+        mealSlot: MealSlot = .any, ingredients: [RecipeIngredient] = []
+    ) {
         self.id = id
         self.name = name
         self.createdAt = createdAt
+        self.mealSlot = mealSlot.rawValue
         self.ingredients = ingredients
+    }
+
+    /// Typed accessor for the stored raw `mealSlot` string.
+    var slot: MealSlot {
+        get { MealSlot(rawValue: mealSlot) ?? .any }
+        set { mealSlot = newValue.rawValue }
+    }
+
+    /// Record that this recipe was just logged — bumps the preference counters
+    /// the recommender reads. Call at every site that logs the recipe.
+    func recordLogged(at date: Date = .now) {
+        timesLogged += 1
+        lastLoggedAt = date
     }
 
     var totalCalories: Double { ingredients.reduce(0) { $0 + $1.calories } }
@@ -56,6 +112,8 @@ final class Recipe {
     }
 
     /// A recipe captured from an already-logged meal (its items as they are).
+    /// The meal's time of day seeds the recipe's slot so a lunch saved as a
+    /// recipe starts life tagged as lunch.
     static func from(meal: Meal, named name: String) -> Recipe {
         let ingredients = meal.items.enumerated().map { index, item in
             RecipeIngredient(
@@ -67,7 +125,7 @@ final class Recipe {
                 sortOrder: index
             )
         }
-        return Recipe(name: name, ingredients: ingredients)
+        return Recipe(name: name, mealSlot: MealSlot.current(meal.timestamp), ingredients: ingredients)
     }
 }
 

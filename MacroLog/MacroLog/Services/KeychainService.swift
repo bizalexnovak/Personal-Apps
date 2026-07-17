@@ -7,6 +7,10 @@ enum KeychainService {
     enum Key: String, CaseIterable {
         case claudeAPIKey = "claude_api_key"
         case usdaAPIKey = "usda_api_key"
+        // Optional recipe-search providers (see RecipeSearchService).
+        case spoonacularAPIKey = "spoonacular_api_key"
+        case edamamAppID = "edamam_app_id"
+        case edamamAppKey = "edamam_app_key"
     }
 
     private static let service = "com.alexnovak.macrolog.keys"

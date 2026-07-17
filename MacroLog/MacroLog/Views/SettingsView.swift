@@ -656,8 +656,18 @@ struct APIKeysSettingsView: View {
     @Environment(\.appBackground) private var appBackground
     @State private var claudeKey = ""
     @State private var usdaKey = ""
+    @State private var spoonacularKey = ""
+    @State private var edamamAppID = ""
+    @State private var edamamAppKey = ""
     @State private var hasSavedClaudeKey = false
+    @State private var hasSavedSpoonacular = false
+    @State private var hasSavedEdamam = false
     @State private var savedMessageVisible = false
+
+    private var hasInput: Bool {
+        ![claudeKey, usdaKey, spoonacularKey, edamamAppID, edamamAppKey]
+            .allSatisfy { $0.isEmpty }
+    }
 
     var body: some View {
         Form {
@@ -672,19 +682,46 @@ struct APIKeysSettingsView: View {
                 SecureField("USDA API key (optional)", text: $usdaKey)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
+            } footer: {
+                Text("Keys are stored in the iOS Keychain, never in UserDefaults. Without a USDA key the app uses the free public DEMO_KEY, which is rate-limited — get a free key at api.data.gov.")
+            }
 
-                Button("Save keys") {
-                    saveKeys()
-                }
-                .disabled(claudeKey.isEmpty && usdaKey.isEmpty)
+            Section {
+                SecureField(
+                    hasSavedSpoonacular ? "Spoonacular key (saved)" : "Spoonacular key",
+                    text: $spoonacularKey
+                )
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+
+                SecureField(
+                    hasSavedEdamam ? "Edamam App ID (saved)" : "Edamam App ID",
+                    text: $edamamAppID
+                )
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+
+                SecureField(
+                    hasSavedEdamam ? "Edamam App Key (saved)" : "Edamam App Key",
+                    text: $edamamAppKey
+                )
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+            } header: {
+                Text("Recipe search (optional)")
+            } footer: {
+                Text("Powers the recipe search on the Recipes tab. TheMealDB works with no key; Spoonacular (spoonacular.com/food-api) and Edamam (developer.edamam.com) each offer a free tier with far more recipes and nutrition included.")
+            }
+
+            Section {
+                Button("Save keys") { saveKeys() }
+                    .disabled(!hasInput)
 
                 if savedMessageVisible {
                     Label("Saved to Keychain", systemImage: "checkmark.circle.fill")
                         .foregroundStyle(.green)
                         .font(.subheadline)
                 }
-            } footer: {
-                Text("Keys are stored in the iOS Keychain, never in UserDefaults. Without a USDA key the app uses the free public DEMO_KEY, which is rate-limited — get a free key at api.data.gov.")
             }
         }
         .appBackground(appBackground)
@@ -693,6 +730,9 @@ struct APIKeysSettingsView: View {
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
             hasSavedClaudeKey = KeychainService.get(.claudeAPIKey) != nil
+            hasSavedSpoonacular = KeychainService.get(.spoonacularAPIKey) != nil
+            hasSavedEdamam = KeychainService.get(.edamamAppID) != nil
+                && KeychainService.get(.edamamAppKey) != nil
         }
     }
 
@@ -706,6 +746,21 @@ struct APIKeysSettingsView: View {
             KeychainService.set(usdaKey, for: .usdaAPIKey)
             usdaKey = ""
         }
+        if !spoonacularKey.isEmpty {
+            KeychainService.set(spoonacularKey, for: .spoonacularAPIKey)
+            spoonacularKey = ""
+            hasSavedSpoonacular = true
+        }
+        if !edamamAppID.isEmpty {
+            KeychainService.set(edamamAppID, for: .edamamAppID)
+            edamamAppID = ""
+        }
+        if !edamamAppKey.isEmpty {
+            KeychainService.set(edamamAppKey, for: .edamamAppKey)
+            edamamAppKey = ""
+        }
+        hasSavedEdamam = KeychainService.get(.edamamAppID) != nil
+            && KeychainService.get(.edamamAppKey) != nil
         savedMessageVisible = true
         Task {
             try? await Task.sleep(for: .seconds(2))
