@@ -7,7 +7,10 @@ import SwiftData
 enum AppModelContainer {
     /// Single source of truth for the persisted model set — reused by the app
     /// container and by the in-memory containers the tests spin up.
-    static let models: [any PersistentModel.Type] = [Meal.self, FoodItem.self, RememberedMatch.self]
+    static let models: [any PersistentModel.Type] = [
+        Meal.self, FoodItem.self, RememberedMatch.self,
+        Recipe.self, RecipeIngredient.self,
+    ]
 
     static let shared: ModelContainer = {
         let schema = Schema(models)

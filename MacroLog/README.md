@@ -83,10 +83,18 @@ previous day.
 
 **Quick add.** The Log tab's idle screen shows one-tap chips for items you log
 often (`MealSuggestions` groups history by name + unit and keeps repeats
-logged ≥ 2×, ranked by frequency, e.g. "24 oz water", "Chobani greek
-yogurt"). Tapping a chip
+logged ≥ 2×). Ranking is **time-of-day aware**: logs within ±2 h of the
+current clock time count double on top of overall frequency, so mornings lead
+with your usual breakfasts and evenings with your usual snacks. Tapping a chip
 re-logs a copy with its last-known macros and micronutrients immediately — no
 parsing or lookup.
+
+**Recipes.** The **Recipes** tab keeps reusable meal templates: save any
+logged meal as a recipe from the meal editor ("Save as recipe"), or build one
+by hand (+ → name → add ingredients with their macros). Opening a recipe shows
+its ingredients and totals; **"Log this recipe today"** stamps a fresh copy
+into the diary as a normal meal. The meal editor also has **"Log this meal
+again today"** for one-off repeats without saving a recipe.
 
 **Offline / bad reception.** Logging never requires a connection. Speech
 recognition runs **on device** (when the locale supports it), and if the
@@ -131,7 +139,8 @@ raw text ─▶ ClaudeMealParsingService ─▶ [FoodItemRequest] ─▶ USDANut
   lookup are behind protocols (`MealParsing`, `NutritionLookup`) so tests inject mocks.
 - **Intents/** — `LogMealIntent` + `MacroLogShortcuts` (App Intents / Siri phrases).
 - **Views/** — Today (day-by-day diary), Log (voice/scan/type capture surface),
-  Edit Meal (adjust quantity, swap USDA match, manual macro override), Trends
+  Edit Meal (adjust quantity, swap USDA match, manual macro override, re-log,
+  save as recipe), Recipes (saved meal templates, one-tap re-log), Trends
   (multi-day chart), Settings (Profile / Daily goals / Appearance / API keys /
   Developer sub-screens), Onboarding.
 - **Theme** — four appearance modes: **Light**, **Dark**, **Auto** (flips

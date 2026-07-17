@@ -70,6 +70,7 @@ struct ContentView: View {
                 tabScreen(HomeView(), AppTab.today)
                 tabScreen(MealListView(), AppTab.log)
                 tabScreen(HistoryView(), AppTab.trends)
+                tabScreen(RecipesView(), AppTab.recipes)
                 tabScreen(SettingsView(), AppTab.settings)
             }
             .ignoresSafeArea(.container, edges: .top) // let screens go under the status bar

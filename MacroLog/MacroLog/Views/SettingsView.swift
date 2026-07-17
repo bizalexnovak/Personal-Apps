@@ -129,12 +129,7 @@ struct ProfileSettingsView: View {
             }
         }
         .scrollDismissesKeyboard(.interactively)
-        .toolbar {
-            ToolbarItemGroup(placement: .keyboard) {
-                Spacer()
-                Button { fieldFocused = false } label: { Image(systemName: "checkmark") }
-            }
-        }
+        .keyboardDismissBar()
         .appBackground(appBackground)
         .navigationTitle("Profile")
         .navigationBarTitleDisplayMode(.inline)
@@ -298,12 +293,7 @@ struct GoalsSettingsView: View {
             }
         }
         .scrollDismissesKeyboard(.interactively)
-        .toolbar {
-            ToolbarItemGroup(placement: .keyboard) {
-                Spacer()
-                Button { fieldFocused = false } label: { Image(systemName: "checkmark") }
-            }
-        }
+        .keyboardDismissBar()
         .appBackground(appBackground)
         .navigationTitle("Daily goals")
         .navigationBarTitleDisplayMode(.inline)
@@ -632,6 +622,7 @@ private struct ReminderEditorView: View {
                     Text("Leave blank to use the default shown above. Once-a-day reminders using the default show your live shortfall (e.g. \u{201C}still 24 oz of water short\u{201D}).")
                 }
             }
+            .keyboardDismissBar()
             .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -703,6 +694,7 @@ struct APIKeysSettingsView: View {
             }
         }
         .appBackground(appBackground)
+        .keyboardDismissBar()
         .navigationTitle("API keys")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {

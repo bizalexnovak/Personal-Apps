@@ -35,6 +35,7 @@ struct MealListView: View {
             content
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .appBackground(appBackground)
+                .keyboardDismissBar()
                 .animation(.easeInOut(duration: 0.3), value: coordinator.review?.id)
                 .navigationTitle(navigationTitle)
                 .navigationBarTitleDisplayMode(.inline)
@@ -357,6 +358,7 @@ struct MealListView: View {
                     Text("Example: \u{201C}two eggs, a slice of toast, and a coffee with milk.\u{201D}")
                 }
             }
+            .keyboardDismissBar()
             .navigationTitle("Type a meal")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

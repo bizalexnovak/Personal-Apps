@@ -141,6 +141,33 @@ struct ListeningView: View {
     }
 }
 
+/// Keyboard accessory bar with one "hide keyboard" button — the standard
+/// keyboard-with-chevron icon — shared by every screen that shows a keyboard.
+/// Dismissal resigns the first responder globally, so no per-screen FocusState
+/// wiring is needed.
+struct KeyboardDismissBar: ViewModifier {
+    func body(content: Content) -> some View {
+        content.toolbar {
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button {
+                    UIApplication.shared.sendAction(
+                        #selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil
+                    )
+                } label: {
+                    Image(systemName: "keyboard.chevron.compact.down")
+                }
+                .accessibilityLabel("Hide keyboard")
+            }
+        }
+    }
+}
+
+extension View {
+    /// Adds the shared hide-keyboard accessory bar above the keyboard.
+    func keyboardDismissBar() -> some View { modifier(KeyboardDismissBar()) }
+}
+
 /// Spinner + status text while parsing / reading a label / estimating a dish.
 /// The text always comes from MealCaptureCoordinator.WorkKind — the single
 /// operation→string mapping — so different screens can't drift apart.

@@ -28,6 +28,7 @@ struct CaptureView: View {
             }
             .animation(.easeInOut(duration: 0.3), value: coordinator.review?.id)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .keyboardDismissBar()
             .navigationTitle(navigationTitle)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

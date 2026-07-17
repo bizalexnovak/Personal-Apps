@@ -36,6 +36,7 @@ enum AppTab {
     static let log = 0
     static let today = 1
     static let trends = 2
+    static let recipes = 4
     static let settings = 3
 }
 

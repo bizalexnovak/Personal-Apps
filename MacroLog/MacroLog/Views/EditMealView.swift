@@ -13,7 +13,10 @@ struct EditorSheet: Identifiable {
 
 struct EditMealView: View {
     @Bindable var meal: Meal
+    @Environment(\.modelContext) private var modelContext
     @State private var sheet: EditorSheet?
+    @State private var justDuplicated = false
+    @State private var justSavedRecipe = false
 
     var body: some View {
         List {
@@ -43,7 +46,32 @@ struct EditMealView: View {
                     sheet = EditorSheet(item: item, kind: kind)
                 }
             }
+
+            Section {
+                Button {
+                    duplicateToToday()
+                } label: {
+                    Label(
+                        justDuplicated ? "Added to today" : "Log this meal again today",
+                        systemImage: justDuplicated ? "checkmark.circle.fill" : "plus.square.on.square"
+                    )
+                }
+                .disabled(justDuplicated)
+
+                Button {
+                    saveAsRecipe()
+                } label: {
+                    Label(
+                        justSavedRecipe ? "Saved to Recipes" : "Save as recipe",
+                        systemImage: justSavedRecipe ? "checkmark.circle.fill" : "book.closed"
+                    )
+                }
+                .disabled(justSavedRecipe)
+            } footer: {
+                Text("\u{201C}Log again\u{201D} adds a copy of this meal to today's diary. \u{201C}Save as recipe\u{201D} keeps it on the Recipes tab for one-tap re-logging anytime.")
+            }
         }
+        .keyboardDismissBar()
         .navigationTitle("Edit Meal")
         .navigationBarTitleDisplayMode(.inline)
         .sheet(item: $sheet) { target in
@@ -53,6 +81,40 @@ struct EditMealView: View {
             case .swap:
                 FoodSwapView(item: target.item)
             }
+        }
+    }
+
+    /// Inserts a fresh copy of this meal (items, macros, micros) timestamped
+    /// now, so a repeated meal can be re-logged without re-capturing it.
+    private func duplicateToToday() {
+        let copies = meal.items.map { item in
+            let copy = FoodItem(
+                name: item.name, quantity: item.quantity, unit: item.unit,
+                calories: item.calories, protein: item.protein,
+                carbs: item.carbs, fat: item.fat,
+                matchConfidence: item.matchConfidence
+            )
+            copy.microsData = item.microsData
+            return copy
+        }
+        let duplicate = Meal(timestamp: .now, rawText: meal.rawText, items: copies)
+        modelContext.insert(duplicate)
+        try? modelContext.save()
+        justDuplicated = true
+        Task {
+            try? await Task.sleep(for: .seconds(2))
+            justDuplicated = false
+        }
+    }
+
+    /// Snapshots this meal as a reusable recipe on the Recipes tab.
+    private func saveAsRecipe() {
+        modelContext.insert(Recipe.from(meal: meal, named: meal.displayName))
+        try? modelContext.save()
+        justSavedRecipe = true
+        Task {
+            try? await Task.sleep(for: .seconds(2))
+            justSavedRecipe = false
         }
     }
 }
@@ -228,6 +290,7 @@ private struct FoodSwapView: View {
                 }
             }
             .searchable(text: $query, prompt: "Search foods")
+            .keyboardDismissBar()
             .onSubmit(of: .search) {
                 Task { await search() }
             }
@@ -315,6 +378,7 @@ private struct MacroOverrideSheet: View {
                     }
                 }
             }
+            .keyboardDismissBar()
             .navigationTitle("Override Macros")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

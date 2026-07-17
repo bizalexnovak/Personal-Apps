@@ -15,6 +15,7 @@ struct AppTabBar: View {
         .init(tab: AppTab.log, title: "Log", icon: "fork.knife"),
         .init(tab: AppTab.today, title: "Today", icon: "chart.bar.fill"),
         .init(tab: AppTab.trends, title: "Trends", icon: "chart.xyaxis.line"),
+        .init(tab: AppTab.recipes, title: "Recipes", icon: "book.closed"),
         .init(tab: AppTab.settings, title: "Settings", icon: "gearshape"),
     ]
 

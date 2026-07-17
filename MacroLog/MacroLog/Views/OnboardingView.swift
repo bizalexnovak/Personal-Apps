@@ -55,6 +55,7 @@ struct OnboardingView: View {
                 .disabled(claudeKey.trimmingCharacters(in: .whitespaces).isEmpty)
                 .frame(maxWidth: .infinity)
             }
+            .keyboardDismissBar()
         }
         .interactiveDismissDisabled(claudeKey.trimmingCharacters(in: .whitespaces).isEmpty)
     }
