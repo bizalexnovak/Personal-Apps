@@ -654,23 +654,45 @@ private struct ReminderEditorView: View {
 
 struct APIKeysSettingsView: View {
     @Environment(\.appBackground) private var appBackground
+    @State private var inviteCode = ""
+    @State private var proxyURL = UserDefaults.standard.string(forKey: ClaudeEndpoint.proxyURLDefaultsKey) ?? ""
     @State private var claudeKey = ""
     @State private var usdaKey = ""
     @State private var spoonacularKey = ""
     @State private var edamamAppID = ""
     @State private var edamamAppKey = ""
+    @State private var hasSavedInviteCode = false
     @State private var hasSavedClaudeKey = false
     @State private var hasSavedSpoonacular = false
     @State private var hasSavedEdamam = false
     @State private var savedMessageVisible = false
 
     private var hasInput: Bool {
-        ![claudeKey, usdaKey, spoonacularKey, edamamAppID, edamamAppKey]
+        ![inviteCode, claudeKey, usdaKey, spoonacularKey, edamamAppID, edamamAppKey]
             .allSatisfy { $0.isEmpty }
+            || proxyURL != (UserDefaults.standard.string(forKey: ClaudeEndpoint.proxyURLDefaultsKey) ?? "")
     }
 
     var body: some View {
         Form {
+            Section {
+                TextField(
+                    hasSavedInviteCode ? "Invite code (saved)" : "Invite code",
+                    text: $inviteCode
+                )
+                .textInputAutocapitalization(.characters)
+                .autocorrectionDisabled()
+
+                TextField("Proxy URL (advanced, optional)", text: $proxyURL)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .keyboardType(.URL)
+            } header: {
+                Text("Invite code")
+            } footer: {
+                Text("Friends & family: just the code you were given. The proxy URL only matters if the app wasn't built with one baked in. An invite code takes priority over a personal Claude key below.")
+            }
+
             Section {
                 SecureField(
                     hasSavedClaudeKey ? "Claude API key (saved)" : "Claude API key",
@@ -682,6 +704,8 @@ struct APIKeysSettingsView: View {
                 SecureField("USDA API key (optional)", text: $usdaKey)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
+            } header: {
+                Text("Personal keys")
             } footer: {
                 Text("Keys are stored in the iOS Keychain, never in UserDefaults. Without a USDA key the app uses the free public DEMO_KEY, which is rate-limited — get a free key at api.data.gov.")
             }
@@ -729,6 +753,7 @@ struct APIKeysSettingsView: View {
         .navigationTitle("API keys")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
+            hasSavedInviteCode = KeychainService.get(.proxyInviteCode) != nil
             hasSavedClaudeKey = KeychainService.get(.claudeAPIKey) != nil
             hasSavedSpoonacular = KeychainService.get(.spoonacularAPIKey) != nil
             hasSavedEdamam = KeychainService.get(.edamamAppID) != nil
@@ -737,6 +762,18 @@ struct APIKeysSettingsView: View {
     }
 
     private func saveKeys() {
+        if !inviteCode.isEmpty {
+            KeychainService.set(
+                inviteCode.trimmingCharacters(in: .whitespaces), for: .proxyInviteCode
+            )
+            inviteCode = ""
+            hasSavedInviteCode = true
+        }
+        // The URL override is saved as typed, including clearing it.
+        UserDefaults.standard.set(
+            proxyURL.trimmingCharacters(in: .whitespaces),
+            forKey: ClaudeEndpoint.proxyURLDefaultsKey
+        )
         if !claudeKey.isEmpty {
             KeychainService.set(claudeKey, for: .claudeAPIKey)
             claudeKey = ""

@@ -36,13 +36,28 @@ If you use a different group ID, update it in both `.entitlements` files and in
 the home screen → **+** → search **MacroLog** to add the small or medium widget.
 The app refreshes it whenever the day's totals change (`WidgetCenter.reloadAllTimelines`).
 
-On first launch the app asks for:
+On first launch the app asks how it should reach Claude — two paths
+(`ClaudeEndpoint` resolves every AI request through whichever is configured):
 
-- **Claude API key** (required) — create one at console.anthropic.com
-- **USDA API key** (optional) — the free public `DEMO_KEY` is used until you add
-  your own free key from [api.data.gov](https://api.data.gov)
+- **Invite code** (friends & family): a short code from whoever shared the
+  app. Requests go through the MacroLog proxy (`server/` — a Cloudflare
+  Worker holding the operator's Claude key), which also **meters each
+  person's tokens and estimated cost per month** for capacity/pricing
+  decisions and enforces a monthly per-person spend cap. Bake the deployed
+  Worker URL into `ClaudeEndpoint.defaultProxyURL` so testers only ever type
+  their code. Setup: `server/README.md`.
+- **My own API key** (developer path): a Claude key from
+  console.anthropic.com, used directly against Anthropic. Optionally a
+  **USDA API key** — the free public `DEMO_KEY` is used until you add your
+  own free key from [api.data.gov](https://api.data.gov).
 
-Both keys are stored in the iOS Keychain, never in UserDefaults.
+Codes and keys are stored in the iOS Keychain, never in UserDefaults.
+
+**Distributing to testers:** see `docs/TESTFLIGHT.md` for the full
+enroll → archive → TestFlight walkthrough (and why free-signed builds stop
+launching after 7 days), plus `docs/privacy-policy.md` ready to host for the
+external-testing requirement. `MacroLog/PrivacyInfo.xcprivacy` (required
+privacy manifest) ships in the app target.
 
 ## Siri & voice capture
 

@@ -14,7 +14,7 @@ enum MealParsingError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .missingAPIKey:
-            return "No Claude API key is set. Add one in Settings."
+            return "No invite code or Claude API key is set. Add one in Settings."
         case .httpError(let status, _):
             return "The Claude API returned an error (HTTP \(status))."
         case .emptyResponse:
@@ -50,19 +50,11 @@ struct ClaudeMealParsingService: MealParsing {
     var session: URLSession = .shared
 
     func parse(_ mealText: String) async throws -> [FoodItemRequest] {
-        guard let apiKey = KeychainService.get(.claudeAPIKey) else {
-            throw MealParsingError.missingAPIKey
-        }
-
-        var request = URLRequest(url: URL(string: "https://api.anthropic.com/v1/messages")!)
-        request.httpMethod = "POST"
+        // Proxy (invite code) or direct (own key) — resolved centrally.
         // Fail fast in dead zones — the coordinator falls back to on-device
         // parsing instead of leaving the user staring at a spinner for the
         // 60 s system default.
-        request.timeoutInterval = 20
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
-        request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
+        var request = try ClaudeEndpoint.makeRequest(timeout: 20)
 
         let body = MessagesRequest(
             model: "claude-sonnet-4-6",

@@ -104,16 +104,9 @@ struct ClaudeLabelScanningService: LabelScanning {
     var session: URLSession = .shared
 
     func scan(imageData: Data) async throws -> LabelNutrition {
-        guard let apiKey = KeychainService.get(.claudeAPIKey) else {
-            throw MealParsingError.missingAPIKey
-        }
-
-        var request = URLRequest(url: URL(string: "https://api.anthropic.com/v1/messages")!)
-        request.httpMethod = "POST"
-        request.timeoutInterval = 30 // image upload; fail fast in dead zones
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
-        request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
+        // Proxy (invite code) or direct (own key) — resolved centrally.
+        // 30 s: image upload; still fails fast in dead zones.
+        var request = try ClaudeEndpoint.makeRequest(timeout: 30)
 
         let body = VisionRequest(
             model: "claude-sonnet-4-6",

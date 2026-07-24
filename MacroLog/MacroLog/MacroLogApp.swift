@@ -17,7 +17,7 @@ struct ContentView: View {
     @StateObject private var coordinator = MealCaptureCoordinator()
     @StateObject private var hub = CaptureHub.shared
     @ObservedObject private var pendingStore = PendingMealStore.shared
-    @State private var showOnboarding = KeychainService.get(.claudeAPIKey) == nil
+    @State private var showOnboarding = !ClaudeEndpoint.isConfigured
     // Skip the welcome splash when Siri launched us straight into an action.
     @State private var showWelcome = !CaptureHub.shared.hasPendingLaunchAction
     @State private var keyboardVisible = false

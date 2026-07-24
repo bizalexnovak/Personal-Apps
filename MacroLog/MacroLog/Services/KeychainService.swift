@@ -7,6 +7,9 @@ enum KeychainService {
     enum Key: String, CaseIterable {
         case claudeAPIKey = "claude_api_key"
         case usdaAPIKey = "usda_api_key"
+        /// Invite code for the MacroLog proxy (friends & family — no Anthropic
+        /// account needed; see ClaudeEndpoint).
+        case proxyInviteCode = "proxy_invite_code"
         // Optional recipe-search providers (see RecipeSearchService).
         case spoonacularAPIKey = "spoonacular_api_key"
         case edamamAppID = "edamam_app_id"
