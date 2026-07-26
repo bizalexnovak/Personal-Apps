@@ -97,4 +97,17 @@ final class RecipeSeedTests: XCTestCase {
         let slots = Set(RecipeSeed.build().map(\.slot))
         XCTAssertTrue(slots.isSuperset(of: [.breakfast, .lunch, .dinner, .snack]))
     }
+
+    func testCookedSeedsHaveInstructionsAndAssemblyOnesDoNot() {
+        let byName = Dictionary(
+            uniqueKeysWithValues: RecipeSeed.build().map { ($0.name, $0.instructions) }
+        )
+        // Every dinner involves actual cooking — steps required.
+        for recipe in RecipeSeed.build() where recipe.slot == .dinner {
+            XCTAssertFalse(recipe.instructions.isEmpty, "\(recipe.name) should have steps")
+        }
+        // Assembly-only items deliberately have none.
+        XCTAssertEqual(byName["Protein Bar"], "")
+        XCTAssertEqual(byName["Trail Mix"], "")
+    }
 }

@@ -41,6 +41,10 @@ struct RecipeSearchResult: Identifiable {
     /// Provider's per-serving macros, shown as a preview. Nil when the source
     /// carries no nutrition (macros are computed from ingredients on import).
     var previewPerServing: MacroSummary?
+    /// Preparation steps when the source provides them (TheMealDB, and
+    /// Spoonacular's analyzed steps). Sources without steps (Edamam) link to
+    /// the original recipe instead. Empty when there's nothing to say.
+    var instructions: String = ""
 }
 
 /// A source the recipe search can pull from. `isConfigured` gates whether it's
@@ -88,6 +92,17 @@ enum RecipeSearchSupport {
         return (qty, unit.isEmpty ? "serving" : unit)
     }
 
+    /// Spoonacular's raw `instructions` string can carry HTML (`<ol><li>…`).
+    /// Strip tags and collapse the whitespace they leave behind.
+    static func strippingHTML(_ text: String) -> String {
+        let noTags = text.replacingOccurrences(
+            of: "<[^>]+>", with: " ", options: .regularExpression
+        )
+        return noTags
+            .replacingOccurrences(of: "\\s{2,}", with: " ", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     /// A decimal, a simple fraction ("1/2"), or nil.
     private static func number(from token: String) -> Double? {
         if let d = Double(token) { return d }
@@ -114,8 +129,10 @@ struct SpoonacularProvider: RecipeSearchProviding {
         var comps = URLComponents(string: "https://api.spoonacular.com/recipes/complexSearch")!
         comps.queryItems = [
             .init(name: "query", value: query),
-            .init(name: "number", value: "10"),
+            .init(name: "number", value: "15"),
             .init(name: "addRecipeNutrition", value: "true"),
+            // Also returns analyzedInstructions/instructions for import.
+            .init(name: "addRecipeInformation", value: "true"),
             .init(name: "apiKey", value: apiKey),
         ]
         var request = URLRequest(url: comps.url!)
@@ -134,6 +151,8 @@ struct SpoonacularProvider: RecipeSearchProviding {
         let servings: Int?
         let dishTypes: [String]?
         let nutrition: Nutrition?
+        let analyzedInstructions: [InstructionSet]?
+        let instructions: String?
 
         struct Nutrition: Decodable {
             let nutrients: [Nutrient]?
@@ -145,6 +164,22 @@ struct SpoonacularProvider: RecipeSearchProviding {
             let amount: Double?
             let unit: String?
             let nutrients: [Nutrient]?
+        }
+        struct InstructionSet: Decodable {
+            let steps: [Step]?
+            struct Step: Decodable { let number: Int?; let step: String }
+        }
+
+        /// Numbered steps from the analyzed set; falls back to the raw
+        /// instructions string (tags stripped) when analysis is missing.
+        var instructionsText: String {
+            let steps = (analyzedInstructions ?? []).flatMap { $0.steps ?? [] }
+            if !steps.isEmpty {
+                return steps.enumerated()
+                    .map { "\($0.offset + 1). \($0.element.step)" }
+                    .joined(separator: "\n")
+            }
+            return RecipeSearchSupport.strippingHTML(instructions ?? "")
         }
 
         func toResult() -> RecipeSearchResult {
@@ -173,7 +208,8 @@ struct SpoonacularProvider: RecipeSearchProviding {
                 id: "spoonacular-\(id)", title: title, sourceName: "Spoonacular",
                 imageURL: image.flatMap(URL.init(string:)), servings: servings,
                 slot: RecipeSearchSupport.slot(title: title, tags: dishTypes ?? []),
-                ingredients: ingredients, previewPerServing: preview
+                ingredients: ingredients, previewPerServing: preview,
+                instructions: instructionsText
             )
         }
 
@@ -261,7 +297,9 @@ struct EdamamProvider: RecipeSearchProviding {
                 sourceName: "Edamam", imageURL: image.flatMap(URL.init(string:)),
                 servings: servings,
                 slot: RecipeSearchSupport.slot(title: label, tags: (mealType ?? []) + (dishType ?? [])),
-                ingredients: mapped, previewPerServing: preview
+                ingredients: mapped, previewPerServing: preview,
+                // Edamam's API doesn't include steps — point at the source.
+                instructions: url.map { "Full steps: \($0)" } ?? ""
             )
         }
     }
@@ -277,14 +315,39 @@ struct TheMealDBProvider: RecipeSearchProviding {
     var isConfigured: Bool { true } // free, keyless — always available
 
     func search(_ query: String) async throws -> [RecipeSearchResult] {
-        var comps = URLComponents(string: "https://www.themealdb.com/api/json/v1/1/search.php")!
-        comps.queryItems = [.init(name: "s", value: query)]
+        // Name search first ("chicken parmesan" → titles containing it)…
+        let byName = try await fetchMeals(
+            path: "search.php", item: .init(name: "s", value: query)
+        )
+        if !byName.isEmpty { return byName.map { Self.toResult($0) } }
+
+        // …then fall back to ingredient search ("shrimp" → dishes using it).
+        // filter.php returns only id/name/thumb, so each hit needs a detail
+        // lookup — capped to keep a broad term from firing dozens of calls.
+        let stubs = try await fetchMeals(
+            path: "filter.php", item: .init(name: "i", value: query)
+        )
+        var results: [RecipeSearchResult] = []
+        for stub in stubs.prefix(8) {
+            guard let id = stub["idMeal"] ?? nil else { continue }
+            let detail = try await fetchMeals(
+                path: "lookup.php", item: .init(name: "i", value: id)
+            )
+            if let full = detail.first {
+                results.append(Self.toResult(full))
+            }
+        }
+        return results
+    }
+
+    private func fetchMeals(path: String, item: URLQueryItem) async throws -> [[String: String?]] {
+        var comps = URLComponents(string: "https://www.themealdb.com/api/json/v1/1/\(path)")!
+        comps.queryItems = [item]
         var request = URLRequest(url: comps.url!)
         request.timeoutInterval = 15
         let (data, response) = try await session.data(for: request)
         try RecipeSearchError.check(response, data, source: displayName)
-        let decoded = try JSONDecoder().decode(Response.self, from: data)
-        return (decoded.meals ?? []).map { Self.toResult($0) }
+        return try JSONDecoder().decode(Response.self, from: data).meals ?? []
     }
 
     private struct Response: Decodable { let meals: [[String: String?]]? }
@@ -308,7 +371,8 @@ struct TheMealDBProvider: RecipeSearchProviding {
             imageURL: field("strMealThumb").flatMap(URL.init(string:)),
             servings: 1, // TheMealDB doesn't give a serving count
             slot: RecipeSearchSupport.slot(title: title, tags: [field("strCategory") ?? ""]),
-            ingredients: ingredients, previewPerServing: nil
+            ingredients: ingredients, previewPerServing: nil,
+            instructions: field("strInstructions") ?? ""
         )
     }
 }
@@ -418,7 +482,10 @@ enum RecipeImporter {
         // New recipe with its ingredients set at creation — a single insert
         // cascades them (the flaky case is appending to an already-persisted
         // parent, which doesn't apply here).
-        let recipe = Recipe(name: result.title, mealSlot: result.slot, ingredients: built)
+        let recipe = Recipe(
+            name: result.title, mealSlot: result.slot,
+            instructions: result.instructions, ingredients: built
+        )
         context.insert(recipe)
         try? context.save()
         return recipe

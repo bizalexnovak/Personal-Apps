@@ -231,6 +231,21 @@ struct RecipeDetailView: View {
             }
 
             Section {
+                TextField(
+                    "Optional — steps for making it",
+                    text: $recipe.instructions,
+                    axis: .vertical
+                )
+                .lineLimit(2...14)
+            } header: {
+                Text("Instructions")
+            } footer: {
+                if recipe.instructions.isEmpty {
+                    Text("Leave empty for things that need no prep (a bar, a fast-food item).")
+                }
+            }
+
+            Section {
                 Button {
                     logAsMeal()
                 } label: {

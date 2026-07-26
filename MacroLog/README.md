@@ -130,10 +130,20 @@ Each suggestion shows why ("Dinner · high protein") and has a one-tap log.
 
 **Recipe search.** The magnifying glass on the Recipes tab searches the web and
 imports a result as a recipe. It queries every configured provider at once:
-**TheMealDB** (free, always on, no key), plus **Spoonacular** and **Edamam**
-if you add their free API keys under Settings → API keys. Imports are scaled to
-a single serving; when a source doesn't include nutrition, each ingredient's
-macros are filled from the USDA lookup the app already uses.
+**TheMealDB** (free, always on, no key — searched by name, then by ingredient
+when the name search finds nothing), plus **Spoonacular** and **Edamam** if you
+add their free API keys under Settings → API keys. **Without those keys the
+searchable library is only TheMealDB's ~300 recipes — a Spoonacular key takes
+it to 350k+ with per-ingredient nutrition, so add one early.** Imports are
+scaled to a single serving; when a source doesn't include nutrition, each
+ingredient's macros are filled from the USDA lookup the app already uses.
+
+**Instructions.** Recipes carry optional preparation steps, shown and editable
+in the recipe's detail view — deliberately empty for things that need none (a
+protein bar, a fast-food item). The seeded library includes steps for all its
+cooked recipes; imports bring them along when the source has them (TheMealDB's
+full steps, Spoonacular's numbered analyzed steps) and Edamam links to the
+original recipe page instead (its API doesn't include steps).
 
 **Offline / bad reception.** Logging never requires a connection. Speech
 recognition runs **on device** (when the locale supports it), and if the

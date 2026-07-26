@@ -48,17 +48,23 @@ final class Recipe {
     /// preference signal the recommender uses to learn favourites over time.
     var timesLogged: Int = 0
     var lastLoggedAt: Date?
+    /// Preparation steps. Deliberately optional-by-emptiness: a McDonald's
+    /// burger or a protein bar needs no instructions, so the UI only shows
+    /// this when there's something to say.
+    var instructions: String = ""
     @Relationship(deleteRule: .cascade, inverse: \RecipeIngredient.recipe)
     var ingredients: [RecipeIngredient]
 
     init(
         id: UUID = UUID(), name: String, createdAt: Date = .now,
-        mealSlot: MealSlot = .any, ingredients: [RecipeIngredient] = []
+        mealSlot: MealSlot = .any, instructions: String = "",
+        ingredients: [RecipeIngredient] = []
     ) {
         self.id = id
         self.name = name
         self.createdAt = createdAt
         self.mealSlot = mealSlot.rawValue
+        self.instructions = instructions
         self.ingredients = ingredients
     }
 

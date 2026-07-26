@@ -25,6 +25,15 @@ final class RecipeSearchSupportTests: XCTestCase {
         XCTAssertEqual(RecipeSearchSupport.slot(title: "Chocolate Cake", tags: ["Dessert"]), .snack)
         XCTAssertEqual(RecipeSearchSupport.slot(title: "Mystery Dish", tags: []), .any)
     }
+
+    func testStrippingHTMLRemovesTagsAndCollapsesWhitespace() {
+        XCTAssertEqual(
+            RecipeSearchSupport.strippingHTML("<ol><li>Chop.</li><li>Cook.</li></ol>"),
+            "Chop. Cook."
+        )
+        XCTAssertEqual(RecipeSearchSupport.strippingHTML("plain text"), "plain text")
+        XCTAssertEqual(RecipeSearchSupport.strippingHTML(""), "")
+    }
 }
 
 /// Stub lookup so import tests don't hit the network.
@@ -92,5 +101,25 @@ final class RecipeImporterTests: XCTestCase {
         // 400 kcal over 2 servings → 200 per serving (not the stub's 999).
         XCTAssertEqual(recipe.ingredients.first?.calories ?? 0, 200, accuracy: 0.001)
         XCTAssertEqual(recipe.ingredients.first?.protein ?? 0, 40, accuracy: 0.001)
+    }
+
+    func testImportCarriesInstructions() async throws {
+        let context = try makeContext()
+        var result = RecipeSearchResult(
+            id: "z", title: "Stew", sourceName: "TheMealDB", imageURL: nil,
+            servings: 1, slot: .dinner,
+            ingredients: [ImportIngredient(
+                name: "beef", quantity: 1, unit: "lb",
+                calories: 800, protein: 90, carbs: 0, fat: 45
+            )],
+            previewPerServing: nil
+        )
+        result.instructions = "1. Brown the beef.\n2. Simmer 2 hours."
+        let stub = StubLookup(perRequest: NutritionMatch(
+            matchedDescription: "x", calories: 0, protein: 0, carbs: 0, fat: 0,
+            confidence: MatchConfidence.low
+        ))
+        let recipe = await RecipeImporter.makeRecipe(from: result, lookup: stub, into: context)
+        XCTAssertEqual(recipe.instructions, "1. Brown the beef.\n2. Simmer 2 hours.")
     }
 }
