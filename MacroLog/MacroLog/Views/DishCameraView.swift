@@ -51,8 +51,9 @@ struct DishCameraScreen: View {
                         .padding(.top, 24)
                     Spacer()
                     shutterButton
-                        // Sits above the mode switcher pinned at the very bottom.
-                        .padding(.bottom, 92)
+                        // Clears the floating tab bar AND the mode switcher
+                        // pinned above it.
+                        .padding(.bottom, AppTabBar.clearance + 64)
                 }
                 .padding()
             }

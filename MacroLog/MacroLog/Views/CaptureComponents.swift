@@ -50,6 +50,9 @@ struct ListeningView: View {
     var prompt: String
     var subtitle: String?
     var showSkip: Bool = false
+    /// Bottom padding under the Done/Skip buttons. The inline Log tab passes
+    /// the floating tab bar's clearance; the modal capture keeps the default.
+    var bottomClearance: CGFloat = 24
     var onDone: () -> Void
     var onSkip: () -> Void = {}
 
@@ -94,7 +97,7 @@ struct ListeningView: View {
                     .padding(.top, 4)
             }
         }
-        .padding(.bottom, 24)
+        .padding(.bottom, bottomClearance)
     }
 }
 
@@ -209,6 +212,9 @@ struct ScannerScreen: View {
 struct MealReviewView: View {
     @ObservedObject var coordinator: MealCaptureCoordinator
     var onSaved: () -> Void
+    /// Extra space under the save bar. The inline Log tab passes the floating
+    /// tab bar's clearance; the modal Siri capture (no tab bar) passes none.
+    var bottomClearance: CGFloat = 0
 
     var body: some View {
         VStack(spacing: 0) {
@@ -277,6 +283,7 @@ struct MealReviewView: View {
             .disabled(!coordinator.canSaveAll)
         }
         .padding()
+        .padding(.bottom, bottomClearance)
         .background(.bar)
     }
 }

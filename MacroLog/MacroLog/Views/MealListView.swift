@@ -86,7 +86,10 @@ struct MealListView: View {
     @ViewBuilder
     private var content: some View {
         if coordinator.review != nil {
-            MealReviewView(coordinator: coordinator, onSaved: reset)
+            MealReviewView(
+                coordinator: coordinator, onSaved: reset,
+                bottomClearance: AppTabBar.clearance - 16 // saveBar has 16 of its own
+            )
                 .transition(.move(edge: .bottom).combined(with: .opacity))
         } else if coordinator.isWorking {
             AnalyzingView(text: coordinator.workingText)
@@ -105,7 +108,7 @@ struct MealListView: View {
                     } else {
                         Color.clear
                     }
-                    modeSwitcher.padding(.bottom, 28)
+                    modeSwitcher.padding(.bottom, AppTabBar.clearance)
                 }
             case .dish:
                 dishPhase
@@ -181,7 +184,7 @@ struct MealListView: View {
                         if !suggestions.isEmpty { suggestionsStrip }
                         modeSwitcher
                     }
-                    .padding(.bottom, 28)
+                    .padding(.bottom, AppTabBar.clearance)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
@@ -207,7 +210,7 @@ struct MealListView: View {
             } else {
                 Color.clear
             }
-            modeSwitcher.padding(.bottom, 28)
+            modeSwitcher.padding(.bottom, AppTabBar.clearance)
         }
     }
 
@@ -218,6 +221,7 @@ struct MealListView: View {
             prompt: "Listening… what's this item called?",
             subtitle: "Label scanned. Say the name of this food.",
             showSkip: true,
+            bottomClearance: AppTabBar.clearance,
             onDone: { speech.finishListening() },
             onSkip: {
                 speech.cancel()

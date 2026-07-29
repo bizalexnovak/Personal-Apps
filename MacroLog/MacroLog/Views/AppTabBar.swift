@@ -4,6 +4,13 @@ import SwiftUI
 /// "+" capture menu sits *beside* them (not on top). The "+" only shows on the
 /// tabs where it's useful (Today / Trends).
 struct AppTabBar: View {
+    /// Bottom padding for content pinned to the bottom of a NON-scrolling
+    /// screen (the Log tab's mode switcher etc.). The bar floats as a
+    /// safe-area inset, which scroll views honor automatically — but plain
+    /// views inside a NavigationStack don't inherit that inset, so they must
+    /// clear the bar zone (~52 pt of bar + breathing room) explicitly.
+    static let clearance: CGFloat = 80
+
     @Binding var selection: Int
     var showPlus: Bool
 
