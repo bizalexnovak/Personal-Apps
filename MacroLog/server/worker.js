@@ -35,7 +35,8 @@ export default {
         return await proxyMessages(request, env);
       }
       if (url.pathname === "/foods" || url.pathname === "/recipes" ||
-          url.pathname === "/recipes/search") {
+          url.pathname === "/recipes/search" ||
+          url.pathname.startsWith("/suggestions")) {
         return await handleDatabase(request, env, url);
       }
       if (url.pathname.startsWith("/admin/")) {
@@ -61,6 +62,15 @@ async function ensureTables(env) {
   );
   await env.FOODDB.exec(
     "CREATE TABLE IF NOT EXISTS recipes (name_key TEXT PRIMARY KEY, name TEXT, slot TEXT, instructions TEXT, ingredients TEXT, created_at INTEGER)"
+  );
+  await env.FOODDB.exec(
+    "CREATE TABLE IF NOT EXISTS suggestions (id INTEGER PRIMARY KEY AUTOINCREMENT, text TEXT, author TEXT, created_at INTEGER)"
+  );
+  await env.FOODDB.exec(
+    "CREATE TABLE IF NOT EXISTS suggestion_votes (suggestion_id INTEGER, voter TEXT, PRIMARY KEY (suggestion_id, voter))"
+  );
+  await env.FOODDB.exec(
+    "CREATE TABLE IF NOT EXISTS suggestion_comments (id INTEGER PRIMARY KEY AUTOINCREMENT, suggestion_id INTEGER, author TEXT, text TEXT, created_at INTEGER)"
   );
   tablesReady = true;
 }
@@ -166,7 +176,130 @@ async function handleDatabase(request, env, url) {
     return json({ items: results });
   }
 
+  // ---- Suggestions board ----
+  // Every user sees every suggestion (ranked by votes); one vote per person
+  // (toggle); comments; near-duplicate submissions get a nudge instead of
+  // silently posting twice, with an explicit force override.
+
+  // GET /suggestions — the board, plus which ones THIS user has voted for.
+  if (url.pathname === "/suggestions" && request.method === "GET") {
+    const { results } = await env.FOODDB
+      .prepare(
+        `SELECT s.id, s.text, s.author, s.created_at,
+           (SELECT COUNT(*) FROM suggestion_votes v WHERE v.suggestion_id = s.id) AS votes,
+           (SELECT COUNT(*) FROM suggestion_comments c WHERE c.suggestion_id = s.id) AS comments
+         FROM suggestions s ORDER BY votes DESC, s.created_at DESC LIMIT 200`
+      )
+      .all();
+    const mine = await env.FOODDB
+      .prepare("SELECT suggestion_id FROM suggestion_votes WHERE voter = ?")
+      .bind(user)
+      .all();
+    return json({
+      items: results,
+      voted: mine.results.map((r) => r.suggestion_id),
+    });
+  }
+
+  // POST /suggestions {text, force?} — 409 + the similar entries when a
+  // near-duplicate exists and force is not set.
+  if (url.pathname === "/suggestions" && request.method === "POST") {
+    const body = await request.json();
+    const text = String(body.text || "").trim().slice(0, 1000);
+    if (text.length < 5) return json({ error: "suggestion too short" }, 400);
+
+    if (!body.force) {
+      const { results } = await env.FOODDB
+        .prepare(
+          `SELECT s.id, s.text, s.author, s.created_at,
+             (SELECT COUNT(*) FROM suggestion_votes v WHERE v.suggestion_id = s.id) AS votes,
+             (SELECT COUNT(*) FROM suggestion_comments c WHERE c.suggestion_id = s.id) AS comments
+           FROM suggestions s ORDER BY s.created_at DESC LIMIT 500`
+        )
+        .all();
+      const similar = results
+        .filter((s) => similarity(text, s.text) >= 0.6)
+        .slice(0, 3);
+      if (similar.length > 0) {
+        return json({ similar }, 409);
+      }
+    }
+
+    const name = JSON.parse(await env.USERS.get(`user:${user}`)).name || user;
+    const result = await env.FOODDB
+      .prepare("INSERT INTO suggestions (text, author, created_at) VALUES (?,?,?)")
+      .bind(text, name, Date.now())
+      .run();
+    return json({ ok: true, id: result.meta.last_row_id });
+  }
+
+  // POST /suggestions/:id/vote — toggle this user's vote.
+  const voteMatch = url.pathname.match(/^\/suggestions\/(\d+)\/vote$/);
+  if (voteMatch && request.method === "POST") {
+    const id = Number(voteMatch[1]);
+    const inserted = await env.FOODDB
+      .prepare("INSERT OR IGNORE INTO suggestion_votes (suggestion_id, voter) VALUES (?,?)")
+      .bind(id, user)
+      .run();
+    let voted = true;
+    if (inserted.meta.changes === 0) {
+      await env.FOODDB
+        .prepare("DELETE FROM suggestion_votes WHERE suggestion_id = ? AND voter = ?")
+        .bind(id, user)
+        .run();
+      voted = false;
+    }
+    const count = await env.FOODDB
+      .prepare("SELECT COUNT(*) AS n FROM suggestion_votes WHERE suggestion_id = ?")
+      .bind(id)
+      .first();
+    return json({ voted, votes: count.n });
+  }
+
+  // GET/POST /suggestions/:id/comments
+  const commentMatch = url.pathname.match(/^\/suggestions\/(\d+)\/comments$/);
+  if (commentMatch && request.method === "GET") {
+    const { results } = await env.FOODDB
+      .prepare("SELECT author, text, created_at FROM suggestion_comments WHERE suggestion_id = ? ORDER BY created_at LIMIT 200")
+      .bind(Number(commentMatch[1]))
+      .all();
+    return json({ items: results });
+  }
+  if (commentMatch && request.method === "POST") {
+    const body = await request.json();
+    const text = String(body.text || "").trim().slice(0, 1000);
+    if (!text) return json({ error: "empty comment" }, 400);
+    const name = JSON.parse(await env.USERS.get(`user:${user}`)).name || user;
+    await env.FOODDB
+      .prepare("INSERT INTO suggestion_comments (suggestion_id, author, text, created_at) VALUES (?,?,?,?)")
+      .bind(Number(commentMatch[1]), name, text, Date.now())
+      .run();
+    return json({ ok: true });
+  }
+
   return json({ error: "not found" }, 404);
+}
+
+// Word-overlap (Jaccard) similarity for the duplicate nudge. Filler words
+// are dropped so "please add dark mode" ≈ "dark mode", while genuinely
+// different ideas ("barcode scanner" vs "recipe scanner") stay distinct.
+const FILLER = new Set([
+  "a", "an", "the", "to", "for", "of", "in", "on", "it", "is", "be", "and",
+  "or", "i", "we", "you", "would", "like", "want", "please", "add", "app",
+  "can", "could", "should", "that", "this", "with", "have", "make", "more",
+]);
+function similarity(a, b) {
+  const tokens = (t) =>
+    new Set(
+      t.toLowerCase().replace(/[^a-z]+/g, " ").split(/\s+/)
+        .filter((w) => w && !FILLER.has(w))
+    );
+  const ta = tokens(a);
+  const tb = tokens(b);
+  if (ta.size === 0 || tb.size === 0) return 0;
+  let shared = 0;
+  for (const w of ta) if (tb.has(w)) shared += 1;
+  return shared / (ta.size + tb.size - shared);
 }
 
 // MARK: Proxy
@@ -271,6 +404,17 @@ async function handleAdmin(request, env, url) {
   if (deleteMatch && request.method === "DELETE") {
     await env.USERS.delete(`user:${deleteMatch[1]}`);
     return json({ ok: true, deleted: deleteMatch[1] });
+  }
+
+  // Moderation: remove a suggestion (votes and comments included).
+  const suggestionDelete = url.pathname.match(/^\/admin\/suggestions\/(\d+)$/);
+  if (suggestionDelete && request.method === "DELETE" && env.FOODDB) {
+    await ensureTables(env);
+    const id = Number(suggestionDelete[1]);
+    await env.FOODDB.prepare("DELETE FROM suggestion_votes WHERE suggestion_id = ?").bind(id).run();
+    await env.FOODDB.prepare("DELETE FROM suggestion_comments WHERE suggestion_id = ?").bind(id).run();
+    await env.FOODDB.prepare("DELETE FROM suggestions WHERE id = ?").bind(id).run();
+    return json({ ok: true, deleted: id });
   }
 
   if (url.pathname === "/admin/users" && request.method === "GET") {

@@ -326,6 +326,19 @@ Recipes participate too: **"Share to community"** in a recipe's detail view
 publishes it to the shared library, and the recipe search includes a
 **Community** source alongside TheMealDB/Spoonacular/Edamam.
 
+### Community suggestions
+
+Settings → **Community suggestions** is a shared feature-request board
+(invite-code installs; it lives on the proxy server's database). Everyone
+sees every suggestion ranked by votes, votes once each (tap again to
+un-vote), and discusses in comments — the vote counts are the operator's
+prioritization list. Submitting something too close to an existing
+suggestion (word-overlap similarity, filler words ignored) shows the
+existing entry with one-tap voting and a nudge to comment there instead —
+plus a **"mine is different — post anyway"** override, so similar-but-
+distinct ideas are never blocked. The operator can remove entries via
+`DELETE /admin/suggestions/<id>` with the admin token.
+
 ### Recommended goals from body metrics
 
 Settings → **Body & goal** takes your height, weight, age, sex, and activity

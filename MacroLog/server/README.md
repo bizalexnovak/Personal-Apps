@@ -108,6 +108,18 @@ Report columns: requests, tokens in/out, and **estimated cost per person** —
 computed from the model's public per-token pricing (see `PRICES` in
 `worker.js`; update it if the app changes models or Anthropic changes prices).
 
+## Suggestions board moderation
+
+The in-app suggestions board (Settings → Community suggestions) stores its
+entries in the same D1 database. Remove one (votes and comments included):
+
+```bash
+curl -X DELETE https://macrolog-proxy.YOURNAME.workers.dev/admin/suggestions/ID \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+(The ID is visible in the `/suggestions` response, or ask the reporter.)
+
 ## Knobs
 
 - **Per-person monthly cap:** `MONTHLY_COST_CAP_USD` in `wrangler.toml`

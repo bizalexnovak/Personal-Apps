@@ -36,6 +36,11 @@ struct SettingsView: View {
                     Label("Food database", systemImage: "archivebox")
                 }
                 NavigationLink {
+                    SuggestionsView()
+                } label: {
+                    Label("Community suggestions", systemImage: "lightbulb")
+                }
+                NavigationLink {
                     APIKeysSettingsView()
                 } label: {
                     Label("API keys", systemImage: "key.fill")
