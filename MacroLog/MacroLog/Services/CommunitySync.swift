@@ -86,37 +86,46 @@ enum CommunitySync {
 
     // MARK: - Pull
 
+    /// The server pages at 500 rows; keep requesting until caught up (with a
+    /// per-launch page cap so a huge backlog can't stall startup — the next
+    /// launch resumes from the saved cursor).
     @MainActor
-    static func pull(context: ModelContext) async {
+    static func pull(context: ModelContext, maxPages: Int = 10) async {
         guard let (base, code) = ClaudeEndpoint.proxyConfig else { return }
-        var comps = URLComponents(url: base.appendingPathComponent("foods"), resolvingAgainstBaseURL: false)!
-        let since = UserDefaults.standard.double(forKey: cursorKey)
-        comps.queryItems = [URLQueryItem(name: "since", value: String(Int(since)))]
-        var request = URLRequest(url: comps.url!)
-        request.timeoutInterval = 15
-        request.setValue(code, forHTTPHeaderField: "x-macrolog-user")
 
         struct PullResponse: Codable {
             var items: [WireFood]
             var next: Double?
         }
-        guard let (data, response) = try? await session.data(for: request),
-              let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode),
-              let decoded = try? JSONDecoder().decode(PullResponse.self, from: data)
-        else { return }
 
-        for item in decoded.items {
-            CustomFoodStore.addIfNew(CustomFood(
-                name: item.name, brand: item.brand, serving: item.serving,
-                calories: item.calories, protein: item.protein,
-                carbs: item.carbs, fat: item.fat,
-                microsData: item.micros?.data(using: .utf8),
-                source: "community", synced: true
-            ), in: context)
-        }
-        if !decoded.items.isEmpty { try? context.save() }
-        if let next = decoded.next {
-            UserDefaults.standard.set(next, forKey: cursorKey)
+        for _ in 0..<maxPages {
+            var comps = URLComponents(url: base.appendingPathComponent("foods"), resolvingAgainstBaseURL: false)!
+            let since = UserDefaults.standard.double(forKey: cursorKey)
+            comps.queryItems = [URLQueryItem(name: "since", value: String(Int(since)))]
+            var request = URLRequest(url: comps.url!)
+            request.timeoutInterval = 15
+            request.setValue(code, forHTTPHeaderField: "x-macrolog-user")
+
+            guard let (data, response) = try? await session.data(for: request),
+                  let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode),
+                  let decoded = try? JSONDecoder().decode(PullResponse.self, from: data)
+            else { return }
+
+            for item in decoded.items {
+                CustomFoodStore.addIfNew(CustomFood(
+                    name: item.name, brand: item.brand, serving: item.serving,
+                    calories: item.calories, protein: item.protein,
+                    carbs: item.carbs, fat: item.fat,
+                    microsData: item.micros?.data(using: .utf8),
+                    source: "community", synced: true
+                ), in: context)
+            }
+            if !decoded.items.isEmpty { try? context.save() }
+            if let next = decoded.next, next > since {
+                UserDefaults.standard.set(next, forKey: cursorKey)
+            }
+            // A short page means we're caught up.
+            if decoded.items.count < 500 { return }
         }
     }
 

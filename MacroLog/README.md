@@ -300,8 +300,18 @@ searches it BEFORE the USDA API — instant, offline, and it grows with use:
   "10 McNuggets" scales naturally.
 - **Community sync** (invite-code installs): scans and imports push to a
   shared D1 database on the proxy server, and everyone pulls each other's
-  contributions — each user's scans make matching better for all users.
-  Direct-key installs simply keep a personal database.
+  contributions (paged, cursor-resumed) — each user's scans make matching
+  better for all users. Direct-key installs simply keep a personal database.
+
+**Scaling plan.** Growth tracks *unique products* (dedup collapses repeat
+scans) and food consumption is Zipf-distributed, so the database grows far
+slower than the user count. Full replication to every device is the right
+trade-off up to roughly tens of thousands of rows (fully offline matching);
+past that, the community tier is designed to flip from "replicate
+everything" to "query the server on a miss, cache the hit" — the same shape
+as the USDA tier, contained inside `CommunitySync` + one rung of
+`resolveMatch`. Server-side, D1's free tier (5 GB ≈ millions of rows) is
+not a realistic constraint.
 
 Match ladder in the capture flow: remembered corrections →
 **food database** → USDA API → **Open Food Facts** (`resolveMatch`).
