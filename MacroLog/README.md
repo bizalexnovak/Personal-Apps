@@ -290,18 +290,27 @@ searches it BEFORE the USDA API — instant, offline, and it grows with use:
   (`caffeine`, `sodium`, `added sugars`, …) matched against the shared
   fields table. Values are per serving. The screen also browses, searches,
   and deletes rows.
-- **A starter set ships bundled** (`CustomFoodSeed`): ~60 items USDA matches
-  poorly — beers, wines, spirits, cocktails, seltzers, and flagship
-  fast-food items with published per-serving numbers.
+- **A starter set ships bundled** (`CustomFoodSeed`): ~220 items USDA
+  matches poorly — full alcohol coverage (beers, wines, spirits, cocktails,
+  seltzers), sodas and energy drinks **with caffeine recorded**, and the
+  flagship menus of the major chains (McDonald's, Chick-fil-A, Taco Bell,
+  Chipotle components, Wendy's, Burger King, Subway, Starbucks with
+  caffeine, Dunkin', KFC/Popeyes, pizza, and more), all published
+  per-serving numbers. Piece-served items (nuggets) are stored per piece so
+  "10 McNuggets" scales naturally.
 - **Community sync** (invite-code installs): scans and imports push to a
   shared D1 database on the proxy server, and everyone pulls each other's
   contributions — each user's scans make matching better for all users.
   Direct-key installs simply keep a personal database.
 
 Match ladder in the capture flow: remembered corrections →
-**food database** → USDA API (`resolveMatch`). USDA stays an API on purpose:
-FoodData Central is 2M+ foods and would bloat the app bundled; the local DB
-accumulates exactly the foods people actually log.
+**food database** → USDA API → **Open Food Facts** (`resolveMatch`).
+Open Food Facts (openfoodfacts.org) is the open community database of ~3M
+branded products — free API, no key — and covers the branded/international
+products USDA lacks; its results come back low-confidence so the review
+card asks for a look. USDA stays an API on purpose: FoodData Central is
+2M+ foods and would bloat the app bundled; the local DB accumulates
+exactly the foods people actually log.
 
 Recipes participate too: **"Share to community"** in a recipe's detail view
 publishes it to the shared library, and the recipe search includes a

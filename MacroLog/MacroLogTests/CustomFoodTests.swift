@@ -165,4 +165,24 @@ final class CustomFoodTests: XCTestCase {
         )
         XCTAssertEqual(match?.calories ?? 0, 190, accuracy: 0.001)
     }
+
+    func testSeedHasNoInternalDuplicateKeys() {
+        var seen = Set<String>()
+        for row in CustomFoodSeed.rows {
+            let key = CustomFoodStore.nameKey(name: row.name, brand: row.brand)
+            XCTAssertTrue(seen.insert(key).inserted,
+                          "duplicate seed key: \(row.name) / \(row.brand)")
+        }
+    }
+
+    func testSeedCaffeineIsRecorded() throws {
+        let context = try makeContext()
+        let defaults = UserDefaults(suiteName: "custom-food-seed-tests-\(UUID().uuidString)")!
+        CustomFoodSeed.seedIfNeeded(in: context, defaults: defaults)
+        let match = CustomFoodStore.match(
+            for: FoodItemRequest(name: "celsius", quantity: 1, unit: "can"),
+            in: context
+        )
+        XCTAssertEqual(match?.micros.caffeine ?? 0, 200, accuracy: 0.001)
+    }
 }

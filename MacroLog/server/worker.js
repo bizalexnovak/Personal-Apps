@@ -65,13 +65,14 @@ async function ensureTables(env) {
   tablesReady = true;
 }
 
-// Mirrors the app's CustomFoodStore.nameKey: lowercase alphanumeric tokens,
-// deduped and sorted, so the same product never lands twice.
+// Mirrors the app's CustomFoodStore.nameKey EXACTLY (letter-only tokens,
+// deduped and sorted) — the two must agree or the same product can land
+// twice across devices.
 function nameKey(...parts) {
   const tokens = parts
     .join(" ")
     .toLowerCase()
-    .replace(/[^a-z0-9 ]+/g, " ")
+    .replace(/[^a-z]+/g, " ")
     .split(/\s+/)
     .filter(Boolean);
   return [...new Set(tokens)].sort().join(" ");

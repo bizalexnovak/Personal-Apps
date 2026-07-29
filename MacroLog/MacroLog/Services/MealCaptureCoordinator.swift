@@ -102,6 +102,7 @@ final class MealCaptureCoordinator: ObservableObject {
     var labelScanner: LabelScanning = ClaudeLabelScanningService()
     var dishEstimator: DishEstimating = ClaudeDishEstimationService()
     var logger = MealLoggingService()
+    var openFoodFacts = OpenFoodFactsService()
 
     private var context: ModelContext?
 
@@ -475,8 +476,9 @@ final class MealCaptureCoordinator: ObservableObject {
 
     /// Match resolution ladder: a remembered correction wins outright, then
     /// the app's own food database (scanned labels, imported sheets, community
-    /// contributions — instant and offline), then the USDA API for the long
-    /// tail. A nil result means no match (never zeros).
+    /// contributions — instant and offline), then the USDA API, and finally
+    /// Open Food Facts for branded products USDA lacks. A nil result means no
+    /// match (never zeros).
     private func resolveMatch(for request: FoodItemRequest, in context: ModelContext) async -> NutritionMatch? {
         if let remembered = RememberedMatchStore.lookup(phrase: request.name, in: context) {
             return USDANutritionLookupService.evaluate(for: request, food: remembered, nameScore: 1.0).match
@@ -485,7 +487,14 @@ final class MealCaptureCoordinator: ObservableObject {
             MatchDebugLog.shared.record(transcript: "Matched \"\(request.name)\" from the food database")
             return custom
         }
-        return try? await logger.nutrition.lookup(request)
+        if let usda = try? await logger.nutrition.lookup(request) {
+            return usda
+        }
+        if let off = (try? await openFoodFacts.lookup(request)) ?? nil {
+            MatchDebugLog.shared.record(transcript: "Matched \"\(request.name)\" via Open Food Facts")
+            return off
+        }
+        return nil
     }
 
     /// Drop an item from the meal (e.g. a hallucinated parse or an unmatched

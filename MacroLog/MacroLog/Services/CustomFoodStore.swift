@@ -43,10 +43,15 @@ enum CustomFoodStore {
         )
     }
 
-    private static let countableUnits: Set<String> = [
-        "serving", "can", "bottle", "glass", "slice", "piece", "bar",
-        "packet", "scoop", "shot", "drink", "sandwich", "burger", "taco",
-        "order", "item", "each",
+    /// Units that mean "N servings of this item" (shared with the Open Food
+    /// Facts lookup, which is also serving-based).
+    static let countableUnits: Set<String> = [
+        "serving", "servings", "can", "cans", "bottle", "bottles",
+        "glass", "glasses", "slice", "slices", "piece", "pieces",
+        "bar", "bars", "packet", "packets", "scoop", "scoops",
+        "shot", "shots", "drink", "drinks", "sandwich", "sandwiches",
+        "burger", "burgers", "taco", "tacos", "nugget", "nuggets",
+        "order", "orders", "item", "items", "each", "cocktail", "cocktails",
     ]
 
     /// The best-scoring row whose name+brand contains EVERY token of the
