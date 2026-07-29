@@ -26,8 +26,8 @@ struct AppTabBar: View {
                     Button {
                         selection = item.tab
                     } label: {
-                        VStack(spacing: 3) {
-                            Image(systemName: item.icon).font(.system(size: 19))
+                        VStack(spacing: 2) {
+                            Image(systemName: item.icon).font(.system(size: 17))
                             Text(item.title).font(.caption2)
                         }
                         .foregroundStyle(selection == item.tab ? accent : .secondary)
@@ -38,13 +38,14 @@ struct AppTabBar: View {
                 }
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 8)
+            .padding(.vertical, 6)
             // Glassy, see-through backdrop (ultraThin) rather than an opaque
             // white slab; the hairline stroke keeps the capsule readable over
-            // busy content.
-            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 22))
+            // busy content. Content scrolls beneath (the bar is a floating
+            // safe-area inset), so the page shows through around and behind it.
+            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 20))
             .overlay(
-                RoundedRectangle(cornerRadius: 22)
+                RoundedRectangle(cornerRadius: 20)
                     .strokeBorder(.quaternary, lineWidth: 0.5)
             )
 
@@ -54,7 +55,7 @@ struct AppTabBar: View {
             }
         }
         .padding(.horizontal, 12)
-        .padding(.top, 6)
+        .padding(.top, 4)
         .animation(.easeInOut(duration: 0.2), value: showPlus)
     }
 
@@ -68,7 +69,7 @@ struct AppTabBar: View {
             Image(systemName: "plus")
                 .font(.title3.weight(.semibold))
                 .foregroundStyle(.white)
-                .frame(width: 54, height: 54)
+                .frame(width: 46, height: 46)
                 .background(Circle().fill(accent))
                 .shadow(radius: 4, y: 2)
         }

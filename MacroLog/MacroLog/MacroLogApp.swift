@@ -62,18 +62,19 @@ struct ContentView: View {
     }
 
     var body: some View {
-        // A plain VStack (content above, custom bar below) so the tabs sit in a
-        // shrunk container with the "+" beside them AND non-scrolling content
-        // (the Log capture screen) stays above the bar instead of behind it.
-        VStack(spacing: 0) {
-            ZStack {
-                tabScreen(HomeView(), AppTab.today)
-                tabScreen(MealListView(), AppTab.log)
-                tabScreen(HistoryView(), AppTab.trends)
-                tabScreen(RecipesView(), AppTab.recipes)
-                tabScreen(SettingsView(), AppTab.settings)
-            }
-            .ignoresSafeArea(.container, edges: .top) // let screens go under the status bar
+        // The bar floats over the content as a bottom safe-area inset: scroll
+        // views extend (and scroll) beneath it, showing through its glassy
+        // material, while non-scrolling screens (the Log capture surface) are
+        // laid out above it because it shrinks their safe area.
+        ZStack {
+            tabScreen(HomeView(), AppTab.today)
+            tabScreen(MealListView(), AppTab.log)
+            tabScreen(HistoryView(), AppTab.trends)
+            tabScreen(RecipesView(), AppTab.recipes)
+            tabScreen(SettingsView(), AppTab.settings)
+        }
+        .ignoresSafeArea(.container, edges: .top) // let screens go under the status bar
+        .safeAreaInset(edge: .bottom, spacing: 0) {
             // Hide the tab bar while a keyboard is up so it doesn't collide with
             // the keyboard's toolbar; it returns when the keyboard dismisses.
             if !keyboardVisible {
