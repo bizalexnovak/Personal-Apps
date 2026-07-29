@@ -39,6 +39,13 @@ struct LabelNutrition: Codable, Equatable {
     var vitaminB6: Double?
     var folate: Double?
     var vitaminB12: Double?
+    var biotin: Double?
+    var pantothenicAcid: Double?
+    var choline: Double?
+    var iodine: Double?
+    var chromium: Double?
+    var molybdenum: Double?
+    var chloride: Double?
     var caffeine: Double?
     var creatine: Double?
 
@@ -61,6 +68,10 @@ struct LabelNutrition: Codable, Equatable {
             copper: copper,
             manganese: manganese,
             selenium: selenium,
+            iodine: iodine,
+            chromium: chromium,
+            molybdenum: molybdenum,
+            chloride: chloride,
             vitaminA: vitaminA,
             vitaminC: vitaminC,
             vitaminD: vitaminD,
@@ -72,6 +83,9 @@ struct LabelNutrition: Codable, Equatable {
             vitaminB6: vitaminB6,
             folate: folate,
             vitaminB12: vitaminB12,
+            biotin: biotin,
+            pantothenicAcid: pantothenicAcid,
+            choline: choline,
             caffeine: caffeine,
             creatine: creatine
         )
@@ -87,13 +101,14 @@ protocol LabelScanning {
 struct ClaudeLabelScanningService: LabelScanning {
     static let systemPrompt = """
     You read nutrition facts and supplement facts labels from photographs. Extract the values for ONE serving as printed on the label. Respond ONLY with valid JSON, no markdown, no preamble.
-    Format: {"name": string, "servingSize": string, "calories": number, "protein": number, "carbs": number, "fat": number, "saturatedFat": number|null, "transFat": number|null, "cholesterol": number|null, "sodium": number|null, "fiber": number|null, "totalSugars": number|null, "addedSugars": number|null, "potassium": number|null, "calcium": number|null, "iron": number|null, "magnesium": number|null, "zinc": number|null, "phosphorus": number|null, "copper": number|null, "manganese": number|null, "selenium": number|null, "vitaminA": number|null, "vitaminC": number|null, "vitaminD": number|null, "vitaminE": number|null, "vitaminK": number|null, "thiamin": number|null, "riboflavin": number|null, "niacin": number|null, "vitaminB6": number|null, "folate": number|null, "vitaminB12": number|null, "caffeine": number|null, "creatine": number|null}
+    Format: {"name": string, "servingSize": string, "calories": number, "protein": number, "carbs": number, "fat": number, "saturatedFat": number|null, "transFat": number|null, "cholesterol": number|null, "sodium": number|null, "fiber": number|null, "totalSugars": number|null, "addedSugars": number|null, "potassium": number|null, "calcium": number|null, "iron": number|null, "magnesium": number|null, "zinc": number|null, "phosphorus": number|null, "copper": number|null, "manganese": number|null, "selenium": number|null, "iodine": number|null, "chromium": number|null, "molybdenum": number|null, "chloride": number|null, "vitaminA": number|null, "vitaminC": number|null, "vitaminD": number|null, "vitaminE": number|null, "vitaminK": number|null, "thiamin": number|null, "riboflavin": number|null, "niacin": number|null, "vitaminB6": number|null, "folate": number|null, "vitaminB12": number|null, "biotin": number|null, "pantothenicAcid": number|null, "choline": number|null, "caffeine": number|null, "creatine": number|null}
     - "name": the product name if visible on the packaging, otherwise a short generic description of the food.
     - "servingSize": the serving size exactly as printed (e.g. "1 can (12 fl oz)", "2/3 cup (55g)").
     - calories, protein, carbs, fat: the per-serving numbers in kcal and grams. If a macro is genuinely not on the label, use 0.
     - saturatedFat, transFat, fiber, totalSugars, addedSugars, creatine: grams per serving.
-    - cholesterol, sodium, potassium, calcium, iron, magnesium, zinc, phosphorus, copper, manganese, vitaminC, vitaminE, thiamin, riboflavin, niacin, vitaminB6, caffeine: milligrams (mg) per serving.
-    - vitaminA, vitaminD, vitaminK, selenium, folate, vitaminB12: micrograms (mcg) per serving.
+    - cholesterol, sodium, potassium, calcium, iron, magnesium, zinc, phosphorus, copper, manganese, chloride, vitaminC, vitaminE, thiamin, riboflavin, niacin, vitaminB6, pantothenicAcid, choline, caffeine: milligrams (mg) per serving.
+    - vitaminA, vitaminD, vitaminK, selenium, iodine, chromium, molybdenum, folate, vitaminB12, biotin: micrograms (mcg) per serving.
+    - Energy drinks and supplements often list B vitamins, biotin, pantothenic acid, and choline — capture every one that is printed.
     - Convert if the label prints a different unit (e.g. vitamin A in IU ≈ printed IU × 0.3 mcg for retinol; 1 g = 1000 mg = 1000000 mcg).
     - caffeine: often printed outside the facts panel ("Caffeine content: 200 mg") — include it if printed anywhere on the visible packaging.
     - creatine: on supplement facts panels (e.g. "Creatine monohydrate 5 g").

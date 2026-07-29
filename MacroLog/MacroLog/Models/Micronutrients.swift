@@ -31,6 +31,10 @@ struct Micronutrients: Codable, Equatable, Hashable {
     var copper: Double?
     var manganese: Double?
     var selenium: Double?  // mcg
+    var iodine: Double?    // mcg
+    var chromium: Double?  // mcg
+    var molybdenum: Double? // mcg
+    var chloride: Double?  // mg
     // Vitamins
     var vitaminA: Double?   // mcg RAE
     var vitaminC: Double?   // mg
@@ -43,6 +47,9 @@ struct Micronutrients: Codable, Equatable, Hashable {
     var vitaminB6: Double?  // mg
     var folate: Double?     // mcg
     var vitaminB12: Double? // mcg
+    var biotin: Double?     // B7, mcg
+    var pantothenicAcid: Double? // B5, mg
+    var choline: Double?    // mg
     // Stimulants & supplements
     var caffeine: Double?   // mg
     var creatine: Double?   // g — not in USDA data; captured from supplement
@@ -116,6 +123,10 @@ extension Micronutrients {
         .init(label: "Copper", unit: "mg", keyPath: \.copper, usdaIDs: [1098]),
         .init(label: "Manganese", unit: "mg", keyPath: \.manganese, usdaIDs: [1101]),
         .init(label: "Selenium", unit: "mcg", keyPath: \.selenium, usdaIDs: [1103]),
+        .init(label: "Iodine", unit: "mcg", keyPath: \.iodine, usdaIDs: [1100]),
+        .init(label: "Chromium", unit: "mcg", keyPath: \.chromium, usdaIDs: [1096]),
+        .init(label: "Molybdenum", unit: "mcg", keyPath: \.molybdenum, usdaIDs: [1102]),
+        .init(label: "Chloride", unit: "mg", keyPath: \.chloride, usdaIDs: [1088]),
         .init(label: "Vitamin A", unit: "mcg", keyPath: \.vitaminA, usdaIDs: [1106]),
         .init(label: "Vitamin C", unit: "mg", keyPath: \.vitaminC, usdaIDs: [1162]),
         .init(label: "Vitamin D", unit: "mcg", keyPath: \.vitaminD, usdaIDs: [1114]),
@@ -127,6 +138,9 @@ extension Micronutrients {
         .init(label: "Vitamin B6", unit: "mg", keyPath: \.vitaminB6, usdaIDs: [1175]),
         .init(label: "Folate", unit: "mcg", keyPath: \.folate, usdaIDs: [1190, 1177]),
         .init(label: "Vitamin B12", unit: "mcg", keyPath: \.vitaminB12, usdaIDs: [1178]),
+        .init(label: "Biotin (B7)", unit: "mcg", keyPath: \.biotin, usdaIDs: [1176]),
+        .init(label: "Pantothenic acid (B5)", unit: "mg", keyPath: \.pantothenicAcid, usdaIDs: [1170]),
+        .init(label: "Choline", unit: "mg", keyPath: \.choline, usdaIDs: [1180]),
         .init(label: "Caffeine", unit: "mg", keyPath: \.caffeine, usdaIDs: [1057]),
         // No FDC nutrient number — creatine comes from labels or direct logging.
         .init(label: "Creatine", unit: "g", keyPath: \.creatine, usdaIDs: []),

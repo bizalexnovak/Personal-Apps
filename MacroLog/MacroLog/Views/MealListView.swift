@@ -19,7 +19,6 @@ struct MealListView: View {
     @State private var mode: LogCaptureMode = .voice
     @State private var showTypeSheet = false
     @State private var typedText = ""
-    @State private var showDishCamera = false
     @State private var lastQuickAdd: String?
     /// Cached quick-add chips. Computing them scans the whole history (with a
     /// JSON decode per unique item), so it runs only when the data changes or
@@ -42,13 +41,6 @@ struct MealListView: View {
                 .toolbar { toolbarContent }
                 .overlay(alignment: .bottom) { quickAddToast }
                 .sheet(isPresented: $showTypeSheet) { typeSheet }
-                .fullScreenCover(isPresented: $showDishCamera) {
-                    CameraPicker { image in
-                        showDishCamera = false
-                        handleDishImage(image)
-                    }
-                    .ignoresSafeArea()
-                }
         }
         // Consume any queued action on appear (covers a cold launch from Siri,
         // where the flag is already set before this view exists).
@@ -204,15 +196,17 @@ struct MealListView: View {
     }
 
     private var dishPhase: some View {
-        VStack(spacing: 22) {
-            Spacer()
-            IdleMicButton(
-                systemImage: "camera.fill",
-                caption: "Take a photo of your dish for an AI nutrition estimate."
-            ) {
-                showDishCamera = true
+        ZStack(alignment: .bottom) {
+            // Live camera with a manual shutter (framing a dish is the user's
+            // call, unlike labels which auto-capture). Only run the camera
+            // while the Log tab is actually showing.
+            if hub.selectedTab == AppTab.log {
+                DishCameraScreen { data in
+                    Task { await coordinator.beginFromDishPhoto(imageData: data, in: modelContext) }
+                }
+            } else {
+                Color.clear
             }
-            Spacer()
             modeSwitcher.padding(.bottom, 28)
         }
     }
@@ -395,11 +389,6 @@ struct MealListView: View {
         typedText = ""
         showTypeSheet = false
         Task { await coordinator.begin(text: text, in: modelContext) }
-    }
-
-    private func handleDishImage(_ image: UIImage?) {
-        guard let image, let data = image.jpegData(compressionQuality: 0.7) else { return }
-        Task { await coordinator.beginFromDishPhoto(imageData: data, in: modelContext) }
     }
 
     private func reset() {

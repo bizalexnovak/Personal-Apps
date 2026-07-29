@@ -42,49 +42,6 @@ struct MicGraphic: View {
     }
 }
 
-/// Idle, continuously pulsing capture button. Tap to begin.
-struct IdleMicButton: View {
-    @Environment(\.appAccent) private var accent
-    var systemImage: String
-    var caption: String
-    var onTap: () -> Void
-    @State private var pulse = false
-
-    var body: some View {
-        Button(action: onTap) {
-            VStack(spacing: 18) {
-                ZStack {
-                    Circle()
-                        .fill(accent.opacity(0.14))
-                        .frame(width: 184, height: 184)
-                        .scaleEffect(pulse ? 1.12 : 0.92)
-                        .opacity(pulse ? 0.45 : 0.9)
-                    Circle()
-                        .fill(accent.opacity(0.22))
-                        .frame(width: 134, height: 134)
-                        .scaleEffect(pulse ? 1.06 : 0.96)
-                    Circle()
-                        .fill(accent)
-                        .frame(width: 104, height: 104)
-                    Image(systemName: systemImage)
-                        .font(.system(size: 42, weight: .semibold))
-                        .foregroundStyle(.white)
-                }
-                Text(caption)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-            }
-        }
-        .buttonStyle(.plain)
-        .onAppear {
-            withAnimation(.easeInOut(duration: 1.1).repeatForever(autoreverses: true)) {
-                pulse = true
-            }
-        }
-    }
-}
-
 /// Active listening: mic pulses with the live audio level, transcript streams in.
 struct ListeningView: View {
     @Environment(\.appAccent) private var accent

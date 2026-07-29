@@ -5,10 +5,10 @@ import SwiftData
 /// stable view (presenting from inside the ForEach row flash-dismisses because
 /// SwiftData re-emitting the items recreates the row and its state).
 struct EditorSheet: Identifiable {
-    enum Kind { case macros, swap }
+    enum Kind: String { case macros = "m", swap = "s", micros = "n" }
     let item: FoodItem
     let kind: Kind
-    var id: String { "\(item.persistentModelID.hashValue)-\(kind == .macros ? "m" : "s")" }
+    var id: String { "\(item.persistentModelID.hashValue)-\(kind.rawValue)" }
 }
 
 struct EditMealView: View {
@@ -80,6 +80,8 @@ struct EditMealView: View {
                 MacroOverrideSheet(item: target.item)
             case .swap:
                 FoodSwapView(item: target.item)
+            case .micros:
+                MicroOverrideSheet(item: target.item)
             }
         }
     }
@@ -215,6 +217,11 @@ private struct FoodItemEditor: View {
 
             Button("Swap matched food…") {
                 present(.swap)
+            }
+            .font(.subheadline)
+
+            Button("Edit micronutrients & caffeine…") {
+                present(.micros)
             }
             .font(.subheadline)
 
@@ -402,6 +409,63 @@ private struct MacroOverrideSheet: View {
                 protein = item.protein
                 carbs = item.carbs
                 fat = item.fat
+            }
+        }
+    }
+}
+
+/// Editor for every micronutrient on one item — vitamins, minerals, caffeine,
+/// creatine. Fields are optional: an empty box means "not recorded" (distinct
+/// from 0), matching how the values are stored. Driven by the same
+/// `Micronutrients.fields` table as capture and display, so a nutrient added
+/// there is automatically editable here.
+private struct MicroOverrideSheet: View {
+    @Bindable var item: FoodItem
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var values: [Double?] = Array(
+        repeating: nil, count: Micronutrients.fields.count
+    )
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    ForEach(Array(Micronutrients.fields.enumerated()), id: \.offset) { index, field in
+                        LabeledContent("\(field.label) (\(field.unit))") {
+                            TextField("—", value: $values[index], format: .number)
+                                .keyboardType(.decimalPad)
+                                .multilineTextAlignment(.trailing)
+                                .frame(maxWidth: 110)
+                        }
+                        .font(.subheadline)
+                    }
+                } header: {
+                    Text("Per \(item.quantity.formatted()) \(item.unit) of \(item.name)")
+                } footer: {
+                    Text("Leave a field empty for \u{201C}not recorded\u{201D} — that's different from 0.")
+                }
+            }
+            .keyboardDismissBar()
+            .navigationTitle("Micronutrients")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") {
+                        var micros = Micronutrients()
+                        for (index, field) in Micronutrients.fields.enumerated() {
+                            micros[keyPath: field.keyPath] = values[index]
+                        }
+                        item.micros = micros
+                        dismiss()
+                    }
+                }
+            }
+            .onAppear {
+                values = Micronutrients.fields.map { item.micros[keyPath: $0.keyPath] }
             }
         }
     }

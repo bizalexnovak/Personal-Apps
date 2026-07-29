@@ -91,8 +91,10 @@ previous day.
   after the capture the app opens **voice capture asking you to say the name**
   ("it's a Quest bar" → "Quest bar") before the review card appears. Tap
   **Skip** to fall back to whatever text the scan read.
-- **Dish photo**: a separate mode from label scanning — photograph a *prepared
-  meal* and Claude (vision) estimates each component's portion and macros
+- **Dish photo**: a separate mode from label scanning — a live camera preview
+  with a manual shutter (`DishCameraScreen`; framing a plate is the user's
+  call, unlike labels which auto-capture). The photo goes to Claude (vision)
+  which estimates each component's portion and macros
   (`DishEstimationService`). Because these are estimates, every item comes back
   low-confidence with its card open for you to confirm or adjust.
 - **Type**: the keyboard button (or the "+" menu's Type) routes through the same flow.
@@ -246,18 +248,33 @@ Beyond the four headline macros, each entry also records **micronutrients** —
 the fat breakdown (saturated / trans / mono- / polyunsaturated), the carb
 breakdown (fiber / total & added sugars), cholesterol, sodium, potassium,
 minerals (calcium, iron, magnesium, zinc, phosphorus, copper, manganese,
-selenium), vitamins (A, C, D, E, K, B1/B2/B3/B6/B12, folate), plus **caffeine**
-and **creatine**. These come from USDA FoodData Central (which returns them per
-food — coffee and energy drinks carry their caffeine), from scanned nutrition
-*and supplement* facts labels, and they **scale with the portion** just like
-the macros. Bare supplements can be logged directly — "5 g of creatine" or "a
-caffeine pill" skips USDA (a food search would mismatch them) and records the
-dose as a zero-calorie entry (`SupplementConversion`). Kept off the Trends
-chart, they're viewable read-only in two places: per item under
-**Micronutrients** in the meal editor, and summed for the day in a collapsed
-**Micronutrients** section at the bottom of the Today tab (`Micronutrients` is
-stored on each `FoodItem` as JSON, so more fields can be added later without a
-schema migration).
+selenium, iodine, chromium, molybdenum, chloride), vitamins (A, C, D, E, K,
+B1/B2/B3/B6/B12, folate, **biotin**, **pantothenic acid**, choline), plus
+**caffeine** and **creatine**. These come from USDA FoodData Central (which
+returns them per food — coffee and energy drinks carry their caffeine), from
+scanned nutrition *and supplement* facts labels (the prompt explicitly asks
+for the B-vitamin row energy drinks print), and they **scale with the
+portion** just like the macros. Bare supplements can be logged directly —
+"5 g of creatine" or "a caffeine pill" skips USDA (a food search would
+mismatch them) and records the dose as a zero-calorie entry
+(`SupplementConversion`). (`Micronutrients` is stored on each `FoodItem` as
+JSON, so more fields can be added later without a schema migration.)
+
+**Daily micro tally.** The top of the Today tab has a **Macros / Micros**
+switch: Macros shows the familiar rings; Micros lists every tracked nutrient
+with the day's total against its adult **Daily Value** as a progress bar, with
+an orange warning when a day exceeds a nutrient's established upper limit.
+Tapping any row opens a reference sheet (`MicronutrientGuide`): what the
+nutrient is good for, the DV and upper limit, and what chronically
+overconsuming it does (e.g. megadosed biotin can trigger acne and distort lab
+tests). General FDA/NIH reference values — labeled as informational, not
+medical advice.
+
+**Editing.** Each item in the meal editor has **"Edit micronutrients &
+caffeine…"** — every field is editable, and an empty box means "not recorded"
+(distinct from 0). The editor, capture, tally, and info sheets are all driven
+by the same `Micronutrients.fields` table, so a nutrient added there appears
+everywhere at once.
 
 ### Recommended goals from body metrics
 

@@ -21,6 +21,12 @@ struct HomeView: View {
     @State private var selectedDate = Calendar.current.startOfDay(for: .now)
     @State private var showDatePicker = false
 
+    /// Macros/Micros switch for the day tally at the top of the diary.
+    private enum TallyScope { case macros, micros }
+    @State private var tallyScope: TallyScope = .macros
+    /// Micronutrient row tapped in the Micros tally → its info sheet.
+    @State private var microInfoField: MicronutrientField?
+
     private var isToday: Bool { Calendar.current.isDateInToday(selectedDate) }
 
     /// Everything the diary shows for the selected day — totals, the meals
@@ -133,21 +139,38 @@ struct HomeView: View {
         return NavigationStack {
             List {
                 Section {
-                    MacroProgressRow(
-                        label: "Calories", unit: "kcal", color: palette.calories,
-                        value: day.calories, target: calorieTarget
-                    )
-                    HStack(alignment: .top, spacing: 8) {
-                        MacroRing(label: "Protein", unit: "g", color: palette.protein,
-                                  value: day.protein, target: proteinTarget)
-                        MacroRing(label: "Carbs", unit: "g", color: palette.carbs,
-                                  value: day.carbs, target: carbTarget)
-                        MacroRing(label: "Fat", unit: "g", color: palette.fat,
-                                  value: day.fat, target: fatTarget)
-                        MacroRing(label: "Water", unit: "oz", color: palette.water,
-                                  value: day.water, target: waterTarget)
+                    Picker("View", selection: $tallyScope) {
+                        Text("Macros").tag(TallyScope.macros)
+                        Text("Micros").tag(TallyScope.micros)
                     }
-                    .padding(.vertical, 4)
+                    .pickerStyle(.segmented)
+                    .listRowSeparator(.hidden)
+
+                    switch tallyScope {
+                    case .macros:
+                        MacroProgressRow(
+                            label: "Calories", unit: "kcal", color: palette.calories,
+                            value: day.calories, target: calorieTarget
+                        )
+                        HStack(alignment: .top, spacing: 8) {
+                            MacroRing(label: "Protein", unit: "g", color: palette.protein,
+                                      value: day.protein, target: proteinTarget)
+                            MacroRing(label: "Carbs", unit: "g", color: palette.carbs,
+                                      value: day.carbs, target: carbTarget)
+                            MacroRing(label: "Fat", unit: "g", color: palette.fat,
+                                      value: day.fat, target: fatTarget)
+                            MacroRing(label: "Water", unit: "oz", color: palette.water,
+                                      value: day.water, target: waterTarget)
+                        }
+                        .padding(.vertical, 4)
+                    case .micros:
+                        // The day's summed vitamins/minerals/supplements
+                        // against adult Daily Values; tap a row for what it
+                        // does and overconsumption warnings.
+                        MicroTallySection(micros: day.micros) { field in
+                            microInfoField = field
+                        }
+                    }
                 }
 
                 if day.meals.isEmpty {
@@ -178,15 +201,8 @@ struct HomeView: View {
                         .onDelete { deleteMeals($0, from: day.meals) }
                     }
 
-                    // The day's summed micronutrient record (vitamins,
-                    // minerals, caffeine, creatine…), collapsed by default.
-                    if !day.micros.isEmpty {
-                        Section {
-                            MicronutrientDisclosure(micros: day.micros)
-                        } footer: {
-                            Text("Everything recorded on this day's entries, summed.")
-                        }
-                    }
+                    // The day's full micronutrient tally lives in the Micros
+                    // scope of the switch at the top of the screen.
                 }
             }
             .appBackground(appBackground)
@@ -228,6 +244,13 @@ struct HomeView: View {
             }
             .sheet(isPresented: $showDatePicker) {
                 datePickerSheet
+            }
+            .sheet(item: $microInfoField) { field in
+                MicronutrientInfoSheet(
+                    field: field,
+                    todayAmount: dayAggregate.micros[keyPath: field.keyPath] ?? 0
+                )
+                .presentationDetents([.medium, .large])
             }
         }
     }

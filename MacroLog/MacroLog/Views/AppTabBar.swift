@@ -39,7 +39,14 @@ struct AppTabBar: View {
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 8)
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 22))
+            // Glassy, see-through backdrop (ultraThin) rather than an opaque
+            // white slab; the hairline stroke keeps the capsule readable over
+            // busy content.
+            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 22))
+            .overlay(
+                RoundedRectangle(cornerRadius: 22)
+                    .strokeBorder(.quaternary, lineWidth: 0.5)
+            )
 
             if showPlus {
                 captureMenu

@@ -16,7 +16,7 @@ enum ReminderKeys {
 /// Which goal a reminder is about. Drives the default message and (for
 /// once-a-day reminders) which goal decides whether today's fire is skipped.
 enum ReminderMetric: String, Codable, CaseIterable, Identifiable {
-    case water, calories, protein, general
+    case water, calories, protein, general, noEntries
 
     var id: String { rawValue }
 
@@ -26,6 +26,7 @@ enum ReminderMetric: String, Codable, CaseIterable, Identifiable {
         case .calories: return "Calories"
         case .protein: return "Protein"
         case .general: return "All goals"
+        case .noEntries: return "No entries yet"
         }
     }
 
@@ -35,6 +36,7 @@ enum ReminderMetric: String, Codable, CaseIterable, Identifiable {
         case .calories: return "flame.fill"
         case .protein: return "fork.knife"
         case .general: return "target"
+        case .noEntries: return "tray"
         }
     }
 
@@ -46,6 +48,7 @@ enum ReminderMetric: String, Codable, CaseIterable, Identifiable {
         case .calories: return "Calorie check-in — log anything you've eaten since last time."
         case .protein: return "Protein check — log your latest meal and keep building. 💪"
         case .general: return "Time to check in — log anything you missed and hit your goals. 💪"
+        case .noEntries: return "Nothing logged yet today — a quick voice note gets the day on the board."
         }
     }
 }
@@ -276,11 +279,18 @@ enum ReminderManager {
             return s.calories >= s.calorieTarget
                 && s.protein >= s.proteinTarget
                 && s.water >= s.waterTarget
+        case .noEntries:
+            // "Met" the moment anything at all is logged — food or water —
+            // so the reminder only fires on a day with zero entries.
+            return s.calories > 0 || s.protein > 0 || s.carbs > 0
+                || s.fat > 0 || s.water > 0
         }
     }
 
     private static func shortfallBody(_ metric: ReminderMetric, _ s: DayNutritionSnapshot) -> String {
         switch metric {
+        case .noEntries:
+            return "You haven't logged anything today. Say it, scan it, or type it — 10 seconds and you're on the board."
         case .water:
             return "You're still \(Int((s.waterTarget - s.water).rounded())) oz of water short of today's goal. 💧"
         case .calories:
