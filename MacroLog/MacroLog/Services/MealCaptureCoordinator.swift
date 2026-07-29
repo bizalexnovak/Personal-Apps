@@ -146,45 +146,109 @@ final class MealCaptureCoordinator: ObservableObject {
             }
         }
 
-        var items: [ReviewItem] = []
-        for request in requests {
+        // Two passes for speed. Pass 1 (instant, on-main): everything that
+        // resolves without the network — explicit macros, supplements, water,
+        // remembered corrections, and the local food database. Pass 2: the
+        // remaining items' USDA/OFF lookups run CONCURRENTLY, so a 3-item
+        // meal costs one round-trip of latency, not three stacked.
+        var slots = [ReviewItem?](repeating: nil, count: requests.count)
+        var pending: [(index: Int, request: FoodItemRequest)] = []
+
+        for (index, request) in requests.enumerated() {
             // Explicit macros spoken by the user win over EVERY shortcut and
             // lookup — checked first so "creatine gummies, 150 calories" keeps
             // its stated numbers instead of being zeroed by a name match.
             if let spoken = Self.explicitMacroMatch(for: request) {
-                items.append(Self.directItem(request, spoken))
+                slots[index] = Self.directItem(request, spoken)
                 continue
             }
             // Bare supplements (creatine, caffeine pills) skip USDA — a food
             // search would mismatch them; the dose goes on the micronutrient
             // record instead.
             if let supplement = SupplementConversion.match(for: request) {
-                items.append(Self.directItem(request, supplement))
+                slots[index] = Self.directItem(request, supplement)
                 continue
             }
             // Water is tracked in ounces, not macros — skip USDA entirely and
             // give it a 0-calorie confirmed-able match.
             if WaterConversion.isWater(request.name) {
                 let oz = WaterConversion.ounces(quantity: request.quantity, unit: request.unit)
-                items.append(Self.directItem(request, NutritionMatch(
+                slots[index] = Self.directItem(request, NutritionMatch(
                     matchedDescription: "Water · \(Int(oz.rounded())) oz",
                     calories: 0, protein: 0, carbs: 0, fat: 0,
                     confidence: MatchConfidence.high
-                )))
+                ))
                 continue
             }
             let hints = Self.clarificationHints(for: request)
-            // A failed lookup is represented as match == nil — the card opens
-            // in search mode and blocks Save All; zeros are never fabricated.
-            let match = await resolveMatch(for: request, in: context)
-            items.append(ReviewItem(
-                request: request,
-                match: match,
-                clarificationQuestion: hints?.question,
-                options: hints?.options ?? [],
-                status: .needsReview
-            ))
+            // Local tiers: a remembered correction or a food-database row
+            // answers in ~a millisecond, skipping the network entirely.
+            if let remembered = RememberedMatchStore.lookup(phrase: request.name, in: context) {
+                slots[index] = ReviewItem(
+                    request: request,
+                    match: USDANutritionLookupService.evaluate(for: request, food: remembered, nameScore: 1.0).match,
+                    clarificationQuestion: hints?.question,
+                    options: hints?.options ?? [],
+                    status: .needsReview
+                )
+                continue
+            }
+            if let custom = CustomFoodStore.match(for: request, in: context) {
+                MatchDebugLog.shared.record(transcript: "Matched \"\(request.name)\" from the food database")
+                slots[index] = ReviewItem(
+                    request: request,
+                    match: custom,
+                    clarificationQuestion: hints?.question,
+                    options: hints?.options ?? [],
+                    status: .needsReview
+                )
+                continue
+            }
+            pending.append((index, request))
         }
+
+        if !pending.isEmpty {
+            // Value-type copies captured so the tasks run off the main actor.
+            let nutrition = logger.nutrition
+            let off = openFoodFacts
+            let resolved = await withTaskGroup(
+                of: (Int, NutritionMatch?).self,
+                returning: [Int: NutritionMatch].self
+            ) { group in
+                for (index, request) in pending {
+                    group.addTask {
+                        if let usda = try? await nutrition.lookup(request) {
+                            return (index, usda)
+                        }
+                        // Open Food Facts catches branded products USDA lacks.
+                        if let offMatch = (try? await off.lookup(request)) ?? nil {
+                            return (index, offMatch)
+                        }
+                        return (index, nil)
+                    }
+                }
+                var found: [Int: NutritionMatch] = [:]
+                for await (index, match) in group {
+                    if let match { found[index] = match }
+                }
+                return found
+            }
+            for (index, request) in pending {
+                let hints = Self.clarificationHints(for: request)
+                // A failed lookup is represented as match == nil — the card
+                // opens in search mode and blocks Save All; zeros are never
+                // fabricated.
+                slots[index] = ReviewItem(
+                    request: request,
+                    match: resolved[index],
+                    clarificationQuestion: hints?.question,
+                    options: hints?.options ?? [],
+                    status: .needsReview
+                )
+            }
+        }
+
+        var items = slots.compactMap { $0 }
         isWorking = false
 
         guard !items.isEmpty else {
