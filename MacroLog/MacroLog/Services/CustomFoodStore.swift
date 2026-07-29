@@ -12,8 +12,10 @@ enum CustomFoodStore {
     /// sorted so word order doesn't create duplicates ("corona extra beer" ==
     /// "beer corona extra").
     static func nameKey(name: String, brand: String) -> String {
-        let tokens = NameTokens.tokens(name) + NameTokens.tokens(brand)
-        return Set(tokens).sorted().joined(separator: " ")
+        NameTokens.tokens(name)
+            .union(NameTokens.tokens(brand))
+            .sorted()
+            .joined(separator: " ")
     }
 
     // MARK: - Matching
@@ -57,12 +59,12 @@ enum CustomFoodStore {
     /// The best-scoring row whose name+brand contains EVERY token of the
     /// query. Among qualifiers, fewer extra tokens wins (tightest match).
     static func bestRow(for query: String, in context: ModelContext) -> CustomFood? {
-        let queryTokens = Set(NameTokens.tokens(query))
+        let queryTokens = NameTokens.tokens(query)
         guard !queryTokens.isEmpty else { return nil }
         let all = (try? context.fetch(FetchDescriptor<CustomFood>())) ?? []
         var best: (food: CustomFood, extras: Int)?
         for food in all {
-            let foodTokens = Set(NameTokens.tokens(food.name) + NameTokens.tokens(food.brand))
+            let foodTokens = NameTokens.tokens(food.name).union(NameTokens.tokens(food.brand))
             guard queryTokens.isSubset(of: foodTokens) else { continue }
             let extras = foodTokens.count - queryTokens.count
             if best == nil || extras < best!.extras {
@@ -101,7 +103,9 @@ enum CustomFoodStore {
 
     /// Auto-capture from a label scan: every scanned label becomes a database
     /// row (deduped), so the next time anyone types or says the product name
-    /// it matches instantly — even offline.
+    /// it matches instantly — even offline. Main-actor because it kicks off
+    /// the community push (and its callers already live there).
+    @MainActor
     static func addFromScan(name: String, label: LabelNutrition, in context: ModelContext) {
         let trimmed = name.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { return }
@@ -128,8 +132,10 @@ enum CustomFoodStore {
     ///   name,brand,serving,calories,protein,carbs,fat[,<micro label>…]
     /// Extra columns are matched against `Micronutrients.fields` labels
     /// (e.g. "caffeine", "sodium", "added sugars"). Returns (added, skipped).
-    static func importCSV(_ text: String, in context: ModelContext) throws -> (added: Int, skipped: Int) {
-        var rows = parseCSV(text)
+    /// Main-actor because it kicks off the community push.
+    @MainActor
+    static func importCSV(_ csvText: String, in context: ModelContext) throws -> (added: Int, skipped: Int) {
+        var rows = parseCSV(csvText)
         guard rows.count >= 2 else { throw ImportError.empty }
         let header = rows.removeFirst().map {
             $0.trimmingCharacters(in: .whitespaces).lowercased()
@@ -148,18 +154,19 @@ enum CustomFoodStore {
             return (index, field)
         }
 
-        func value(_ row: [String], _ index: Int?) -> Double {
+        // Named to avoid shadowing anything: cellText / cellNumber.
+        func cellNumber(_ row: [String], _ index: Int?) -> Double {
             guard let index, index < row.count else { return 0 }
             return Double(row[index].trimmingCharacters(in: .whitespaces)) ?? 0
         }
-        func text(_ row: [String], _ index: Int?) -> String {
+        func cellText(_ row: [String], _ index: Int?) -> String {
             guard let index, index < row.count else { return "" }
             return row[index].trimmingCharacters(in: .whitespaces)
         }
 
         var added = 0, skipped = 0
         for row in rows {
-            let name = text(row, nameCol)
+            let name = cellText(row, nameCol)
             guard !name.isEmpty else { continue }
             var micros = Micronutrients()
             for (index, field) in microColumns where index < row.count {
@@ -167,15 +174,15 @@ enum CustomFoodStore {
                     micros[keyPath: field.keyPath] = v
                 }
             }
-            let serving = text(row, col("serving"))
+            let serving = cellText(row, col("serving"))
             let food = CustomFood(
                 name: name,
-                brand: text(row, col("brand")),
+                brand: cellText(row, col("brand")),
                 serving: serving.isEmpty ? "1 serving" : serving,
-                calories: value(row, calCol),
-                protein: value(row, col("protein")),
-                carbs: value(row, col("carbs")),
-                fat: value(row, col("fat")),
+                calories: cellNumber(row, calCol),
+                protein: cellNumber(row, col("protein")),
+                carbs: cellNumber(row, col("carbs")),
+                fat: cellNumber(row, col("fat")),
                 microsData: micros.isEmpty ? nil : try? JSONEncoder().encode(micros),
                 source: "import"
             )
