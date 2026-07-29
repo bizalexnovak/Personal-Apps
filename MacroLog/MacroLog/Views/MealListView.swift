@@ -177,14 +177,18 @@ struct MealListView: View {
 
             // Bottom controls, anchored to the bottom independently of the mic.
             // While listening they simply disappear — tapping the mic again stops.
+            // Only the switcher carries the tab-bar clearance (a Group would
+            // stamp it onto every child); the 64 pt gap sits the quick-add
+            // strip roughly midway between the mic caption and the switcher.
             if !listening {
-                VStack(spacing: 16) {
+                VStack(spacing: 0) {
                     Spacer()
-                    Group {
-                        if !suggestions.isEmpty { suggestionsStrip }
-                        modeSwitcher
+                    if !suggestions.isEmpty {
+                        suggestionsStrip
+                            .padding(.bottom, 64)
                     }
-                    .padding(.bottom, AppTabBar.clearance)
+                    modeSwitcher
+                        .padding(.bottom, AppTabBar.clearance)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
