@@ -1,0 +1,54 @@
+name: MindLog
+options:
+  bundleIdPrefix: com.alexnovak
+  deploymentTarget:
+    iOS: "17.0"
+  createIntermediateGroups: true
+
+settings:
+  base:
+    SWIFT_VERSION: "5.9"
+    MARKETING_VERSION: "1.0"
+    CURRENT_PROJECT_VERSION: "1"
+
+targets:
+  MindLog:
+    type: application
+    platform: iOS
+    sources:
+      - MindLog
+    settings:
+      base:
+        TARGETED_DEVICE_FAMILY: "1"
+        SUPPORTS_MACCATALYST: false
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        INFOPLIST_KEY_UISupportedInterfaceOrientations: UIInterfaceOrientationPortrait
+    info:
+      path: MindLog/Info.plist
+      properties:
+        CFBundleDisplayName: MindLog
+        UILaunchScreen: {}
+        ITSAppUsesNonExemptEncryption: false
+        NSMicrophoneUsageDescription: MindLog uses the microphone so you can speak your journal entries out loud.
+        NSSpeechRecognitionUsageDescription: MindLog transcribes what you say into a journal entry. On-device recognition is used whenever your language supports it, so your words stay on this phone.
+
+  MindLogTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - MindLogTests
+    dependencies:
+      - target: MindLog
+
+schemes:
+  MindLog:
+    build:
+      targets:
+        MindLog: all
+        MindLogTests: [test]
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
+        - MindLogTests
