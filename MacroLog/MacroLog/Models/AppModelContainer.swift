@@ -9,7 +9,7 @@ enum AppModelContainer {
     /// container and by the in-memory containers the tests spin up.
     static let models: [any PersistentModel.Type] = [
         Meal.self, FoodItem.self, RememberedMatch.self,
-        Recipe.self, RecipeIngredient.self,
+        Recipe.self, RecipeIngredient.self, CustomFood.self,
     ]
 
     static let shared: ModelContainer = {

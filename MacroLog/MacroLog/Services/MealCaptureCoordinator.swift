@@ -251,6 +251,9 @@ final class MealCaptureCoordinator: ObservableObject {
         )
         item.captureScaleBaseline()
         MatchDebugLog.shared.record(transcript: "Scanned label: \(name)")
+        // Every scanned label feeds the food database (deduped), so this
+        // product matches instantly next time — for everyone, once synced.
+        CustomFoodStore.addFromScan(name: name, label: label, in: context)
         pendingLabel = nil
         review = ReviewSession(rawText: "Scanned label: \(name)", items: [item])
     }
@@ -470,11 +473,17 @@ final class MealCaptureCoordinator: ObservableObject {
         }
     }
 
-    /// A remembered correction wins over a fresh search; otherwise fall through
-    /// to the normal USDA lookup. A nil result means no match (never zeros).
+    /// Match resolution ladder: a remembered correction wins outright, then
+    /// the app's own food database (scanned labels, imported sheets, community
+    /// contributions — instant and offline), then the USDA API for the long
+    /// tail. A nil result means no match (never zeros).
     private func resolveMatch(for request: FoodItemRequest, in context: ModelContext) async -> NutritionMatch? {
         if let remembered = RememberedMatchStore.lookup(phrase: request.name, in: context) {
             return USDANutritionLookupService.evaluate(for: request, food: remembered, nameScore: 1.0).match
+        }
+        if let custom = CustomFoodStore.match(for: request, in: context) {
+            MatchDebugLog.shared.record(transcript: "Matched \"\(request.name)\" from the food database")
+            return custom
         }
         return try? await logger.nutrition.lookup(request)
     }

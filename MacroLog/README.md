@@ -276,6 +276,37 @@ caffeine…"** — every field is editable, and an empty box means "not recorded
 by the same `Micronutrients.fields` table, so a nutrient added there appears
 everywhere at once.
 
+### The food database (matching before USDA)
+
+The app keeps its **own nutrition database** (`CustomFood`, SwiftData) and
+searches it BEFORE the USDA API — instant, offline, and it grows with use:
+
+- **Label scans feed it automatically.** Every scanned nutrition/supplement
+  label becomes a row (name, brand, serving, macros, micros). Deduped by a
+  normalized name+brand key, so re-scanning never duplicates.
+- **Nutrition sheets import as CSV** in Settings → **Food database**
+  (restaurant menus, beer/wine lists…). Header: `name, brand, serving,
+  calories, protein, carbs, fat`, plus optional micronutrient columns
+  (`caffeine`, `sodium`, `added sugars`, …) matched against the shared
+  fields table. Values are per serving. The screen also browses, searches,
+  and deletes rows.
+- **A starter set ships bundled** (`CustomFoodSeed`): ~60 items USDA matches
+  poorly — beers, wines, spirits, cocktails, seltzers, and flagship
+  fast-food items with published per-serving numbers.
+- **Community sync** (invite-code installs): scans and imports push to a
+  shared D1 database on the proxy server, and everyone pulls each other's
+  contributions — each user's scans make matching better for all users.
+  Direct-key installs simply keep a personal database.
+
+Match ladder in the capture flow: remembered corrections →
+**food database** → USDA API (`resolveMatch`). USDA stays an API on purpose:
+FoodData Central is 2M+ foods and would bloat the app bundled; the local DB
+accumulates exactly the foods people actually log.
+
+Recipes participate too: **"Share to community"** in a recipe's detail view
+publishes it to the shared library, and the recipe search includes a
+**Community** source alongside TheMealDB/Spoonacular/Edamam.
+
 ### Recommended goals from body metrics
 
 Settings → **Body & goal** takes your height, weight, age, sex, and activity

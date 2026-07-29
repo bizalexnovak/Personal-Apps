@@ -15,6 +15,13 @@ MONTHLY_COST_CAP_USD = "10"
 binding = "USERS"
 id = "PASTE_KV_NAMESPACE_ID_HERE"
 
+# Shared community food/recipe database (D1, SQLite).
+# Created by `wrangler d1 create macrolog-foods` — paste the id it prints.
+[[d1_databases]]
+binding = "FOODDB"
+database_name = "macrolog-foods"
+database_id = "PASTE_D1_DATABASE_ID_HERE"
+
 # Secrets (set via `wrangler secret put …`, never in this file):
 #   ANTHROPIC_API_KEY — your Claude API key
 #   ADMIN_TOKEN       — any long random string; guards the /admin endpoints

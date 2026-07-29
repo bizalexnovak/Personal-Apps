@@ -34,6 +34,10 @@ export default {
       if (url.pathname === "/v1/messages" && request.method === "POST") {
         return await proxyMessages(request, env);
       }
+      if (url.pathname === "/foods" || url.pathname === "/recipes" ||
+          url.pathname === "/recipes/search") {
+        return await handleDatabase(request, env, url);
+      }
       if (url.pathname.startsWith("/admin/")) {
         return await handleAdmin(request, env, url);
       }
@@ -43,6 +47,126 @@ export default {
     }
   },
 };
+
+// MARK: Community database (D1)
+// The shared food + recipe database every app install syncs with: scans and
+// CSV imports push up, everyone pulls each other's contributions down.
+// Auth: the same per-person invite code as the Claude proxy.
+
+let tablesReady = false;
+async function ensureTables(env) {
+  if (tablesReady) return;
+  await env.FOODDB.exec(
+    "CREATE TABLE IF NOT EXISTS foods (name_key TEXT PRIMARY KEY, name TEXT, brand TEXT, serving TEXT, calories REAL, protein REAL, carbs REAL, fat REAL, micros TEXT, source TEXT, created_at INTEGER)"
+  );
+  await env.FOODDB.exec(
+    "CREATE TABLE IF NOT EXISTS recipes (name_key TEXT PRIMARY KEY, name TEXT, slot TEXT, instructions TEXT, ingredients TEXT, created_at INTEGER)"
+  );
+  tablesReady = true;
+}
+
+// Mirrors the app's CustomFoodStore.nameKey: lowercase alphanumeric tokens,
+// deduped and sorted, so the same product never lands twice.
+function nameKey(...parts) {
+  const tokens = parts
+    .join(" ")
+    .toLowerCase()
+    .replace(/[^a-z0-9 ]+/g, " ")
+    .split(/\s+/)
+    .filter(Boolean);
+  return [...new Set(tokens)].sort().join(" ");
+}
+
+async function requireUser(request, env) {
+  const code = (request.headers.get("x-macrolog-user") || "").trim();
+  if (!code) return null;
+  const raw = await env.USERS.get(`user:${code}`);
+  return raw ? code : null;
+}
+
+async function handleDatabase(request, env, url) {
+  if (!env.FOODDB) {
+    return json({ error: "food database not configured (add the D1 binding — see server/README.md)" }, 503);
+  }
+  const user = await requireUser(request, env);
+  if (!user) return json({ error: "invalid invite code" }, 403);
+  await ensureTables(env);
+
+  // POST /foods {items: [...]} — contribute rows; duplicates are ignored.
+  if (url.pathname === "/foods" && request.method === "POST") {
+    const { items } = await request.json();
+    if (!Array.isArray(items) || items.length > 500) {
+      return json({ error: "items must be an array of at most 500" }, 400);
+    }
+    let added = 0;
+    for (const f of items) {
+      if (!f?.name || typeof f.calories !== "number") continue;
+      const result = await env.FOODDB
+        .prepare(
+          "INSERT OR IGNORE INTO foods (name_key, name, brand, serving, calories, protein, carbs, fat, micros, source, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)"
+        )
+        .bind(
+          nameKey(f.name, f.brand || ""),
+          String(f.name).slice(0, 200),
+          String(f.brand || "").slice(0, 100),
+          String(f.serving || "1 serving").slice(0, 100),
+          f.calories, f.protein || 0, f.carbs || 0, f.fat || 0,
+          f.micros ? String(f.micros).slice(0, 4000) : null,
+          String(f.source || "scan").slice(0, 20),
+          Date.now()
+        )
+        .run();
+      if (result.meta.changes > 0) added += 1;
+    }
+    return json({ ok: true, added });
+  }
+
+  // GET /foods?since=<ms> — pull rows added after the cursor.
+  if (url.pathname === "/foods" && request.method === "GET") {
+    const since = Number(url.searchParams.get("since") || "0");
+    const { results } = await env.FOODDB
+      .prepare("SELECT * FROM foods WHERE created_at > ? ORDER BY created_at LIMIT 500")
+      .bind(since)
+      .all();
+    const next = results.length
+      ? results[results.length - 1].created_at
+      : since;
+    return json({ items: results, next });
+  }
+
+  // POST /recipes — share one recipe; duplicates (by name) are ignored.
+  if (url.pathname === "/recipes" && request.method === "POST") {
+    const r = await request.json();
+    if (!r?.name) return json({ error: "name required" }, 400);
+    const result = await env.FOODDB
+      .prepare(
+        "INSERT OR IGNORE INTO recipes (name_key, name, slot, instructions, ingredients, created_at) VALUES (?,?,?,?,?,?)"
+      )
+      .bind(
+        nameKey(r.name),
+        String(r.name).slice(0, 200),
+        String(r.slot || "any").slice(0, 20),
+        String(r.instructions || "").slice(0, 8000),
+        String(r.ingredients || "[]").slice(0, 16000),
+        Date.now()
+      )
+      .run();
+    return json({ ok: true, added: result.meta.changes > 0 });
+  }
+
+  // GET /recipes/search?q= — for the app's recipe search "Community" source.
+  if (url.pathname === "/recipes/search" && request.method === "GET") {
+    const q = (url.searchParams.get("q") || "").trim().toLowerCase();
+    if (!q) return json({ items: [] });
+    const { results } = await env.FOODDB
+      .prepare("SELECT name, slot, instructions, ingredients FROM recipes WHERE name_key LIKE ? LIMIT 20")
+      .bind(`%${q.replace(/[%_]/g, "")}%`)
+      .all();
+    return json({ items: results });
+  }
+
+  return json({ error: "not found" }, 404);
+}
 
 // MARK: Proxy
 

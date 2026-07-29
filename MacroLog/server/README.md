@@ -32,6 +32,18 @@ maybe 30 meals a day.
    It prints an `id = "…"` line — paste that id into `wrangler.toml` where it
    says `PASTE_KV_NAMESPACE_ID_HERE`.
 
+3b. **Create the community food database** (shared foods & recipes — every
+   user's label scans and CSV uploads sync here and improve matching for
+   everyone):
+
+   ```bash
+   wrangler d1 create macrolog-foods
+   ```
+
+   It prints a `database_id = "…"` line — paste that id into `wrangler.toml`
+   where it says `PASTE_D1_DATABASE_ID_HERE`. Tables are created
+   automatically on first use.
+
 4. **Set the two secrets** (paste the value when each command prompts):
 
    ```bash

@@ -407,6 +407,7 @@ struct RecipeSearchAggregator {
 
     static var configured: RecipeSearchAggregator {
         RecipeSearchAggregator(providers: [
+            CommunityRecipeProvider(), // recipes shared by this app's users
             SpoonacularProvider(), EdamamProvider(), TheMealDBProvider(),
         ])
     }

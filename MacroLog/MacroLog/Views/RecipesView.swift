@@ -192,6 +192,9 @@ struct RecipeDetailView: View {
 
     @State private var showIngredientEditor = false
     @State private var justLogged = false
+    @State private var shareState: ShareState = .idle
+
+    enum ShareState { case idle, sharing, shared, failed }
 
     var body: some View {
         List {
@@ -255,8 +258,25 @@ struct RecipeDetailView: View {
                     )
                 }
                 .disabled(justLogged || recipe.ingredients.isEmpty)
+
+                // Only invite-code installs have a shared server to publish to.
+                if ClaudeEndpoint.proxyConfig != nil {
+                    Button {
+                        share()
+                    } label: {
+                        switch shareState {
+                        case .idle: Label("Share to community", systemImage: "square.and.arrow.up")
+                        case .sharing: HStack { ProgressView(); Text("Sharing…") }
+                        case .shared: Label("Shared", systemImage: "checkmark.circle.fill")
+                        case .failed: Label("Couldn't share — tap to retry", systemImage: "arrow.clockwise")
+                        }
+                    }
+                    .disabled(shareState == .sharing || shareState == .shared || recipe.ingredients.isEmpty)
+                }
             } footer: {
-                Text("Adds the whole recipe to today's diary as a meal.")
+                Text(ClaudeEndpoint.proxyConfig != nil
+                    ? "\u{201C}Log\u{201D} adds the recipe to today's diary. \u{201C}Share\u{201D} publishes it to the community library other users can search."
+                    : "Adds the whole recipe to today's diary as a meal.")
             }
         }
         .keyboardDismissBar()
@@ -303,6 +323,13 @@ struct RecipeDetailView: View {
         Task {
             try? await Task.sleep(for: .seconds(2))
             justLogged = false
+        }
+    }
+
+    private func share() {
+        shareState = .sharing
+        Task {
+            shareState = await CommunitySync.shareRecipe(recipe) ? .shared : .failed
         }
     }
 }

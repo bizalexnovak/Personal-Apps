@@ -63,6 +63,18 @@ enum ClaudeEndpoint {
         return nil
     }
 
+    /// Proxy origin + invite code when the proxy path is active — the same
+    /// server also hosts the community food/recipe database (CommunitySync).
+    /// Nil for direct-key users: they have no shared server to sync with.
+    static var proxyConfig: (base: URL, inviteCode: String)? {
+        guard case .proxy(let url, let code) = access else { return nil }
+        var comps = URLComponents(url: url, resolvingAgainstBaseURL: false)
+        comps?.path = ""
+        comps?.query = nil
+        guard let base = comps?.url else { return nil }
+        return (base, code)
+    }
+
     /// A ready-to-send POST for the Messages API, throwing the shared
     /// missing-key error when nothing is configured. Callers attach their
     /// encoded body.
