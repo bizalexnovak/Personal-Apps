@@ -48,6 +48,17 @@ struct LabelNutrition: Codable, Equatable {
     var chloride: Double?
     var caffeine: Double?
     var creatine: Double?
+    // Ergogenics & nootropics (supplement facts panels: pre-workouts,
+    // energy drinks, nootropic blends).
+    var citrulline: Double?
+    var betaAlanine: Double?
+    var betaine: Double?
+    var taurine: Double?
+    var tyrosine: Double?
+    var theanine: Double?
+    var alphaGPC: Double?
+    var norvaline: Double?
+    var huperzineA: Double?
 
     /// The micronutrient values a label carries, mapped into the shared type.
     var micronutrients: Micronutrients {
@@ -87,7 +98,16 @@ struct LabelNutrition: Codable, Equatable {
             pantothenicAcid: pantothenicAcid,
             choline: choline,
             caffeine: caffeine,
-            creatine: creatine
+            creatine: creatine,
+            citrulline: citrulline,
+            betaAlanine: betaAlanine,
+            betaine: betaine,
+            taurine: taurine,
+            tyrosine: tyrosine,
+            theanine: theanine,
+            alphaGPC: alphaGPC,
+            norvaline: norvaline,
+            huperzineA: huperzineA
         )
     }
 }
@@ -101,17 +121,21 @@ protocol LabelScanning {
 struct ClaudeLabelScanningService: LabelScanning {
     static let systemPrompt = """
     You read nutrition facts and supplement facts labels from photographs. Extract the values for ONE serving as printed on the label. Respond ONLY with valid JSON, no markdown, no preamble.
-    Format: {"name": string, "servingSize": string, "calories": number, "protein": number, "carbs": number, "fat": number, "saturatedFat": number|null, "transFat": number|null, "cholesterol": number|null, "sodium": number|null, "fiber": number|null, "totalSugars": number|null, "addedSugars": number|null, "potassium": number|null, "calcium": number|null, "iron": number|null, "magnesium": number|null, "zinc": number|null, "phosphorus": number|null, "copper": number|null, "manganese": number|null, "selenium": number|null, "iodine": number|null, "chromium": number|null, "molybdenum": number|null, "chloride": number|null, "vitaminA": number|null, "vitaminC": number|null, "vitaminD": number|null, "vitaminE": number|null, "vitaminK": number|null, "thiamin": number|null, "riboflavin": number|null, "niacin": number|null, "vitaminB6": number|null, "folate": number|null, "vitaminB12": number|null, "biotin": number|null, "pantothenicAcid": number|null, "choline": number|null, "caffeine": number|null, "creatine": number|null}
+    Format: {"name": string, "servingSize": string, "calories": number, "protein": number, "carbs": number, "fat": number, "saturatedFat": number|null, "transFat": number|null, "cholesterol": number|null, "sodium": number|null, "fiber": number|null, "totalSugars": number|null, "addedSugars": number|null, "potassium": number|null, "calcium": number|null, "iron": number|null, "magnesium": number|null, "zinc": number|null, "phosphorus": number|null, "copper": number|null, "manganese": number|null, "selenium": number|null, "iodine": number|null, "chromium": number|null, "molybdenum": number|null, "chloride": number|null, "vitaminA": number|null, "vitaminC": number|null, "vitaminD": number|null, "vitaminE": number|null, "vitaminK": number|null, "thiamin": number|null, "riboflavin": number|null, "niacin": number|null, "vitaminB6": number|null, "folate": number|null, "vitaminB12": number|null, "biotin": number|null, "pantothenicAcid": number|null, "choline": number|null, "caffeine": number|null, "creatine": number|null, "citrulline": number|null, "betaAlanine": number|null, "betaine": number|null, "taurine": number|null, "tyrosine": number|null, "theanine": number|null, "alphaGPC": number|null, "norvaline": number|null, "huperzineA": number|null}
     - "name": the product name if visible on the packaging, otherwise a short generic description of the food.
     - "servingSize": the serving size exactly as printed (e.g. "1 can (12 fl oz)", "2/3 cup (55g)").
     - calories, protein, carbs, fat: the per-serving numbers in kcal and grams. If a macro is genuinely not on the label, use 0.
-    - saturatedFat, transFat, fiber, totalSugars, addedSugars, creatine: grams per serving.
-    - cholesterol, sodium, potassium, calcium, iron, magnesium, zinc, phosphorus, copper, manganese, chloride, vitaminC, vitaminE, thiamin, riboflavin, niacin, vitaminB6, pantothenicAcid, choline, caffeine: milligrams (mg) per serving.
-    - vitaminA, vitaminD, vitaminK, selenium, iodine, chromium, molybdenum, folate, vitaminB12, biotin: micrograms (mcg) per serving.
+    - saturatedFat, transFat, fiber, totalSugars, addedSugars, creatine, citrulline, betaAlanine, betaine: grams per serving.
+    - cholesterol, sodium, potassium, calcium, iron, magnesium, zinc, phosphorus, copper, manganese, chloride, vitaminC, vitaminE, thiamin, riboflavin, niacin, vitaminB6, pantothenicAcid, choline, caffeine, taurine, tyrosine, theanine, alphaGPC, norvaline: milligrams (mg) per serving.
+    - vitaminA, vitaminD, vitaminK, selenium, iodine, chromium, molybdenum, folate, vitaminB12, biotin, huperzineA: micrograms (mcg) per serving.
     - Energy drinks and supplements often list B vitamins, biotin, pantothenic acid, and choline — capture every one that is printed.
-    - Convert if the label prints a different unit (e.g. vitamin A in IU ≈ printed IU × 0.3 mcg for retinol; 1 g = 1000 mg = 1000000 mcg).
-    - caffeine: often printed outside the facts panel ("Caffeine content: 200 mg") — include it if printed anywhere on the visible packaging.
+    - Convert if the label prints a different unit (e.g. vitamin A in IU ≈ printed IU × 0.3 mcg for retinol; 1 g = 1000 mg = 1000000 mcg). So "L-Citrulline 6000mg" is citrulline 6, "Beta Alanine 3200mg" is betaAlanine 3.2.
+    - caffeine: often printed outside the facts panel ("Caffeine content: 200 mg") — include it if printed anywhere on the visible packaging. "Caffeine Anhydrous" counts as caffeine.
     - creatine: on supplement facts panels (e.g. "Creatine monohydrate 5 g").
+    - Pre-workout / nootropic ingredients map by compound regardless of the printed form: "L-Citrulline" or "Citrulline Malate" -> citrulline; "Beta Alanine" -> betaAlanine; "Betaine Anhydrous" or "Trimethylglycine" -> betaine; "L-Taurine" -> taurine; "L-Tyrosine" or "N-Acetyl L-Tyrosine" -> tyrosine; "L-Theanine" -> theanine; "Alpha GPC" or "Alpha-Glyceryl Phosphoryl Choline" -> alphaGPC (record the printed amount of the compound, at 50% purity record the printed mg as-is); "L-Norvaline" -> norvaline.
+    - choline: for elemental choline as printed on nutrition facts. For "Choline Bitartrate", record ~41% of the printed amount as choline (e.g. 1500 mg bitartrate -> choline 615). Do NOT also count Alpha GPC into choline — it has its own field.
+    - huperzineA: labels usually print the herb extract with a standardization ("Huperzia Serrata (1% Huperzine A) 5mg") — record the ACTIVE amount in mcg: 5 mg x 1% = 50. If huperzine A itself is printed in mcg, use that number.
+    - Proprietary blends that print only a total without per-ingredient amounts: record nothing for those ingredients.
     - For every micronutrient field: use the printed number, or null if that nutrient is not shown on the label. Do NOT use 0 for a missing micronutrient, and do not estimate.
     Read the printed numbers only — do not infer values that aren't shown.
     """

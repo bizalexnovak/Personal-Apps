@@ -38,4 +38,26 @@ final class NameCleaningTests: XCTestCase {
         XCTAssertEqual(label.calories, 10)
         XCTAssertEqual(label.carbs, 2)
     }
+
+    func testSupplementFactsLabelDecodingCarriesErgogenics() throws {
+        // The pre-workout shape: gram-scale aminos, mg nootropics, mcg actives
+        // (huperzine already converted from the "5 mg herb at 1%" printing).
+        let json = #"""
+        {"name": "Pre-Workout", "servingSize": "1 Scoop (17g)", "calories": 0, "protein": 0, "carbs": 0, "fat": 0,
+         "citrulline": 6, "betaAlanine": 3.2, "betaine": 2.5, "choline": 615, "alphaGPC": 300,
+         "caffeine": 250, "theanine": 250, "norvaline": 200, "huperzineA": 50}
+        """#
+        let label = try ClaudeLabelScanningService.decode(from: json)
+        let micros = label.micronutrients
+        XCTAssertEqual(micros.citrulline ?? 0, 6, accuracy: 0.001)
+        XCTAssertEqual(micros.betaAlanine ?? 0, 3.2, accuracy: 0.001)
+        XCTAssertEqual(micros.betaine ?? 0, 2.5, accuracy: 0.001)
+        XCTAssertEqual(micros.choline ?? 0, 615, accuracy: 0.001)
+        XCTAssertEqual(micros.alphaGPC ?? 0, 300, accuracy: 0.001)
+        XCTAssertEqual(micros.caffeine ?? 0, 250, accuracy: 0.001)
+        XCTAssertEqual(micros.theanine ?? 0, 250, accuracy: 0.001)
+        XCTAssertEqual(micros.norvaline ?? 0, 200, accuracy: 0.001)
+        XCTAssertEqual(micros.huperzineA ?? 0, 50, accuracy: 0.001)
+        XCTAssertNil(micros.creatine, "absent fields must stay nil, not 0")
+    }
 }

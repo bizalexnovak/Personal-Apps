@@ -414,13 +414,30 @@ private struct MacroOverrideSheet: View {
     }
 }
 
-/// Editor for every micronutrient on one item — vitamins, minerals, caffeine,
-/// creatine. Fields are optional: an empty box means "not recorded" (distinct
-/// from 0), matching how the values are stored. Driven by the same
-/// `Micronutrients.fields` table as capture and display, so a nutrient added
-/// there is automatically editable here.
+/// Meal-editor adapter: edits a saved FoodItem's micros via the shared
+/// value-based editor.
 private struct MicroOverrideSheet: View {
     @Bindable var item: FoodItem
+
+    var body: some View {
+        MicronutrientEditSheet(
+            initial: item.micros,
+            contextLine: "Per \(item.quantity.formatted()) \(item.unit) of \(item.name)"
+        ) { item.micros = $0 }
+    }
+}
+
+/// Editor for every micronutrient on one set of values — vitamins, minerals,
+/// caffeine, creatine, pre-workout compounds. Fields are optional: an empty
+/// box means "not recorded" (distinct from 0), matching how the values are
+/// stored. Driven by the same `Micronutrients.fields` table as capture and
+/// display, so a nutrient added there is automatically editable here.
+/// Value-in/value-out so the meal editor (saved items) and the capture review
+/// cards (pre-save matches) share one editor.
+struct MicronutrientEditSheet: View {
+    let initial: Micronutrients
+    let contextLine: String
+    let onSave: (Micronutrients) -> Void
     @Environment(\.dismiss) private var dismiss
 
     @State private var values: [Double?] = Array(
@@ -441,7 +458,7 @@ private struct MicroOverrideSheet: View {
                         .font(.subheadline)
                     }
                 } header: {
-                    Text("Per \(item.quantity.formatted()) \(item.unit) of \(item.name)")
+                    Text(contextLine)
                 } footer: {
                     Text("Leave a field empty for \u{201C}not recorded\u{201D} — that's different from 0.")
                 }
@@ -459,13 +476,13 @@ private struct MicroOverrideSheet: View {
                         for (index, field) in Micronutrients.fields.enumerated() {
                             micros[keyPath: field.keyPath] = values[index]
                         }
-                        item.micros = micros
+                        onSave(micros)
                         dismiss()
                     }
                 }
             }
             .onAppear {
-                values = Micronutrients.fields.map { item.micros[keyPath: $0.keyPath] }
+                values = Micronutrients.fields.map { initial[keyPath: $0.keyPath] }
             }
         }
     }
@@ -474,17 +491,22 @@ private struct MicroOverrideSheet: View {
 /// Read-only read-out of recorded micronutrients (fat/carb breakdown, minerals,
 /// vitamins, caffeine…). Collapsed by default — this detail is captured with
 /// each entry but intentionally kept out of the way. Shared between the meal
-/// editor (one item) and the Today tab (the whole day's totals).
+/// editor (one item), the Today tab (the whole day's totals), and the capture
+/// review cards. The label carries a count so a collapsed row still says
+/// whether there's anything inside; pass `onEdit` to append an edit button to
+/// the expanded content (the review cards do).
 struct MicronutrientDisclosure: View {
     let micros: Micronutrients
+    var onEdit: (() -> Void)? = nil
 
     var body: some View {
-        DisclosureGroup("Micronutrients") {
-            let recorded = micros.recorded
+        let recorded = micros.recorded
+        DisclosureGroup(recorded.isEmpty ? "Micronutrients" : "Micronutrients (\(recorded.count))") {
             if recorded.isEmpty {
                 Text("None recorded.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             } else {
                 ForEach(recorded, id: \.label) { entry in
                     LabeledContent(entry.label) {
@@ -494,6 +516,19 @@ struct MicronutrientDisclosure: View {
                     }
                     .font(.subheadline)
                 }
+            }
+            if let onEdit {
+                Button {
+                    onEdit()
+                } label: {
+                    Label(
+                        recorded.isEmpty ? "Add micronutrients…" : "Edit micronutrients…",
+                        systemImage: "pencil"
+                    )
+                    .font(.subheadline)
+                }
+                .buttonStyle(.borderless)
+                .padding(.top, 2)
             }
         }
         .font(.subheadline)

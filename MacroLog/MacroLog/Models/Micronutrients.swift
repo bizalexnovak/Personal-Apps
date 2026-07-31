@@ -54,6 +54,20 @@ struct Micronutrients: Codable, Equatable, Hashable {
     var caffeine: Double?   // mg
     var creatine: Double?   // g — not in USDA data; captured from supplement
                             // labels or logged directly ("5 g of creatine")
+    // Ergogenics & nootropics (pre-workouts, energy drinks). Like creatine,
+    // none of these exist in USDA data — they come from scanned supplement
+    // facts labels or direct logging ("6 grams of citrulline"). Gram-scale
+    // doses store as g, the rest as printed (mg / mcg).
+    var citrulline: Double?  // g
+    var betaAlanine: Double? // g
+    var betaine: Double?     // g
+    var taurine: Double?     // mg
+    var tyrosine: Double?    // mg
+    var theanine: Double?    // mg
+    var alphaGPC: Double?    // mg
+    var norvaline: Double?   // mg
+    var huperzineA: Double?  // mcg — labels often print the herb extract
+                             // ("Huperzia Serrata (1% Huperzine A) 5 mg" = 50 mcg)
 
     static let empty = Micronutrients()
 
@@ -142,7 +156,17 @@ extension Micronutrients {
         .init(label: "Pantothenic acid (B5)", unit: "mg", keyPath: \.pantothenicAcid, usdaIDs: [1170]),
         .init(label: "Choline", unit: "mg", keyPath: \.choline, usdaIDs: [1180]),
         .init(label: "Caffeine", unit: "mg", keyPath: \.caffeine, usdaIDs: [1057]),
-        // No FDC nutrient number — creatine comes from labels or direct logging.
+        // No FDC nutrient numbers below here — these come from supplement
+        // facts labels or direct logging, never USDA.
         .init(label: "Creatine", unit: "g", keyPath: \.creatine, usdaIDs: []),
+        .init(label: "L-Citrulline", unit: "g", keyPath: \.citrulline, usdaIDs: []),
+        .init(label: "Beta-alanine", unit: "g", keyPath: \.betaAlanine, usdaIDs: []),
+        .init(label: "Betaine", unit: "g", keyPath: \.betaine, usdaIDs: []),
+        .init(label: "Taurine", unit: "mg", keyPath: \.taurine, usdaIDs: []),
+        .init(label: "L-Tyrosine", unit: "mg", keyPath: \.tyrosine, usdaIDs: []),
+        .init(label: "L-Theanine", unit: "mg", keyPath: \.theanine, usdaIDs: []),
+        .init(label: "Alpha-GPC", unit: "mg", keyPath: \.alphaGPC, usdaIDs: []),
+        .init(label: "L-Norvaline", unit: "mg", keyPath: \.norvaline, usdaIDs: []),
+        .init(label: "Huperzine A", unit: "mcg", keyPath: \.huperzineA, usdaIDs: []),
     ]
 }

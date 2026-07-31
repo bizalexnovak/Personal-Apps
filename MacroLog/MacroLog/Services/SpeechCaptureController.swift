@@ -259,6 +259,9 @@ final class SpeechCaptureController: ObservableObject {
         // Supplements (logged directly, so mis-transcription breaks the flow)
         "creatine", "creatine monohydrate", "caffeine", "caffeine pill",
         "multivitamin", "pre-workout", "electrolytes",
+        "citrulline", "L-citrulline", "citrulline malate", "beta alanine",
+        "betaine", "taurine", "tyrosine", "L-theanine", "theanine",
+        "alpha GPC", "norvaline", "huperzine",
         // Units & amounts
         "ounce", "ounces", "tablespoon", "tablespoons", "teaspoon", "teaspoons",
         "cup", "cups", "slice", "slices", "piece", "pieces", "handful",

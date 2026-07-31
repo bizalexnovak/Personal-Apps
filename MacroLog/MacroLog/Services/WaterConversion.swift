@@ -63,55 +63,111 @@ enum WaterConversion {
 }
 
 /// Zero-calorie supplements logged directly ("5 g of creatine", "a caffeine
-/// pill") — like water, these skip USDA entirely: a food search would match
-/// them to nonsense, and their value lives in the micronutrient record.
+/// pill", "6 grams of citrulline") — like water, these skip USDA entirely: a
+/// food search would match them to nonsense, and their value lives in the
+/// micronutrient record.
 enum SupplementConversion {
-    /// Words allowed in a BARE creatine dose ("creatine", "creatine
-    /// monohydrate powder"). Anything else in the name ("creatine gummies",
-    /// "creatine protein blend") means a real caloric product — those must go
-    /// through the normal lookup so their calories aren't zeroed.
+    /// How a supplement's dose is stored on `Micronutrients`.
+    private enum DoseUnit {
+        case grams, milligrams
+
+        var displayUnit: String {
+            switch self {
+            case .grams: return "g"
+            case .milligrams: return "mg"
+            }
+        }
+    }
+
+    /// One directly-loggable supplement. The name must contain every
+    /// `required` token and nothing outside `allowed` — anything else in the
+    /// name ("creatine gummies", "creatine protein blend") means a real
+    /// caloric product that must go through the normal lookup so its calories
+    /// aren't zeroed.
     ///
     /// Deliberate trade-off: branded phrasings ("Optimum Nutrition creatine")
     /// also fall through to USDA rather than dose-guessing here — brand words
     /// are unbounded, and a wrong zero-calorie guess is worse than a lookup.
     /// Say the bare name ("5 grams of creatine") for direct dose logging.
-    private static let creatineWords: Set<String> = [
-        "creatine", "monohydrate", "micronized", "powder", "supplement",
-        "scoop", "scoops", "unflavored", "unflavoured", "hcl",
-    ]
+    private struct BareSupplement {
+        let required: Set<String>
+        let allowed: Set<String>
+        let storage: DoseUnit
+        let keyPath: WritableKeyPath<Micronutrients, Double?>
+        /// Dose per scoop/pill/serving (in the storage unit) when the unit
+        /// isn't an explicit weight.
+        let defaultDose: Double
+        let displayName: String
+    }
 
-    /// Words allowed in a BARE caffeine dose ("caffeine", "caffeine pill",
-    /// "caffeine anhydrous tablets"). "high caffeine energy drink" and
-    /// "caffeine-free coke" both contain other words, so they fall through.
-    private static let caffeineWords: Set<String> = [
-        "caffeine", "anhydrous", "pill", "pills", "tablet", "tablets",
-        "capsule", "capsules", "supplement",
+    /// Checked in order; creatine and caffeine first (the originals).
+    /// "l" is allowed where dictation may produce "L-theanine" → {l, theanine}.
+    private static let supplements: [BareSupplement] = [
+        .init(required: ["creatine"],
+              allowed: ["creatine", "monohydrate", "micronized", "powder", "supplement",
+                        "scoop", "scoops", "unflavored", "unflavoured", "hcl"],
+              storage: .grams, keyPath: \.creatine, defaultDose: 5,
+              displayName: "Creatine"),
+        .init(required: ["caffeine"],
+              allowed: ["caffeine", "anhydrous", "pill", "pills", "tablet", "tablets",
+                        "capsule", "capsules", "supplement"],
+              storage: .milligrams, keyPath: \.caffeine, defaultDose: 200,
+              displayName: "Caffeine"),
+        .init(required: ["citrulline"],
+              allowed: ["citrulline", "l", "malate", "powder", "supplement",
+                        "scoop", "scoops", "unflavored", "unflavoured"],
+              storage: .grams, keyPath: \.citrulline, defaultDose: 6,
+              displayName: "L-Citrulline"),
+        .init(required: ["beta", "alanine"],
+              allowed: ["beta", "alanine", "powder", "supplement",
+                        "scoop", "scoops", "unflavored", "unflavoured"],
+              storage: .grams, keyPath: \.betaAlanine, defaultDose: 3.2,
+              displayName: "Beta-alanine"),
+        .init(required: ["betaine"],
+              allowed: ["betaine", "anhydrous", "trimethylglycine", "powder",
+                        "supplement", "scoop", "scoops"],
+              storage: .grams, keyPath: \.betaine, defaultDose: 2.5,
+              displayName: "Betaine"),
+        .init(required: ["taurine"],
+              allowed: ["taurine", "l", "powder", "supplement", "scoop", "scoops",
+                        "pill", "pills", "tablet", "tablets", "capsule", "capsules"],
+              storage: .milligrams, keyPath: \.taurine, defaultDose: 1000,
+              displayName: "Taurine"),
+        .init(required: ["tyrosine"],
+              allowed: ["tyrosine", "l", "n", "acetyl", "powder", "supplement",
+                        "scoop", "scoops", "pill", "pills", "tablet", "tablets",
+                        "capsule", "capsules"],
+              storage: .milligrams, keyPath: \.tyrosine, defaultDose: 500,
+              displayName: "L-Tyrosine"),
+        .init(required: ["theanine"],
+              allowed: ["theanine", "l", "supplement", "pill", "pills",
+                        "tablet", "tablets", "capsule", "capsules"],
+              storage: .milligrams, keyPath: \.theanine, defaultDose: 200,
+              displayName: "L-Theanine"),
+        .init(required: ["alpha", "gpc"],
+              allowed: ["alpha", "gpc", "powder", "supplement", "pill", "pills",
+                        "tablet", "tablets", "capsule", "capsules"],
+              storage: .milligrams, keyPath: \.alphaGPC, defaultDose: 300,
+              displayName: "Alpha-GPC"),
     ]
 
     /// A ready-made match when the item is a bare supplement, else nil.
-    /// The name must contain the supplement word and nothing outside its
+    /// The name must contain the supplement's tokens and nothing outside its
     /// allowed vocabulary, and the dose must be positive.
     static func match(for request: FoodItemRequest) -> NutritionMatch? {
         let words = NameTokens.tokens(request.name)
-        if words.contains("creatine"), words.isSubset(of: creatineWords) {
-            let grams = creatineGrams(quantity: request.quantity, unit: request.unit)
-            guard grams > 0 else { return nil }
-            var micros = Micronutrients()
-            micros.creatine = grams
-            return NutritionMatch(
-                matchedDescription: "Creatine · \(PortionScale.numberText(grams)) g",
-                calories: 0, protein: 0, carbs: 0, fat: 0,
-                confidence: MatchConfidence.high,
-                micros: micros
+        for supplement in supplements {
+            guard supplement.required.isSubset(of: words),
+                  words.isSubset(of: supplement.allowed) else { continue }
+            let amount = dose(
+                quantity: request.quantity, unit: request.unit,
+                storage: supplement.storage, defaultPerUnit: supplement.defaultDose
             )
-        }
-        if words.contains("caffeine"), words.isSubset(of: caffeineWords) {
-            let mg = caffeineMilligrams(quantity: request.quantity, unit: request.unit)
-            guard mg > 0 else { return nil }
+            guard amount > 0 else { return nil }
             var micros = Micronutrients()
-            micros.caffeine = mg
+            micros[keyPath: supplement.keyPath] = amount
             return NutritionMatch(
-                matchedDescription: "Caffeine · \(PortionScale.numberText(mg)) mg",
+                matchedDescription: "\(supplement.displayName) · \(PortionScale.numberText(amount)) \(supplement.storage.displayUnit)",
                 calories: 0, protein: 0, carbs: 0, fat: 0,
                 confidence: MatchConfidence.high,
                 micros: micros
@@ -120,23 +176,35 @@ enum SupplementConversion {
         return nil
     }
 
+    /// Convert a spoken quantity + unit into the storage unit. Explicit
+    /// weights convert exactly; anything else (scoop, pill, serving, dose…)
+    /// counts as `defaultPerUnit` each.
+    private static func dose(
+        quantity: Double, unit: String, storage: DoseUnit, defaultPerUnit: Double
+    ) -> Double {
+        let u = NameTokens.normalizedUnit(unit)
+        let isGrams = u == "g" || u == "gram" || u == "grams"
+        let isMilligrams = u == "mg" || u == "milligram" || u == "milligrams"
+        switch storage {
+        case .grams:
+            if isGrams { return quantity }
+            if isMilligrams { return quantity / 1000 }
+        case .milligrams:
+            if isMilligrams { return quantity }
+            if isGrams { return quantity * 1000 }
+        }
+        return quantity * defaultPerUnit
+    }
+
     /// Grams of creatine for a quantity + unit. A scoop/serving is the common
     /// 5 g dose; unknown units also default to 5 g each.
     static func creatineGrams(quantity: Double, unit: String) -> Double {
-        switch NameTokens.normalizedUnit(unit) {
-        case "g", "gram", "grams": return quantity
-        case "mg", "milligram", "milligrams": return quantity / 1000
-        default: return quantity * 5 // scoop, serving, dose…
-        }
+        dose(quantity: quantity, unit: unit, storage: .grams, defaultPerUnit: 5)
     }
 
     /// Milligrams of caffeine for a quantity + unit. Pills/tablets default to
     /// the common 200 mg dose; unknown units too.
     static func caffeineMilligrams(quantity: Double, unit: String) -> Double {
-        switch NameTokens.normalizedUnit(unit) {
-        case "mg", "milligram", "milligrams": return quantity
-        case "g", "gram", "grams": return quantity * 1000
-        default: return quantity * 200 // pill, tablet, capsule, serving…
-        }
+        dose(quantity: quantity, unit: unit, storage: .milligrams, defaultPerUnit: 200)
     }
 }
