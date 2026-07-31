@@ -13,6 +13,7 @@ struct ReviewItemCard: View {
 
     @State private var pane: Pane = .none
     @State private var didAutoOpen = false
+    @State private var showMicroEditor = false
 
     // Edit pane
     @State private var editedName = ""
@@ -40,6 +41,12 @@ struct ReviewItemCard: View {
 
             if !isWater, item.match != nil {
                 scaleRow
+                // Micronutrients ride the match through the whole flow — show
+                // them before saving, and let label mistakes (or a match with
+                // nothing recorded) be fixed right here instead of after save.
+                MicronutrientDisclosure(micros: item.match?.micros ?? .empty) {
+                    showMicroEditor = true
+                }
             }
 
             actionsRow
@@ -57,6 +64,12 @@ struct ReviewItemCard: View {
                 .strokeBorder(borderColor, lineWidth: 1.5)
         )
         .onAppear(perform: autoOpenIfNeeded)
+        .sheet(isPresented: $showMicroEditor) {
+            MicronutrientEditSheet(
+                initial: item.match?.micros ?? .empty,
+                contextLine: "Per \(item.request.quantity.formatted()) \(item.request.unit) of \(item.request.name)"
+            ) { coordinator.applyMicrosEdit(item.id, micros: $0) }
+        }
     }
 
     private var borderColor: Color {

@@ -112,4 +112,64 @@ final class SupplementConversionTests: XCTestCase {
         XCTAssertEqual(SupplementConversion.caffeineMilligrams(quantity: 100, unit: "mg"), 100, accuracy: 0.001)
         XCTAssertEqual(SupplementConversion.caffeineMilligrams(quantity: 2, unit: "pills"), 400, accuracy: 0.001)
     }
+
+    // MARK: Pre-workout compounds
+
+    func testCitrullineGramsMatch() {
+        let match = SupplementConversion.match(
+            for: FoodItemRequest(name: "L-citrulline", quantity: 6, unit: "grams")
+        )
+        XCTAssertEqual(match?.calories, 0)
+        XCTAssertEqual(match?.micros.citrulline ?? 0, 6, accuracy: 0.001)
+    }
+
+    func testCitrullineMalateScoopUsesDefaultDose() {
+        let match = SupplementConversion.match(
+            for: FoodItemRequest(name: "citrulline malate", quantity: 1, unit: "scoop")
+        )
+        XCTAssertEqual(match?.micros.citrulline ?? 0, 6, accuracy: 0.001)
+    }
+
+    func testBetaAlanineConvertsMilligramsToGrams() {
+        let match = SupplementConversion.match(
+            for: FoodItemRequest(name: "beta alanine", quantity: 3200, unit: "mg")
+        )
+        XCTAssertEqual(match?.micros.betaAlanine ?? 0, 3.2, accuracy: 0.001)
+    }
+
+    func testTheanineCapsuleUsesDefaultDose() {
+        let match = SupplementConversion.match(
+            for: FoodItemRequest(name: "L-theanine", quantity: 1, unit: "capsule")
+        )
+        XCTAssertEqual(match?.micros.theanine ?? 0, 200, accuracy: 0.001)
+    }
+
+    func testAlphaGPCMatchesInMilligrams() {
+        let match = SupplementConversion.match(
+            for: FoodItemRequest(name: "alpha GPC", quantity: 300, unit: "mg")
+        )
+        XCTAssertEqual(match?.calories, 0)
+        XCTAssertEqual(match?.micros.alphaGPC ?? 0, 300, accuracy: 0.001)
+    }
+
+    func testPlainAlanineDoesNotMatchBetaAlanine() {
+        // "beta alanine" needs BOTH tokens — bare "alanine" (or "beta" in some
+        // other product name) must fall through to the normal lookup.
+        XCTAssertNil(SupplementConversion.match(
+            for: FoodItemRequest(name: "alanine", quantity: 3, unit: "grams")
+        ))
+    }
+
+    func testCompoundContainingProductsStillGoToLookup() {
+        // Real products that merely contain a compound keep their calories.
+        XCTAssertNil(SupplementConversion.match(
+            for: FoodItemRequest(name: "pre-workout", quantity: 1, unit: "scoop")
+        ))
+        XCTAssertNil(SupplementConversion.match(
+            for: FoodItemRequest(name: "citrulline energy drink", quantity: 1, unit: "can")
+        ))
+        XCTAssertNil(SupplementConversion.match(
+            for: FoodItemRequest(name: "taurine gummies", quantity: 2, unit: "pieces")
+        ))
+    }
 }

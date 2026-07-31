@@ -250,14 +250,22 @@ breakdown (fiber / total & added sugars), cholesterol, sodium, potassium,
 minerals (calcium, iron, magnesium, zinc, phosphorus, copper, manganese,
 selenium, iodine, chromium, molybdenum, chloride), vitamins (A, C, D, E, K,
 B1/B2/B3/B6/B12, folate, **biotin**, **pantothenic acid**, choline), plus
-**caffeine** and **creatine**. These come from USDA FoodData Central (which
+**caffeine** and **creatine** — and the **pre-workout / nootropic compounds**
+supplement labels print: L-citrulline, beta-alanine, betaine, taurine,
+L-tyrosine, L-theanine, Alpha-GPC, L-norvaline, and huperzine A. The label
+scanner knows the forms: citrulline malate counts as citrulline, choline
+bitartrate is recorded as its ~41% elemental choline (Alpha-GPC stays its own
+field), and standardized extracts are resolved to the active — "Huperzia
+serrata (1% huperzine A) 5 mg" records 50 mcg. These come from USDA FoodData Central (which
 returns them per food — coffee and energy drinks carry their caffeine), from
 scanned nutrition *and supplement* facts labels (the prompt explicitly asks
 for the B-vitamin row energy drinks print), and they **scale with the
 portion** just like the macros. Bare supplements can be logged directly —
-"5 g of creatine" or "a caffeine pill" skips USDA (a food search would
+"5 g of creatine", "a caffeine pill", "6 grams of citrulline", "beta
+alanine", "an L-theanine capsule" — each skips USDA (a food search would
 mismatch them) and records the dose as a zero-calorie entry
-(`SupplementConversion`). (`Micronutrients` is stored on each `FoodItem` as
+(`SupplementConversion`; scoops/pills without a stated weight use the
+compound's standard dose). (`Micronutrients` is stored on each `FoodItem` as
 JSON, so more fields can be added later without a schema migration.)
 
 **Daily micro tally.** The top of the Today tab has a **Macros / Micros**
@@ -272,9 +280,14 @@ medical advice.
 
 **Editing.** Each item in the meal editor has **"Edit micronutrients &
 caffeine…"** — every field is editable, and an empty box means "not recorded"
-(distinct from 0). The editor, capture, tally, and info sheets are all driven
-by the same `Micronutrients.fields` table, so a nutrient added there appears
-everywhere at once.
+(distinct from 0). **The review card shows micros before anything is saved,
+too:** every card in the capture flow carries a collapsed
+**"Micronutrients (n)"** disclosure — expand it to see exactly what a scan or
+match recorded, and **"Edit micronutrients…"** inside it fixes a mis-read
+label (or adds what a match lacked) right there, before Save All. The editor,
+capture, review, tally, and info sheets are all driven by the same
+`Micronutrients.fields` table, so a nutrient added there appears everywhere
+at once.
 
 ### The food database (matching before USDA)
 

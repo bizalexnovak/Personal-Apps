@@ -21,6 +21,32 @@ final class MicronutrientGuideTests: XCTestCase {
         }
     }
 
+    func testPreWorkoutFieldsAreTracked() {
+        let labels = Micronutrients.fields.map(\.label)
+        for expected in ["L-Citrulline", "Beta-alanine", "Betaine", "Taurine",
+                         "L-Tyrosine", "L-Theanine", "Alpha-GPC", "L-Norvaline",
+                         "Huperzine A"] {
+            XCTAssertTrue(labels.contains(expected), "\(expected) missing from fields table")
+        }
+    }
+
+    func testPreWorkoutFieldsSumAndScale() {
+        var a = Micronutrients()
+        a.citrulline = 6
+        a.caffeine = 250
+        var b = Micronutrients()
+        b.citrulline = 2
+        b.huperzineA = 50
+        let sum = a.adding(b)
+        XCTAssertEqual(sum.citrulline ?? 0, 8, accuracy: 0.001)
+        XCTAssertEqual(sum.caffeine ?? 0, 250, accuracy: 0.001)
+        XCTAssertEqual(sum.huperzineA ?? 0, 50, accuracy: 0.001)
+        // Half a scoop halves the doses; unrecorded fields stay unrecorded.
+        let scaled = sum.scaled(by: 0.5)
+        XCTAssertEqual(scaled.citrulline ?? 0, 4, accuracy: 0.001)
+        XCTAssertNil(scaled.betaAlanine)
+    }
+
     func testNewFieldsSumAndScale() {
         var a = Micronutrients()
         a.biotin = 30

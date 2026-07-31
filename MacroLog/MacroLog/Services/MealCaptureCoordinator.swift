@@ -425,6 +425,21 @@ final class MealCaptureCoordinator: ObservableObject {
         }
     }
 
+    /// ✏️ Micros — user-entered micronutrients replace the match's record
+    /// before save (fixing a mis-read label, or adding what a match lacked).
+    /// A needs-review card still needs its Confirm/Edit — micros alone don't
+    /// unlock Save All — but like the portion slider, editing micros on an
+    /// already-confirmed card downgrades it to edited.
+    func applyMicrosEdit(_ itemID: UUID, micros: Micronutrients) {
+        updateItem(itemID) { item in
+            guard var match = item.match else { return }
+            match.micros = micros
+            item.match = match
+            if item.status == .confirmed { item.status = .edited }
+            item.captureScaleBaseline()
+        }
+    }
+
     /// ✏️ Edit — user-entered macros replace the match (verified values).
     func applyEdit(_ itemID: UUID, calories: Double, protein: Double, carbs: Double, fat: Double) {
         updateItem(itemID) { item in

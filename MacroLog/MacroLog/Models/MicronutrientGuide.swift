@@ -207,6 +207,51 @@ enum MicronutrientGuide {
             goodFor: "One of the best-studied supplements: increases strength, power output, and lean mass; 3\u{2013}5 g daily is the standard dose.",
             excess: "Above ~10 g in one sitting commonly causes stomach upset; otherwise well tolerated in healthy people. It raises creatinine on blood tests without indicating kidney harm — mention it to your doctor. Drink enough water."
         ),
+        "L-Citrulline": .init(
+            dailyValue: nil, upperLimit: nil,
+            goodFor: "Raises blood arginine and nitric oxide — better blood flow, \u{201C}pumps\u{201D}, and modest endurance benefits. Typical pre-workout dose is 6\u{2013}8 g (or 8 g citrulline malate).",
+            excess: "Well tolerated even at high doses; very large amounts can cause stomach upset. It lowers blood pressure slightly — relevant alongside blood-pressure medication."
+        ),
+        "Beta-alanine": .init(
+            dailyValue: nil, upperLimit: nil,
+            goodFor: "Builds muscle carnosine, buffering acid during hard 1\u{2013}4 minute efforts. The effective dose is 3.2\u{2013}6.4 g per day, taken consistently — timing doesn't matter.",
+            excess: "The face-and-hands tingling (paresthesia) from a full dose is harmless and fades within an hour; split doses avoid it. No other established risks at studied doses."
+        ),
+        "Betaine": .init(
+            dailyValue: nil, upperLimit: nil,
+            goodFor: "Trimethylglycine, from beets: supports power output and cellular hydration in some studies; 2.5 g daily is the researched dose.",
+            excess: "High doses can cause a fishy body odor and raise blood cholesterol modestly in some people; GI upset past several grams."
+        ),
+        "Taurine": .init(
+            dailyValue: nil, upperLimit: nil,
+            goodFor: "An amino acid abundant in muscle and heart tissue — the energy-drink staple. Evidence suggests mild endurance and antioxidant benefits; ~0.5\u{2013}3 g doses are typical.",
+            excess: "Very safe at studied doses (up to ~3 g/day long-term, more short-term). The caffeine riding alongside it in energy drinks is the ingredient to actually watch."
+        ),
+        "L-Tyrosine": .init(
+            dailyValue: nil, upperLimit: nil,
+            goodFor: "Precursor to dopamine and adrenaline; helps maintain focus under stress, sleep deprivation, and long training sessions. Typical doses are 500\u{2013}2000 mg.",
+            excess: "Well tolerated; occasional headaches or nausea at gram-level doses. Avoid with MAOI antidepressants and check with a doctor if you have thyroid conditions (it's also a thyroid-hormone precursor)."
+        ),
+        "L-Theanine": .init(
+            dailyValue: nil, upperLimit: nil,
+            goodFor: "The calm-focus amino acid from tea. Pairs with caffeine to smooth jitters while keeping alertness; 100\u{2013}400 mg is typical (a 1:1 to 2:1 theanine:caffeine ratio is common).",
+            excess: "One of the safest supplements known; very high doses may cause drowsiness or headache. It can mildly lower blood pressure."
+        ),
+        "Alpha-GPC": .init(
+            dailyValue: nil, upperLimit: nil,
+            goodFor: "A highly bioavailable choline source that crosses into the brain — used for focus and a possible power-output bump. Pre-workouts use 300\u{2013}600 mg. (Tracked separately from the Choline field, which is elemental choline from food.)",
+            excess: "Occasional headaches, dizziness, or heartburn. One large observational study associated multi-year daily use with higher stroke risk — a reason to treat it as a sometimes tool, not a daily staple."
+        ),
+        "L-Norvaline": .init(
+            dailyValue: nil, upperLimit: nil,
+            goodFor: "Marketed as an arginase inhibitor to extend nitric-oxide \u{201C}pumps\u{201D}. Honest read: human evidence is thin — it rides along in pre-workouts at 100\u{2013}200 mg mostly on theory.",
+            excess: "Cell studies have flagged potential neurotoxicity at high concentrations. Nothing is established in humans at label doses, but of everything in a pre-workout, this is the ingredient with the least reason to chase more of."
+        ),
+        "Huperzine A": .init(
+            dailyValue: nil, upperLimit: nil,
+            goodFor: "A plant alkaloid that slows the breakdown of acetylcholine — sharper focus and mind-muscle connection. Effective at tiny doses: 50\u{2013}200 mcg. Labels often print the herb (\u{201C}Huperzia serrata 5 mg, 1% huperzine A\u{201D} = 50 mcg of the active).",
+            excess: "It has a long half-life (~12 h) and accumulates with daily use — nausea, cramps, vivid dreams, and a racing heart are the overshoot signs. Common practice is cycling (e.g. a few days off each week) rather than daily use; avoid with cholinergic medications."
+        ),
     ]
 
     static func info(for label: String) -> MicronutrientInfo? { entries[label] }
