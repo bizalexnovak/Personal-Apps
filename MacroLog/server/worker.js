@@ -42,6 +42,9 @@ export default {
       if (url.pathname.startsWith("/admin/")) {
         return await handleAdmin(request, env, url);
       }
+      if (url.pathname === "/privacy") {
+        return privacyPage(); // public: TestFlight requires a policy URL
+      }
       return json({ error: "not found" }, 404);
     } catch (err) {
       return json({ error: `proxy error: ${err.message}` }, 500);
@@ -478,6 +481,32 @@ function escapeHTML(s) {
 
 function currentMonth() {
   return new Date().toISOString().slice(0, 7); // YYYY-MM
+}
+
+// Public privacy policy (mirrors docs/privacy-policy.md) — the URL App Store
+// Connect's TestFlight test information asks for.
+function privacyPage() {
+  const html = `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MacroLog Privacy Policy</title>
+<style>body{font-family:-apple-system,sans-serif;max-width:42rem;margin:2rem auto;padding:0 1rem;line-height:1.55}h1,h2{line-height:1.2}</style>
+<h1>MacroLog Privacy Policy</h1>
+<p><em>Last updated: August 2026</em></p>
+<p>MacroLog is a nutrition tracker. This policy explains what data the app handles and where it goes.</p>
+<h2>What stays on your device</h2>
+<p>Your food diary — meals, ingredients, macros, micronutrients, water, recipes, goals, and profile details — is stored only on your iPhone. It is not uploaded to any server operated by us and is not shared with third parties. Voice input is transcribed on your device when supported.</p>
+<h2>What leaves your device</h2>
+<p>To understand a meal, the app sends the minimum needed for that one request: the text of the meal description or a photo you deliberately captured is sent to Anthropic's Claude API for analysis (directly with your own key, or via the operator's proxy with an invite code). Food names are sent to USDA FoodData Central and, when needed, Open Food Facts to look up nutrition. Recipe search terms go to the providers you use. None of these requests include your name, profile, goals, or diary history.</p>
+<h2>Shared community features</h2>
+<p>If you use an invite code: scanned nutrition labels you capture (product name, serving, nutrition numbers — never your diary) may be contributed to a shared food database; suggestions, votes, and comments you post on the community board are visible to other users with your display name; the proxy records per-code request counts, token counts, and estimated cost for capacity management. Meal text and photos are not retained by the proxy.</p>
+<h2>Keys and credentials</h2>
+<p>API keys and invite codes are stored in the iOS Keychain on your device.</p>
+<h2>Data deletion</h2>
+<p>Deleting the app deletes your diary and all local data. Ask the operator to delete your invite code, its usage counters, and any board posts.</p>
+<h2>Children</h2>
+<p>MacroLog is not directed at children under 13.</p>
+<h2>Contact</h2>
+<p>Contact the person who shared MacroLog with you.</p>`;
+  return new Response(html, { headers: { "content-type": "text/html" } });
 }
 
 function json(obj, status = 200) {
