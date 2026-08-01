@@ -14,10 +14,10 @@ import Foundation
 /// path for everyone except the developer.
 enum ClaudeEndpoint {
     /// The deployed proxy Worker URL. Baked in (rather than typed by each
-    /// user) so a friend's entire setup is "enter your invite code". Set this
-    /// once after `wrangler deploy` prints your URL — empty string disables
-    /// the proxy path unless a URL is set in Settings.
-    static let defaultProxyURL = ""
+    /// user) so a friend's entire setup is "enter your invite code". Update
+    /// if the Worker is ever redeployed under a different name — a Settings
+    /// override can also point at a new URL without rebuilding.
+    static let defaultProxyURL = "https://macrolog-proxy.biz-alexnovak.workers.dev"
 
     /// UserDefaults key for a Settings override of the proxy URL (useful for
     /// testing a new deployment without rebuilding).
