@@ -108,6 +108,20 @@ Report columns: requests, tokens in/out, and **estimated cost per person** —
 computed from the model's public per-token pricing (see `PRICES` in
 `worker.js`; update it if the app changes models or Anthropic changes prices).
 
+## Privacy policy page
+
+The Worker publicly serves the app's privacy policy at `/privacy` (no auth
+— it's the URL App Store Connect asks for). Content lives in
+`PRIVACY_HTML` in `worker.js`, mirrored by `docs/privacy-policy.md`; edit
+both together and `wrangler deploy`.
+
+## Removing a person completely
+
+`DELETE /admin/users/CODE` (shown under "Managing people") honors the
+policy's deletion promise in one call: it removes the invite code, all
+usage counters, the person's votes and comments, and re-attributes their
+suggestions to "(removed user)" so other people's threads survive.
+
 ## Suggestions board moderation
 
 The in-app suggestions board (Settings → Community suggestions) stores its

@@ -38,12 +38,17 @@ Now each friend's entire setup is typing the invite code you text them.
    **Bundle ID**: `com.alexnovak.MacroLog` (must match the project);
    SKU: anything, e.g. `macrolog-001`.
 
-## Step 3 — Host the privacy policy (one time)
+## Step 3 — Privacy policy URL (already hosted)
 
-External TestFlight needs a privacy policy **URL**. `docs/privacy-policy.md`
-in this repo is ready to use. Easiest hosting: turn on GitHub Pages for the
-repo (Settings → Pages), or paste it into any page you control. Put the URL
-in App Store Connect → App Privacy.
+External TestFlight needs a privacy policy **URL**. The proxy server hosts
+it: once the Worker is deployed (`server/README.md`), the policy is live at
+
+    https://<your-worker>.workers.dev/privacy
+
+Use that URL wherever App Store Connect asks for a privacy policy (the
+TestFlight test information, and later App Privacy). The page's source of
+truth is `PRIVACY_HTML` in `server/worker.js`, mirrored by
+`docs/privacy-policy.md` — edit both together and redeploy.
 
 For the **App Privacy questionnaire**, MacroLog's honest answers:
 - Data collected: **None** collected by you from users (diary data never

@@ -42,8 +42,11 @@ export default {
       if (url.pathname.startsWith("/admin/")) {
         return await handleAdmin(request, env, url);
       }
-      if (url.pathname === "/privacy") {
-        return privacyPage(); // public: TestFlight requires a policy URL
+      // Public: TestFlight requires a policy URL. Tolerant of a trailing
+      // slash and casing so a normalized/pasted variant can't 404 during
+      // App Review.
+      if (/^\/privacy\/?$/i.test(url.pathname)) {
+        return privacyPage();
       }
       return json({ error: "not found" }, 404);
     } catch (err) {
@@ -403,10 +406,31 @@ async function handleAdmin(request, env, url) {
     return json({ ok: true, code, name: name || code });
   }
 
+  // Full user removal, matching the published privacy policy: the code, all
+  // usage counters, their votes, their comments (matched by the display name
+  // they were posted under), and their suggestions are re-attributed to
+  // "(removed user)" so other people's votes/comments on those threads
+  // survive.
   const deleteMatch = url.pathname.match(/^\/admin\/users\/([A-Za-z0-9_-]+)$/);
   if (deleteMatch && request.method === "DELETE") {
-    await env.USERS.delete(`user:${deleteMatch[1]}`);
-    return json({ ok: true, deleted: deleteMatch[1] });
+    const code = deleteMatch[1];
+    const raw = await env.USERS.get(`user:${code}`);
+    const name = raw ? (JSON.parse(raw).name || code) : code;
+    await env.USERS.delete(`user:${code}`);
+    const usage = await env.USERS.list({ prefix: `usage:${code}:` });
+    for (const k of usage.keys) {
+      await env.USERS.delete(k.name);
+    }
+    if (env.FOODDB) {
+      await ensureTables(env);
+      await env.FOODDB.prepare("DELETE FROM suggestion_votes WHERE voter = ?")
+        .bind(code).run();
+      await env.FOODDB.prepare("DELETE FROM suggestion_comments WHERE author = ?")
+        .bind(name).run();
+      await env.FOODDB.prepare("UPDATE suggestions SET author = '(removed user)' WHERE author = ?")
+        .bind(name).run();
+    }
+    return json({ ok: true, deleted: code });
   }
 
   // Moderation: remove a suggestion (votes and comments included).
@@ -483,17 +507,17 @@ function currentMonth() {
   return new Date().toISOString().slice(0, 7); // YYYY-MM
 }
 
-// Public privacy policy (mirrors docs/privacy-policy.md) — the URL App Store
-// Connect's TestFlight test information asks for.
-function privacyPage() {
-  const html = `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+// Public privacy policy — the URL App Store Connect's TestFlight test
+// information asks for. Kept in sync with docs/privacy-policy.md: edit both
+// together. Module-level constant so the string is built once per isolate.
+const PRIVACY_HTML = `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>MacroLog Privacy Policy</title>
 <style>body{font-family:-apple-system,sans-serif;max-width:42rem;margin:2rem auto;padding:0 1rem;line-height:1.55}h1,h2{line-height:1.2}</style>
 <h1>MacroLog Privacy Policy</h1>
 <p><em>Last updated: August 2026</em></p>
 <p>MacroLog is a nutrition tracker. This policy explains what data the app handles and where it goes.</p>
 <h2>What stays on your device</h2>
-<p>Your food diary — meals, ingredients, macros, micronutrients, water, recipes, goals, and profile details — is stored only on your iPhone. It is not uploaded to any server operated by us and is not shared with third parties. Voice input is transcribed on your device when supported.</p>
+<p>Your food diary — meals, ingredients, macros, micronutrients, water, recipes, goals, and profile details — is stored only on your iPhone. It is not uploaded to any server operated by us and is not shared with third parties. Voice input is transcribed on your device when your iPhone supports on-device recognition; when it does not (or on-device recognition fails), Apple's speech service may process the audio, under Apple's own privacy terms.</p>
 <h2>What leaves your device</h2>
 <p>To understand a meal, the app sends the minimum needed for that one request: the text of the meal description or a photo you deliberately captured is sent to Anthropic's Claude API for analysis (directly with your own key, or via the operator's proxy with an invite code). Food names are sent to USDA FoodData Central and, when needed, Open Food Facts to look up nutrition. Recipe search terms go to the providers you use. None of these requests include your name, profile, goals, or diary history.</p>
 <h2>Shared community features</h2>
@@ -501,12 +525,14 @@ function privacyPage() {
 <h2>Keys and credentials</h2>
 <p>API keys and invite codes are stored in the iOS Keychain on your device.</p>
 <h2>Data deletion</h2>
-<p>Deleting the app deletes your diary and all local data. Ask the operator to delete your invite code, its usage counters, and any board posts.</p>
+<p>Deleting the app deletes your diary and all local data. Ask the operator to delete your invite code — doing so also removes your usage counters, your votes, and your comments, and detaches your name from suggestions you posted.</p>
 <h2>Children</h2>
 <p>MacroLog is not directed at children under 13.</p>
 <h2>Contact</h2>
 <p>Contact the person who shared MacroLog with you.</p>`;
-  return new Response(html, { headers: { "content-type": "text/html" } });
+
+function privacyPage() {
+  return new Response(PRIVACY_HTML, { headers: { "content-type": "text/html" } });
 }
 
 function json(obj, status = 200) {
