@@ -29,6 +29,15 @@ Now each friend's entire setup is typing the invite code you text them.
    and enroll as an **individual** with your Apple ID ($99/year).
    Approval is usually within 48 hours.
 2. In Xcode → Settings → Accounts, make sure that Apple ID is signed in.
+3. Put your **Team ID** (the 10-character code at developer.apple.com →
+   Membership) into `MacroLog/Signing.xcconfig`:
+
+       DEVELOPMENT_TEAM = ABCDE12345
+
+   Do this rather than only picking the team in Xcode's Signing &
+   Capabilities tab — `xcodegen generate` rewrites the `.xcodeproj` and would
+   drop the choice, so you'd re-pick it after every project regeneration. The
+   xcconfig applies to both the app and the widget extension.
 
 ## Step 2 — App record (one time)
 

@@ -11,6 +11,13 @@ settings:
     MARKETING_VERSION: "1.0"
     CURRENT_PROJECT_VERSION: "1"
 
+# Signing lives in an xcconfig so the Team ID survives `xcodegen generate`
+# (which rewrites the .xcodeproj and would otherwise drop it). Targets inherit
+# these project-level settings.
+configFiles:
+  Debug: Signing.xcconfig
+  Release: Signing.xcconfig
+
 targets:
   MacroLog:
     type: application

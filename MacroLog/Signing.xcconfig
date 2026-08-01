@@ -1,0 +1,13 @@
+// Code signing identity for MacroLog.
+//
+// Xcode writes DEVELOPMENT_TEAM into MacroLog.xcodeproj when you pick a team
+// in Signing & Capabilities — but `xcodegen generate` rebuilds that file from
+// project.yml and throws the choice away. Keeping it here instead means the
+// team survives regeneration, for both the app and the widget extension.
+//
+// Fill in your 10-character Team ID (developer.apple.com → Membership, or the
+// code in parentheses in Xcode's team dropdown). Leaving it blank is fine for
+// free-Apple-ID builds; Xcode just asks you to pick a team each time.
+
+DEVELOPMENT_TEAM =
+CODE_SIGN_STYLE = Automatic
