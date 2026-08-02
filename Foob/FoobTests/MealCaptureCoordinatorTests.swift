@@ -25,6 +25,9 @@ final class MealCaptureCoordinatorTests: XCTestCase {
             parser: MockMealParser(result: parsed),
             nutrition: MockNutritionLookup(matches: matches)
         )
+        // Keep the last rung off the network: an unmocked Open Food Facts
+        // makes these tests depend on what that database holds today.
+        coordinator.openFoodFacts = MockOpenFoodFacts()
         return coordinator
     }
 
@@ -346,6 +349,7 @@ final class MealCaptureCoordinatorTests: XCTestCase {
             parser: OfflineMealParser(),
             nutrition: MockNutritionLookup(matches: [:])
         )
+        coordinator.openFoodFacts = MockOpenFoodFacts()
 
         await coordinator.begin(text: "24 oz of water", in: context)
         XCTAssertNotNil(coordinator.notice, "user is told parsing happened on device")

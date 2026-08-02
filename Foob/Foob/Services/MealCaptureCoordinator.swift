@@ -102,7 +102,7 @@ final class MealCaptureCoordinator: ObservableObject {
     var labelScanner: LabelScanning = ClaudeLabelScanningService()
     var dishEstimator: DishEstimating = ClaudeDishEstimationService()
     var logger = MealLoggingService()
-    var openFoodFacts = OpenFoodFactsService()
+    var openFoodFacts: OpenFoodFactsLooking = OpenFoodFactsService()
 
     private var context: ModelContext?
 

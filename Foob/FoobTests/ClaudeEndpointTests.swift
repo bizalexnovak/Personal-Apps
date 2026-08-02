@@ -19,12 +19,27 @@ final class ClaudeEndpointTests: XCTestCase {
     func testInviteCodeWithoutAnyURLFallsBackToDirectKey() {
         // No baked-in default and no override → the code alone can't route.
         let access = ClaudeEndpoint.resolveAccess(
-            inviteCode: "MOM-7291", proxyURLOverride: nil, apiKey: "sk-ant-x"
+            inviteCode: "MOM-7291", proxyURLOverride: nil, apiKey: "sk-ant-x",
+            defaultURL: ""
         )
         guard case .direct(let key) = access else {
             return XCTFail("expected direct access")
         }
         XCTAssertEqual(key, "sk-ant-x")
+    }
+
+    /// The shipping configuration: a friend types only an invite code, and the
+    /// URL compiled into the app routes them to the proxy.
+    func testInviteCodeUsesTheBakedInProxyURL() {
+        let access = ClaudeEndpoint.resolveAccess(
+            inviteCode: "MOM-7291", proxyURLOverride: nil, apiKey: "sk-ant-x"
+        )
+        guard case .proxy(let url, let code) = access else {
+            return XCTFail("expected proxy access")
+        }
+        XCTAssertEqual(code, "MOM-7291")
+        XCTAssertTrue(url.absoluteString.hasPrefix(ClaudeEndpoint.defaultProxyURL))
+        XCTAssertTrue(url.absoluteString.hasSuffix("/v1/messages"))
     }
 
     func testKeyOnlyResolvesToDirect() {

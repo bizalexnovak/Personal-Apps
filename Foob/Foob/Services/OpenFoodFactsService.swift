@@ -5,7 +5,15 @@ import Foundation
 /// Queried only after the local database and USDA both miss — it shines on
 /// branded/international products USDA lacks. Results are marked
 /// low-confidence so the review card asks for a look.
-struct OpenFoodFactsService {
+/// Injection seam, mirroring `NutritionLookup` and `MealParsing`. Without it
+/// the coordinator's last rung reaches the live Open Food Facts API during
+/// unit tests, so a test that mocks USDA into finding nothing still gets a
+/// match — and passes or fails depending on the network.
+protocol OpenFoodFactsLooking {
+    func lookup(_ request: FoodItemRequest) async throws -> NutritionMatch?
+}
+
+struct OpenFoodFactsService: OpenFoodFactsLooking {
     var session: URLSession = .shared
 
     func lookup(_ request: FoodItemRequest) async throws -> NutritionMatch? {

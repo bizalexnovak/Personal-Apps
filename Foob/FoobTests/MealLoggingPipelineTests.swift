@@ -29,6 +29,16 @@ struct MockNutritionLookup: NutritionLookup {
     func search(query: String) async throws -> [USDAFood] { [] }
 }
 
+/// Open Food Facts that finds nothing, so tests exercise the rungs above it
+/// instead of whatever the live database happens to hold today.
+struct MockOpenFoodFacts: OpenFoodFactsLooking {
+    var matches: [String: NutritionMatch] = [:]
+
+    func lookup(_ request: FoodItemRequest) async throws -> NutritionMatch? {
+        matches[request.name]
+    }
+}
+
 // MARK: - Pipeline tests
 
 @MainActor

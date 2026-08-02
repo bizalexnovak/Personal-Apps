@@ -70,6 +70,10 @@ final class RememberedMatchTests: XCTestCase {
                 parser: MockMealParser(result: parsed),
                 nutrition: MockNutritionLookup(matches: [:])
             )
+            // Open Food Facts is the rung below USDA and would otherwise hit
+            // the real API — it has Celsius, which would satisfy the first log
+            // and defeat the point of the test.
+            c.openFoodFacts = MockOpenFoodFacts()
             return c
         }
 

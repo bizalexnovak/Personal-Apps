@@ -42,11 +42,14 @@ enum ClaudeEndpoint {
     static var isConfigured: Bool { access != nil }
 
     /// Pure resolution logic, separated for tests. Invite code + reachable
-    /// proxy URL beats a direct key.
+    /// proxy URL beats a direct key. `defaultURL` is a parameter rather than a
+    /// direct read of `defaultProxyURL` so the no-proxy-configured case stays
+    /// testable now that a URL is baked into the app.
     static func resolveAccess(
-        inviteCode: String?, proxyURLOverride: String?, apiKey: String?
+        inviteCode: String?, proxyURLOverride: String?, apiKey: String?,
+        defaultURL: String = defaultProxyURL
     ) -> Access? {
-        let urlString = [proxyURLOverride, defaultProxyURL]
+        let urlString = [proxyURLOverride, defaultURL]
             .compactMap { $0?.trimmingCharacters(in: .whitespaces) }
             .first { !$0.isEmpty }
         if let inviteCode, !inviteCode.isEmpty,
