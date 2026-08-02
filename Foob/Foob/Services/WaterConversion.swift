@@ -3,9 +3,15 @@ import Foundation
 /// Shared word-tokenization for name sniffing ("is this water?", "is this a
 /// bare supplement?") so the two detectors can never drift apart.
 enum NameTokens {
+    /// Apostrophes are erased rather than treated as separators, so a
+    /// possessive brand tokenizes as one word: "McDonald's" and "McDonalds"
+    /// both give {mcdonalds}. Splitting there instead would yield
+    /// {mcdonald, s}, and the two spellings would dedup as different foods.
     static func tokens(_ name: String) -> Set<String> {
         Set(
             name.lowercased()
+                .replacingOccurrences(of: "'", with: "")
+                .replacingOccurrences(of: "\u{2019}", with: "")
                 .split(whereSeparator: { !$0.isLetter })
                 .map(String.init)
         )

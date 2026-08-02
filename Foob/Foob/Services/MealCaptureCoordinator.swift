@@ -180,7 +180,7 @@ final class MealCaptureCoordinator: ObservableObject {
                 ))
                 continue
             }
-            let hints = Self.clarificationHints(for: request)
+            let hints = Self.clarificationHints(for: request, in: context)
             // Local tiers: a remembered correction or a food-database row
             // answers in ~a millisecond, skipping the network entirely.
             if let remembered = RememberedMatchStore.lookup(phrase: request.name, in: context) {
@@ -234,7 +234,7 @@ final class MealCaptureCoordinator: ObservableObject {
                 return found
             }
             for (index, request) in pending {
-                let hints = Self.clarificationHints(for: request)
+                let hints = Self.clarificationHints(for: request, in: context)
                 // A failed lookup is represented as match == nil — the card
                 // opens in search mode and blocks Save All; zeros are never
                 // fabricated.
@@ -627,14 +627,42 @@ final class MealCaptureCoordinator: ObservableObject {
     /// Claude's clarification flag is the primary source; a locally detected
     /// vague unit is the safety net. Either way the interpretations become
     /// tap-to-resolve chips on the review card.
-    static func clarificationHints(for item: FoodItemRequest) -> (question: String, options: [ClarificationOption])? {
+    ///
+    /// Passing a context adds branded chips for any restaurant or packaged
+    /// version the match deliberately didn't assume (see
+    /// `CustomFoodStore.brandedAlternatives`) — offered, never guessed.
+    static func clarificationHints(
+        for item: FoodItemRequest, in context: ModelContext? = nil
+    ) -> (question: String, options: [ClarificationOption])? {
+        let branded = context.map { brandOptions(for: item, in: $0) } ?? []
         if item.needsClarification == true, let options = item.options, !options.isEmpty {
-            return (item.clarificationQuestion ?? "Can you be more specific?", options)
+            return (item.clarificationQuestion ?? "Can you be more specific?", options + branded)
         }
         if case .vague(let word) = USDANutritionLookupService.classifyUnit(item.unit) {
-            return ("How much \(item.name) was it?", fallbackOptions(for: item, vagueWord: word))
+            return (
+                "How much \(item.name) was it?",
+                fallbackOptions(for: item, vagueWord: word) + branded
+            )
+        }
+        if !branded.isEmpty {
+            return ("Logged as homemade — was it one of these?", branded)
         }
         return nil
+    }
+
+    /// Chips for the branded rows a bare name skipped, keeping the spoken
+    /// quantity and unit so tapping one only changes *which* food it is.
+    static func brandOptions(
+        for item: FoodItemRequest, in context: ModelContext
+    ) -> [ClarificationOption] {
+        CustomFoodStore.brandedAlternatives(for: item.name, in: context).map { food in
+            ClarificationOption(
+                label: food.displayName,
+                name: "\(food.name) \(food.brand)",
+                quantity: item.quantity,
+                unit: item.unit
+            )
+        }
     }
 
     /// Generic size options used when the parser flagged nothing but the unit

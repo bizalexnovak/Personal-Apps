@@ -31,13 +31,20 @@ of these requests include your name, profile, goals, or diary history.
 
 ## Shared community features
 
-If you use an invite code: scanned nutrition labels you capture (product
-name, serving, nutrition numbers — never your diary) may be contributed to
-a shared food database; suggestions, votes, and comments you post on the
-community board are visible to other users with your display name; the
-proxy records per-code request counts, token counts, and estimated cost
-for capacity management. Meal text and photos are not retained by the
-proxy.
+If you use an invite code, exactly two kinds of thing are contributed to
+the shared food database: nutrition labels you photograph off a package,
+and nutrition fact sheets you upload. Both are published nutrition facts —
+product name, serving size, and the numbers printed on them — not personal
+information. **Meals you log are never shared.** Homemade food, recipes you
+write, dishes estimated from your photos, and everything else in your diary
+stay on your device, including the food matching and recommendations built
+from them, which are computed locally and per person.
+
+Separately: suggestions, votes, and comments you post on the community
+board are visible to other users alongside your display name; and the proxy
+records per-code request counts, token counts, and estimated cost for
+capacity management. Meal text and photos sent for analysis are not
+retained by the proxy.
 
 ## Keys and credentials
 

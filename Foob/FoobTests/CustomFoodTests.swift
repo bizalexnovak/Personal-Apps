@@ -95,6 +95,85 @@ final class CustomFoodTests: XCTestCase {
         XCTAssertEqual(hit?.calories ?? 0, 148, accuracy: 0.001)
     }
 
+    // MARK: Homemade assumption
+
+    /// Seeds a chain burger whose BRAND contains the generic word "burger".
+    private func seedWhopper(in context: ModelContext) {
+        CustomFoodStore.addIfNew(
+            CustomFood(name: "Whopper", brand: "Burger King", calories: 657, source: "seed"),
+            in: context
+        )
+    }
+
+    func testBareGenericNameDoesNotMatchABrandedRow() throws {
+        let context = try makeContext()
+        seedWhopper(in: context)
+        // "a burger" is a homemade burger. It must not resolve to the chain
+        // row just because "burger" is a word in "Burger King".
+        XCTAssertNil(CustomFoodStore.bestRow(for: "burger", in: context))
+    }
+
+    func testNamingTheBrandMatchesIt() throws {
+        let context = try makeContext()
+        seedWhopper(in: context)
+        XCTAssertEqual(
+            CustomFoodStore.bestRow(for: "burger king whopper", in: context)?.calories ?? 0,
+            657, accuracy: 0.001
+        )
+        // The product name alone is unambiguous, so it matches unbranded too.
+        XCTAssertEqual(
+            CustomFoodStore.bestRow(for: "whopper", in: context)?.calories ?? 0,
+            657, accuracy: 0.001
+        )
+    }
+
+    func testUnambiguousProductNameStillMatchesWithoutTheBrand() throws {
+        let context = try makeContext()
+        CustomFoodStore.addIfNew(
+            CustomFood(name: "Big Mac", brand: "McDonald's", calories: 550, source: "seed"),
+            in: context
+        )
+        XCTAssertEqual(
+            CustomFoodStore.bestRow(for: "big mac", in: context)?.calories ?? 0,
+            550, accuracy: 0.001
+        )
+    }
+
+    func testSkippedBrandedRowsAreOfferedAsAlternatives() throws {
+        let context = try makeContext()
+        seedWhopper(in: context)
+        let alternatives = CustomFoodStore.brandedAlternatives(for: "burger", in: context)
+        XCTAssertEqual(alternatives.map(\.name), ["Whopper"])
+
+        // Nothing to offer once the row is the actual match.
+        XCTAssertTrue(
+            CustomFoodStore.brandedAlternatives(for: "burger king whopper", in: context).isEmpty
+        )
+    }
+
+    func testHomemadeMatchOffersBrandedChips() throws {
+        let context = try makeContext()
+        seedWhopper(in: context)
+        let hints = MealCaptureCoordinator.clarificationHints(
+            for: FoodItemRequest(name: "burger", quantity: 2, unit: "burgers"),
+            in: context
+        )
+        XCTAssertEqual(hints?.options.map(\.label), ["Whopper — Burger King"])
+        // Tapping a chip changes only which food it is, not how much.
+        XCTAssertEqual(hints?.options.first?.quantity, 2)
+        XCTAssertEqual(hints?.options.first?.unit, "burgers")
+    }
+
+    // MARK: Community sharing
+
+    func testOnlyLabelScansAndUploadedSheetsAreShareable() {
+        XCTAssertEqual(CommunitySync.shareableSources, ["scan", "import"])
+        // Community/seed rows arrive already-synced; nothing else may be sent.
+        for source in ["community", "seed", "recipe", "meal"] {
+            XCTAssertFalse(CommunitySync.shareableSources.contains(source), source)
+        }
+    }
+
     // MARK: CSV import
 
     func testCSVImportWithMicrosAndDedup() throws {

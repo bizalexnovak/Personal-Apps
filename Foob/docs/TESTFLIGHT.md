@@ -59,11 +59,33 @@ TestFlight test information, and later App Privacy). The page's source of
 truth is `PRIVACY_HTML` in `server/worker.js`, mirrored by
 `docs/privacy-policy.md` — edit both together and redeploy.
 
-For the **App Privacy questionnaire**, Foob's honest answers:
-- Data collected: **None** collected by you from users (diary data never
-  leaves the device; meal text/photos are processed per-request and not
-  retained; invite-code metering stores counts, not content).
-- Tracking: **No**.
+## Step 3b — App Privacy questionnaire
+
+App Store Connect → Foob → **App Privacy**. Required before external
+TestFlight, and it must match what the server actually stores.
+
+The diary never leaves the device, and meal text/photos sent to Claude are
+transient. But the proxy *does* retain three things, so "Data Not Collected"
+is not an honest answer while the community features are on:
+
+| Category | What | Linked to identity | Used for tracking |
+|---|---|---|---|
+| User Content | Suggestions and comments, posted with a display name | Yes | No |
+| Identifiers | The invite code | Yes | No |
+| Usage Data | Per-code request and token counts | Yes | No |
+
+Purpose for all three: **App Functionality** (and Analytics for usage data,
+if you want to be maximally forthcoming — it drives the cost report).
+
+**Tracking: No.** Nothing is linked to third-party data or used for ads.
+
+Two things that are *not* collected, and shouldn't be declared: the food
+diary (never transmitted), and shared food-database rows (published
+nutrition facts off labels and uploaded sheets — not personal data, and
+meals you log are never contributed; see `CommunitySync.shareableSources`).
+
+If you turn the suggestions board off for the first round, User Content
+drops off this table.
 
 ## Step 4 — Archive & upload (every release)
 

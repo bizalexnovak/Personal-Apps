@@ -56,22 +56,66 @@ enum CustomFoodStore {
         "order", "orders", "item", "items", "each", "cocktail", "cocktails",
     ]
 
-    /// The best-scoring row whose name+brand contains EVERY token of the
-    /// query. Among qualifiers, fewer extra tokens wins (tightest match).
+    /// Whether a row is allowed to answer this query.
+    ///
+    /// Every query token must appear in the row, as before — but a row that
+    /// carries a brand has to earn the match on its *product name*, unless the
+    /// query names the brand outright. Logging "a burger" means a homemade
+    /// burger; it must not silently resolve to "Whopper — Burger King" just
+    /// because "burger" happens to be a word in that chain's name. Say
+    /// "burger king whopper" and it matches, because the brand was named.
+    ///
+    /// Product names that are already unambiguous still work unbranded: "big
+    /// mac" is a subset of the row's own name, so it matches without anyone
+    /// having to say McDonald's.
+    private static func qualifies(queryTokens: Set<String>, food: CustomFood) -> Bool {
+        let nameTokens = NameTokens.tokens(food.name)
+        if queryTokens.isSubset(of: nameTokens) { return true }
+        let brandTokens = NameTokens.tokens(food.brand)
+        guard !brandTokens.isEmpty, brandTokens.isSubset(of: queryTokens) else { return false }
+        return queryTokens.isSubset(of: nameTokens.union(brandTokens))
+    }
+
+    /// The best-scoring row allowed to answer the query (see `qualifies`).
+    /// Among qualifiers, fewer extra tokens wins (tightest match).
     static func bestRow(for query: String, in context: ModelContext) -> CustomFood? {
         let queryTokens = NameTokens.tokens(query)
         guard !queryTokens.isEmpty else { return nil }
         let all = (try? context.fetch(FetchDescriptor<CustomFood>())) ?? []
         var best: (food: CustomFood, extras: Int)?
         for food in all {
+            guard qualifies(queryTokens: queryTokens, food: food) else { continue }
             let foodTokens = NameTokens.tokens(food.name).union(NameTokens.tokens(food.brand))
-            guard queryTokens.isSubset(of: foodTokens) else { continue }
             let extras = foodTokens.count - queryTokens.count
             if best == nil || extras < best!.extras {
                 best = (food, extras)
             }
         }
         return best?.food
+    }
+
+    /// Branded rows this query deliberately skipped — the ones that contain
+    /// every query token but weren't allowed to answer because the brand went
+    /// unnamed. The review card offers them as chips, so "a burger" logs as
+    /// homemade by default with the chain versions one tap away.
+    static func brandedAlternatives(
+        for query: String, in context: ModelContext, limit: Int = 3
+    ) -> [CustomFood] {
+        let queryTokens = NameTokens.tokens(query)
+        guard !queryTokens.isEmpty else { return [] }
+        let all = (try? context.fetch(FetchDescriptor<CustomFood>())) ?? []
+        let skipped = all.compactMap { food -> (food: CustomFood, extras: Int)? in
+            guard !food.brand.isEmpty else { return nil }
+            let foodTokens = NameTokens.tokens(food.name).union(NameTokens.tokens(food.brand))
+            guard queryTokens.isSubset(of: foodTokens),
+                  !qualifies(queryTokens: queryTokens, food: food)
+            else { return nil }
+            return (food, foodTokens.count - queryTokens.count)
+        }
+        return skipped
+            .sorted { $0.extras < $1.extras }
+            .prefix(limit)
+            .map(\.food)
     }
 
     /// Substring search for the browse UI (name, brand, or serving).

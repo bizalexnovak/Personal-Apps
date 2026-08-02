@@ -53,12 +53,20 @@ enum CommunitySync {
 
     // MARK: - Push
 
+    /// The only row sources that may be shared: published nutrition facts a
+    /// user photographed off a package, and nutrition sheets they uploaded.
+    /// Anything else stays on the device. This is the privacy policy expressed
+    /// as code — a new row source is private until it is deliberately added
+    /// here, rather than shared by default because someone forgot.
+    static let shareableSources: Set<String> = ["scan", "import"]
+
     @MainActor
     static func push(context: ModelContext) async {
         guard let (base, code) = ClaudeEndpoint.proxyConfig else { return }
-        let pending = (try? context.fetch(FetchDescriptor<CustomFood>(
+        let unsynced = (try? context.fetch(FetchDescriptor<CustomFood>(
             predicate: #Predicate { $0.synced == false }
         ))) ?? []
+        let pending = unsynced.filter { shareableSources.contains($0.source) }
         guard !pending.isEmpty else { return }
 
         let items = pending.map { food in
