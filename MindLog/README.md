@@ -1,7 +1,7 @@
 # MindLog
 
 Voice-first mental health tracker for iOS 17+ — the mind-side sibling of
-MacroLog. Speak (or type) diary entries, check in on your mood, and give
+Foob. Speak (or type) diary entries, check in on your mood, and give
 yourself credit for the things that actually help — meditating, breathing,
 walking, calling a friend. Everything stays on the phone: **no account, no
 server, no API keys**.
@@ -45,7 +45,7 @@ just talk to. Recognition is tuned for journaling, not command capture:
 - **On-device recognition is preferred** whenever the locale supports it —
   the private path; words never leave the phone. If the locale's on-device
   model isn't actually installed, the app falls back to Apple's server
-  recognizer for that run (same fallback dance MacroLog uses).
+  recognizer for that run (same fallback dance Foob uses).
 
 Nothing is saved while you speak. The transcript lands in a **review editor**
 — fix any mis-hearings, optionally attach a **mood** (1–5 emoji scale), then
@@ -164,14 +164,14 @@ JournalEntry + ActivityLog ─▶ DayAggregator ─▶ [DaySummary] ─▶ Insig
   scoring/insights/breathing layers are pure value-type logic so the tests
   never need a database or a device.
 - **Views/** — Journal (capture + timeline), Today (day-by-day dashboard
-  with chevron/calendar navigation like MacroLog's diary), Practice
+  with chevron/calendar navigation like Foob's diary), Practice
   (guided sessions + two-tap logging), Trends, Settings, Onboarding.
-- **Theme** — same system as MacroLog: Light / Dark / Auto (time-of-day) /
+- **Theme** — same system as Foob: Light / Dark / Auto (time-of-day) /
   Custom appearance, customizable app accent + background + chart colours,
   all in AppStorage and injected via the environment. Default is dark with
   a calm teal accent.
 
-The five tabs share MacroLog's shell: the keep-alive `ZStack` tab container,
+The five tabs share Foob's shell: the keep-alive `ZStack` tab container,
 the floating glassy tab bar, and a "+" quick-actions menu (voice entry /
 type entry / log activity / breathe / meditate).
 
@@ -179,9 +179,9 @@ type entry / log activity / breathe / meditate).
 
 - **HealthKit** — import Mindful Minutes and sleep; export sessions.
 - **Home-screen widget** — today's score ring + one-tap check-in (App Group
-  plumbing mirrors MacroLog's widget).
+  plumbing mirrors Foob's widget).
 - **Optional Claude-powered weekly reflection** — a gentle summary of the
-  week's entries via the same invite-code proxy MacroLog uses. Off by
+  week's entries via the same invite-code proxy Foob uses. Off by
   default and clearly opt-in, because it means journal text leaving the
   device; the on-device experience must stay complete without it.
 - **Custom activities** — user-defined catalog entries (needs a stored

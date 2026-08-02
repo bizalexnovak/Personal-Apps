@@ -1,0 +1,86 @@
+name: Foob
+options:
+  bundleIdPrefix: com.alexnovak
+  deploymentTarget:
+    iOS: "17.0"
+  createIntermediateGroups: true
+
+settings:
+  base:
+    SWIFT_VERSION: "5.9"
+    MARKETING_VERSION: "1.0"
+    CURRENT_PROJECT_VERSION: "1"
+
+# Signing lives in an xcconfig so the Team ID survives `xcodegen generate`
+# (which rewrites the .xcodeproj and would otherwise drop it). Targets inherit
+# these project-level settings.
+configFiles:
+  Debug: Signing.xcconfig
+  Release: Signing.xcconfig
+
+targets:
+  Foob:
+    type: application
+    platform: iOS
+    sources:
+      - Foob
+      - Shared
+    settings:
+      base:
+        TARGETED_DEVICE_FAMILY: "1"
+        SUPPORTS_MACCATALYST: false
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        INFOPLIST_KEY_UISupportedInterfaceOrientations: UIInterfaceOrientationPortrait
+        CODE_SIGN_ENTITLEMENTS: Foob.entitlements
+    info:
+      path: Foob/Info.plist
+      properties:
+        CFBundleDisplayName: Foob
+        UILaunchScreen: {}
+        ITSAppUsesNonExemptEncryption: false
+        NSMicrophoneUsageDescription: Foob uses the microphone to hear you describe your meal.
+        NSSpeechRecognitionUsageDescription: Foob transcribes your meal description so it can be parsed and logged.
+        NSCameraUsageDescription: Foob uses the camera to read nutrition facts labels you photograph.
+    dependencies:
+      - target: FoobWidgetExtension
+
+  FoobWidgetExtension:
+    type: app-extension
+    platform: iOS
+    sources:
+      - FoobWidget
+      - Shared
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.alexnovak.Foob.Widget
+        TARGETED_DEVICE_FAMILY: "1"
+        SUPPORTS_MACCATALYST: false
+        CODE_SIGN_ENTITLEMENTS: FoobWidget.entitlements
+    info:
+      path: FoobWidget/Info.plist
+      properties:
+        CFBundleDisplayName: Foob
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+
+  FoobTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - FoobTests
+    dependencies:
+      - target: Foob
+
+schemes:
+  Foob:
+    build:
+      targets:
+        Foob: all
+        FoobWidgetExtension: all
+        FoobTests: [test]
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
+        - FoobTests
