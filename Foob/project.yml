@@ -68,6 +68,13 @@ targets:
     platform: iOS
     sources:
       - FoobTests
+    settings:
+      base:
+        # The project-level Signing.xcconfig makes every target code-sign,
+        # and signing a bundle requires an Info.plist. The app and widget
+        # ship their own; the test bundle has nothing to put in one, so let
+        # Xcode synthesize it rather than checking in an empty file.
+        GENERATE_INFOPLIST_FILE: YES
     dependencies:
       - target: Foob
 
