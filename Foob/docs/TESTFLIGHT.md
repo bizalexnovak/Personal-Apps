@@ -65,27 +65,41 @@ App Store Connect → Foob → **App Privacy**. Required before external
 TestFlight, and it must match what the server actually stores.
 
 The diary never leaves the device, and meal text/photos sent to Claude are
-transient. But the proxy *does* retain three things, so "Data Not Collected"
-is not an honest answer while the community features are on:
+transient. But the proxy *does* retain things, so "Data Not Collected" is
+not an honest answer while the community features are on.
 
-| Category | What | Linked to identity | Used for tracking |
-|---|---|---|---|
-| User Content | Suggestions and comments, posted with a display name | Yes | No |
-| Identifiers | The invite code | Yes | No |
-| Usage Data | Per-code request and token counts | Yes | No |
+These are the five entries to declare — the answers submitted for 1.0:
 
-Purpose for all three: **App Functionality** (and Analytics for usage data,
-if you want to be maximally forthcoming — it drives the cost report).
+| Data type | Section | Linked to identity | Tracking | Purpose |
+|---|---|---|---|---|
+| User ID | Identifiers | Yes | No | App Functionality |
+| Product Interaction | Usage Data | Yes | No | Analytics |
+| Other User Content | User Content | Yes | No | App Functionality |
+| Crash Data | Diagnostics | No | No | App Functionality |
+| Performance Data | Diagnostics | No | No | App Functionality |
 
-**Tracking: No.** Nothing is linked to third-party data or used for ads.
+- **User ID** is the invite code; **Product Interaction** is the per-code
+  request and token counts that drive the cost report; **Other User Content**
+  is suggestions and comments posted with a display name.
+- **Crash and Performance Data** are true the moment you're on TestFlight —
+  Xcode Organizer shows you crash and hang reports from testers. Not linked
+  to identity, because Apple aggregates them before you see them.
+- **Tracking: No** on all five. Nothing is linked to third-party data or ads.
 
-Two things that are *not* collected, and shouldn't be declared: the food
-diary (never transmitted), and shared food-database rows (published
-nutrition facts off labels and uploaded sheets — not personal data, and
-meals you log are never contributed; see `CommunitySync.shareableSources`).
+Three things that are *not* collected and must not be declared: the food
+diary (never transmitted), shared food-database rows (published nutrition
+facts off labels and uploaded sheets — not personal data, and meals you log
+are never contributed; see `CommunitySync.shareableSources`), and photos or
+audio (analyzed in-flight, never stored server-side).
 
-If you turn the suggestions board off for the first round, User Content
-drops off this table.
+If you turn the suggestions board off for a round, User Content drops off
+this table.
+
+**This declaration must be updated before — not after — shipping a build
+that collects something new.** Editing it is free and takes a minute, so
+there's no reason to pre-declare things the app doesn't do yet. If media
+storage or contact details (name/phone/email at signup) ever land, they get
+added here in the same change that adds the feature.
 
 ## Step 4 — Archive & upload (every release)
 
@@ -99,6 +113,13 @@ In Xcode with the Foob project open:
    Upload**, accept the signing defaults.
 5. Wait ~10–30 minutes for processing (email arrives when done).
 
+**Export compliance** — nothing to do. US export rules make Apple ask every
+app whether it uses encryption; plain HTTPS to your own server is exempt.
+`project.yml` already sets `ITSAppUsesNonExemptEncryption: false`, which
+answers it in the build so App Store Connect stops prompting. If it ever
+asks anyway, the build predates that line — answer **No** and it goes away
+next upload.
+
 ## Step 5 — Invite people
 
 In App Store Connect → Foob → **TestFlight** tab:
@@ -110,7 +131,52 @@ In App Store Connect → Foob → **TestFlight** tab:
   goes through a light Beta App Review (usually < 1 day). Then share the
   **public link** — anyone who taps it installs the app.
 
-For family: external with the public link is the least admin work.
+For family: external with the public link is the least admin work. Internal
+testing is instant and review-free, but every tester needs an account on
+your App Store Connect team — fine for you, awkward for relatives.
+
+### Filling in the review forms
+
+Three fields live in different places, which is the confusing part:
+
+- **Beta App Description** and **Feedback Email** — TestFlight → **Test
+  Information** (applies to all builds).
+- **What to Test** — *not* in Test Information. It's on the individual
+  build: TestFlight → **Builds → iOS → click the build number**. It won't
+  appear until processing finishes.
+- **Sign-in required** — App Review Information, on the external group.
+
+**The sign-in fields are the most common rejection.** Foob has no accounts,
+but a reviewer who can't get past onboarding rejects the build, so declaring
+"no sign-in required" is the riskier answer. Leave the toggle **on**, put a
+working invite code in *both* the username and password fields (the form
+requires both), and explain in the notes:
+
+> This app has no user accounts, passwords, or email sign-up. Access is
+> granted by a single invite code.
+>
+> On the onboarding screen, tap "Use an invite code" and enter: REVIEW-2026
+>
+> The username and password fields above both contain that same invite code,
+> because the App Store Connect form requires both — there is no separate
+> password.
+
+Create the code **before submitting**, and enter it in the app yourself to
+confirm it works. A code that 403s is the same rejection as no code at all.
+
+```bash
+curl -X POST https://macrolog-proxy.YOURNAME.workers.dev/admin/users \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"code": "REVIEW-2026", "name": "App Review"}'
+```
+
+Once review passes, delete it so it isn't a live code sitting on the server:
+
+```bash
+curl -X DELETE https://macrolog-proxy.YOURNAME.workers.dev/admin/users/REVIEW-2026 \
+  -H "Authorization: Bearer $TOKEN"
+```
 
 ## Step 6 — Per-person invite codes
 
@@ -128,6 +194,36 @@ They install → open → pick **Invite code** → type it → done. Check what
 everyone's usage costs any time with the `/admin/usage` report
 (`server/README.md`).
 
+### `{"error":"unauthorized"}`
+
+`worker.js` compares the header against `Bearer ${env.ADMIN_TOKEN}` with
+exact string equality, so a missing token, a stray space, and a completely
+wrong token all fail identically. In rough order of likelihood:
+
+1. **`$TOKEN` isn't set in this terminal.** `export` only lasts for one
+   window, so a new tab needs it again. Check the length without printing
+   the secret — `0` means it's unset:
+
+       printf '%s' "$TOKEN" | wc -c
+
+   If it's one or two *more* than the real token, you've copy-pasted a
+   trailing newline or space. Re-export with quotes: `export TOKEN='…'`
+
+2. **The secret was never set on the Worker.** `ADMIN_TOKEN` is a secret,
+   not a `[vars]` entry, so if it's missing `env.ADMIN_TOKEN` is `undefined`
+   and the Worker is literally comparing against `"Bearer undefined"`. Test
+   for exactly that:
+
+       curl -s https://macrolog-proxy.YOURNAME.workers.dev/admin/users \
+         -H "Authorization: Bearer undefined"
+
+   A user list back confirms it. Fix with `wrangler secret put ADMIN_TOKEN`
+   from `server/`, then verify with `wrangler secret list`.
+
+Set `ADMIN_TOKEN` to something random rather than a memorable word —
+`openssl rand -hex 32`. It is the only thing between the public internet and
+the ability to add users, delete accounts, and read everyone's usage.
+
 ## Updating everyone later
 
 Push new code → bump build number → Archive → Upload → add the build to the
@@ -139,3 +235,13 @@ them). Builds expire after 90 days, so ship at least quarterly.
 The same app record, archive, and privacy setup feeds a real **App Store**
 release — you'd add screenshots, a description, and submit for full review.
 The usage report tells you what each user costs before you price anything.
+
+The reason to bother, for a family app nobody intends to sell: TestFlight
+builds expire every 90 days, so staying on it means re-uploading four times
+a year forever or everyone's app stops opening. An App Store release
+installs once and updates itself. Being publicly listed matters less than it
+sounds — without an invite code a stranger who downloads it can't do
+anything — and [unlisted app distribution][unlisted] keeps it out of search
+entirely, reachable only by direct link.
+
+[unlisted]: https://developer.apple.com/support/unlisted-app-distribution/
