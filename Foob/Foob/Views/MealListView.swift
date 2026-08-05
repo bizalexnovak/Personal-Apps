@@ -112,6 +112,8 @@ struct MealListView: View {
                 }
             case .dish:
                 dishPhase
+            case .barcode:
+                barcodePhase
             }
         }
     }
@@ -211,6 +213,23 @@ struct MealListView: View {
                 DishCameraScreen { data in
                     Task { await coordinator.beginFromDishPhoto(imageData: data, in: modelContext) }
                 }
+            } else {
+                Color.clear
+            }
+            modeSwitcher.padding(.bottom, AppTabBar.clearance)
+        }
+    }
+
+    private var barcodePhase: some View {
+        ZStack(alignment: .bottom) {
+            if hub.selectedTab == AppTab.log {
+                BarcodeScannerScreen(
+                    notice: coordinator.notice,
+                    onScan: { barcode in
+                        coordinator.notice = nil
+                        Task { await coordinator.beginFromBarcode(barcode, in: modelContext) }
+                    }
+                )
             } else {
                 Color.clear
             }
