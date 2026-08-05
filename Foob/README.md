@@ -203,6 +203,15 @@ raw text ─▶ ClaudeMealParsingService ─▶ [FoodItemRequest] ─▶ USDANut
   the environment (`appAccent`, `appBackground`, `MetricPalette`) so the UI,
   Today rings/bar, and Trends chart update live; Settings → Appearance edits
   them. Default is Dark.
+- **Tools/make_app_icon.py** — the app icon (white spiral notebook + cutlery on
+  mint) is generated from vector source rather than hand-exported, so the colour
+  or artwork can change without a design tool:
+
+      pip install cairosvg pillow && python3 Tools/make_app_icon.py
+
+  Edit `BACKGROUND` or the SVG in that file and re-run; it overwrites
+  `Assets.xcassets/AppIcon.appiconset/icon-1024.png`. It flattens to RGB on the
+  way out because App Store Connect rejects icons with an alpha channel.
 
 ### The Today diary
 
