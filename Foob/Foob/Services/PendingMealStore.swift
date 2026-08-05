@@ -41,13 +41,14 @@ enum AppTab {
 }
 
 enum LogCaptureMode: String, CaseIterable, Identifiable, Equatable {
-    case voice, scan, dish
+    case voice, scan, dish, barcode
     var id: String { rawValue }
     var title: String {
         switch self {
         case .voice: return "Voice"
         case .scan: return "Scan"
         case .dish: return "AI"
+        case .barcode: return "Barcode"
         }
     }
     var menuIcon: String {
@@ -55,6 +56,7 @@ enum LogCaptureMode: String, CaseIterable, Identifiable, Equatable {
         case .voice: return "mic.fill"
         case .scan: return "doc.viewfinder"
         case .dish: return "sparkles"
+        case .barcode: return "barcode.viewfinder"
         }
     }
 }

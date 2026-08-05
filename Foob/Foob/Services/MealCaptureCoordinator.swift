@@ -67,7 +67,7 @@ final class MealCaptureCoordinator: ObservableObject {
     /// (typing a meal while the Log tab happens to be in Scan mode must still
     /// say "Analyzing your meal…", not "Reading the label…").
     enum WorkKind {
-        case parsingText, readingLabel, estimatingDish
+        case parsingText, readingLabel, estimatingDish, lookingUpBarcode
 
         /// The ONE mapping from operation to spinner text — every status
         /// string the capture flow shows comes from here.
@@ -76,6 +76,7 @@ final class MealCaptureCoordinator: ObservableObject {
             case .parsingText: return "Analyzing your meal…"
             case .readingLabel: return "Reading the label…"
             case .estimatingDish: return "Estimating from your photo…"
+            case .lookingUpBarcode: return "Looking up product…"
             }
         }
     }
@@ -103,6 +104,7 @@ final class MealCaptureCoordinator: ObservableObject {
     var dishEstimator: DishEstimating = ClaudeDishEstimationService()
     var logger = MealLoggingService()
     var openFoodFacts: OpenFoodFactsLooking = OpenFoodFactsService()
+    var barcodeService: BarcodeLooking = BarcodeService()
 
     private var context: ModelContext?
 
@@ -369,6 +371,63 @@ final class MealCaptureCoordinator: ObservableObject {
         }
         MatchDebugLog.shared.record(transcript: "Photo of a dish (\(items.count) items)")
         review = ReviewSession(rawText: "Photo of a dish", items: items)
+    }
+
+    /// Barcode path: look up the scanned code on Open Food Facts and build a
+    /// one-item review. Per-serving values are preferred; per-100g is the
+    /// fallback when no serving data exists. Not found → sets a notice banner
+    /// on the scanner screen so the user can try again or switch to label scan.
+    func beginFromBarcode(_ barcode: String, in context: ModelContext) async {
+        guard !isCapturing else { return }
+        self.context = context
+        workKind = .lookingUpBarcode
+        isWorking = true
+        notice = nil
+        logDate = Date()
+
+        let product: BarcodeProduct?
+        do {
+            product = try await barcodeService.lookup(barcode: barcode)
+        } catch {
+            errorMessage = Self.isConnectivityError(error)
+                ? "No connection — barcode lookup needs the internet. Try scanning the nutrition label or type the item's numbers instead."
+                : error.localizedDescription
+            isWorking = false
+            return
+        }
+        isWorking = false
+
+        guard let product else {
+            notice = "Product not found — try scanning the nutrition label instead."
+            return
+        }
+
+        let nameParts = [product.name, product.brand]
+            .compactMap { $0?.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+        let itemName = nameParts.first ?? "Scanned product"
+        let servingNote = product.servingSize.map { " · \($0)" } ?? ""
+        let description = nameParts.joined(separator: " — ") + servingNote
+
+        let match = NutritionMatch(
+            matchedDescription: description,
+            calories: product.calories,
+            protein: product.protein,
+            carbs: product.carbs,
+            fat: product.fat,
+            confidence: MatchConfidence.high,
+            micros: product.micros
+        )
+        var item = ReviewItem(
+            request: FoodItemRequest(name: itemName, quantity: 1, unit: "serving"),
+            match: match,
+            clarificationQuestion: nil,
+            options: [],
+            status: .needsReview
+        )
+        item.captureScaleBaseline()
+        MatchDebugLog.shared.record(transcript: "Barcode \(barcode): \(itemName)")
+        review = ReviewSession(rawText: "Barcode: \(itemName)", items: [item])
     }
 
     /// Trim conversational lead-ins from a spoken product name so "it's a Quest
