@@ -90,6 +90,7 @@ struct RemindersSettingsView: View {
     @State private var rules: [ReminderRule] = ReminderRulesStore.load()
     @State private var editingIndex: Int?
     @State private var authorizationDenied = false
+    @State private var checkInSettings = CheckInWindow.loadSettings()
 
     var body: some View {
         Form {
@@ -155,6 +156,45 @@ struct RemindersSettingsView: View {
             } footer: {
                 Text("Daily nudges that skip themselves once the habit is done for the day — a check-in reminder stays quiet on days you've already checked in.")
             }
+
+            Section {
+                Toggle("Randomized check-ins", isOn: Binding(
+                    get: { checkInSettings.isEnabled },
+                    set: { enabled in
+                        guard enabled else {
+                            checkInSettings.isEnabled = false
+                            persistCheckIn()
+                            return
+                        }
+                        Task {
+                            let granted = await ReminderManager.requestAuthorization()
+                            authorizationDenied = !granted
+                            checkInSettings.isEnabled = granted
+                            persistCheckIn()
+                        }
+                    }
+                ))
+                if checkInSettings.isEnabled {
+                    Picker("From", selection: hourBinding(\.startHour)) {
+                        ForEach(0..<24, id: \.self) { hour in
+                            Text(ReminderRule.timeText(hour, 0)).tag(hour)
+                        }
+                    }
+                    Picker("Until", selection: hourBinding(\.endHour)) {
+                        ForEach(0..<24, id: \.self) { hour in
+                            Text(ReminderRule.timeText(hour, 0)).tag(hour)
+                        }
+                    }
+                    Stepper(
+                        "Check-ins per day: \(checkInSettings.perDay)",
+                        value: hourBinding(\.perDay), in: 1...4
+                    )
+                }
+            } header: {
+                Text("Randomized check-ins")
+            } footer: {
+                Text("Times are randomized inside your window so it never feels like a routine. Tapping a mood right on the notification logs it instantly — the app never has to open.")
+            }
         }
         .navigationTitle("Reminders")
         .navigationBarTitleDisplayMode(.inline)
@@ -181,6 +221,18 @@ struct RemindersSettingsView: View {
 
     private func persist() {
         ReminderRulesStore.save(rules)
+        ReminderManager.refresh(today: ReminderManager.todayState(entries: entries, logs: logs))
+    }
+
+    private func hourBinding(_ keyPath: WritableKeyPath<CheckInWindow.Settings, Int>) -> Binding<Int> {
+        Binding(
+            get: { checkInSettings[keyPath: keyPath] },
+            set: { checkInSettings[keyPath: keyPath] = $0; persistCheckIn() }
+        )
+    }
+
+    private func persistCheckIn() {
+        CheckInWindow.save(checkInSettings)
         ReminderManager.refresh(today: ReminderManager.todayState(entries: entries, logs: logs))
     }
 }

@@ -18,6 +18,13 @@ final class JournalEntry {
     /// once at save. nil for check-ins and whenever analysis was unavailable.
     /// Never shown as a judgement — it only feeds the Trends overlay.
     var sentimentScore: Double?
+    /// Optional second step after any mood: finer-grained emotion words
+    /// ("drained", "content"). Empty is the normal case — the grid is never
+    /// mandatory, and the 1–5 mood alone is a complete entry.
+    var emotionWords: [String] = []
+    /// Optional who/what/where context tags ("work", "alone", "outside").
+    /// Same rule: empty is fine, they only ever add colour.
+    var contextTags: [String] = []
 
     init(
         id: UUID = UUID(),
@@ -25,7 +32,9 @@ final class JournalEntry {
         text: String = "",
         source: String = EntrySource.typed,
         moodScore: Int? = nil,
-        sentimentScore: Double? = nil
+        sentimentScore: Double? = nil,
+        emotionWords: [String] = [],
+        contextTags: [String] = []
     ) {
         self.id = id
         self.timestamp = timestamp
@@ -33,6 +42,8 @@ final class JournalEntry {
         self.source = source
         self.moodScore = moodScore
         self.sentimentScore = sentimentScore
+        self.emotionWords = emotionWords
+        self.contextTags = contextTags
     }
 
     var trimmedText: String {

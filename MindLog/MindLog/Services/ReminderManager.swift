@@ -130,7 +130,9 @@ enum ReminderManager {
             center.removePendingNotificationRequests(withIdentifiers: ours)
 
             let rules = ReminderRulesStore.load().filter(\.isEnabled)
-            guard !rules.isEmpty else { return }
+            let checkInSettings = CheckInWindow.loadSettings()
+            // Nothing to schedule at all — bail before touching the calendar.
+            guard !rules.isEmpty || checkInSettings.isEnabled else { return }
 
             let cal = Calendar.current
             let now = Date()
@@ -164,6 +166,41 @@ enum ReminderManager {
                         trigger: UNCalendarNotificationTrigger(dateMatching: triggerComps, repeats: false)
                     ))
                     budget -= 1
+                }
+            }
+
+            // The randomized check-in window is a separate, off-by-default
+            // feature: same identifier prefix (so it's cleared above too),
+            // same shared budget, but its own fire-time math since the times
+            // aren't fixed daily slots.
+            if checkInSettings.isEnabled {
+                for dayOffset in 0..<7 {
+                    guard budget > 0 else { return }
+                    guard let day = cal.date(byAdding: .day, value: dayOffset, to: now) else { continue }
+                    // Already checked in today — no need to nudge again.
+                    if dayOffset == 0, today.checkedIn { continue }
+
+                    let fireTimes = CheckInWindow.fireTimes(for: day, settings: checkInSettings, calendar: cal)
+                    for (index, fireDate) in fireTimes.enumerated() {
+                        guard budget > 0 else { return }
+                        if dayOffset == 0, fireDate <= now { continue }
+
+                        let content = UNMutableNotificationContent()
+                        content.title = "MindLog"
+                        content.body = "A gentle check-in: how are you feeling right now?"
+                        content.sound = .default
+                        content.categoryIdentifier = CheckInNotifications.categoryIdentifier
+
+                        let triggerComps = cal.dateComponents(
+                            [.year, .month, .day, .hour, .minute, .second], from: fireDate
+                        )
+                        center.add(UNNotificationRequest(
+                            identifier: "\(identifierPrefix)checkin.day\(dayOffset).\(index)",
+                            content: content,
+                            trigger: UNCalendarNotificationTrigger(dateMatching: triggerComps, repeats: false)
+                        ))
+                        budget -= 1
+                    }
                 }
             }
         }

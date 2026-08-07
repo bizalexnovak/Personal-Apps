@@ -2,9 +2,18 @@ import SwiftUI
 import SwiftData
 import Combine
 import UIKit
+import UserNotifications
 
 @main
 struct MindLogApp: App {
+    init() {
+        // Register the check-in category/actions and claim the delegate up
+        // front so a tap on a mood button is handled even if it's the very
+        // first thing that ever launches the process (background delivery).
+        CheckInNotifications.registerCategories()
+        UNUserNotificationCenter.current().delegate = CheckInNotificationDelegate.shared
+    }
+
     var body: some Scene {
         WindowGroup {
             ContentView()
