@@ -75,7 +75,7 @@ final class MealLoggingPipelineTests: XCTestCase {
 
         let meal = try await service.logMeal(from: "6oz chicken and a cup of rice", in: context)
 
-        XCTAssertEqual(meal.items.count, 2)
+        XCTAssertEqual(meal.itemList.count, 2)
         XCTAssertEqual(meal.rawText, "6oz chicken and a cup of rice")
         XCTAssertEqual(meal.totalCalories, 485, accuracy: 0.01)
         XCTAssertEqual(meal.totalProtein, 56.2, accuracy: 0.01)
@@ -95,8 +95,8 @@ final class MealLoggingPipelineTests: XCTestCase {
 
         let meal = try await service.logMeal(from: "some casserole", in: context)
 
-        XCTAssertEqual(meal.items.count, 1)
-        let item = try XCTUnwrap(meal.items.first)
+        XCTAssertEqual(meal.itemList.count, 1)
+        let item = try XCTUnwrap(meal.itemList.first)
         XCTAssertEqual(item.calories, 0)
         XCTAssertEqual(item.matchConfidence, MatchConfidence.low)
     }

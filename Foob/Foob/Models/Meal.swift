@@ -10,11 +10,19 @@ private enum MicrosCoding {
 
 @Model
 final class Meal {
-    @Attribute(.unique) var id: UUID
-    var timestamp: Date
-    var rawText: String
+    // CloudKit rules (docs/ICLOUD.md): every stored attribute is optional or has
+    // a default, relationships are optional, and nothing is `.unique` — the
+    // private database enforces no uniqueness, so `id` is a plain attribute and
+    // de-duplication is done in code.
+    var id: UUID = UUID()
+    var timestamp: Date = Date.distantPast
+    var rawText: String = ""
     @Relationship(deleteRule: .cascade, inverse: \FoodItem.meal)
-    var items: [FoodItem]
+    var items: [FoodItem]?
+
+    /// Non-optional view of `items`. CloudKit forces the stored relationship to
+    /// be optional; nothing outside this file should have to care.
+    var itemList: [FoodItem] { items ?? [] }
 
     init(id: UUID = UUID(), timestamp: Date = .now, rawText: String, items: [FoodItem] = []) {
         self.id = id
@@ -23,19 +31,19 @@ final class Meal {
         self.items = items
     }
 
-    var totalCalories: Double { items.reduce(0) { $0 + $1.calories } }
-    var totalProtein: Double { items.reduce(0) { $0 + $1.protein } }
-    var totalCarbs: Double { items.reduce(0) { $0 + $1.carbs } }
-    var totalFat: Double { items.reduce(0) { $0 + $1.fat } }
+    var totalCalories: Double { itemList.reduce(0) { $0 + $1.calories } }
+    var totalProtein: Double { itemList.reduce(0) { $0 + $1.protein } }
+    var totalCarbs: Double { itemList.reduce(0) { $0 + $1.carbs } }
+    var totalFat: Double { itemList.reduce(0) { $0 + $1.fat } }
     /// Fluid ounces of water in this meal (water items only).
-    var waterOunces: Double { items.reduce(0) { $0 + WaterConversion.ounces(for: $1) } }
+    var waterOunces: Double { itemList.reduce(0) { $0 + WaterConversion.ounces(for: $1) } }
 
     /// All five totals in a single pass over the items. The aggregation screens
     /// (Today, Trends, the widget snapshot) sum many meals per render — use this
     /// there instead of five separate per-total passes.
     var totals: MealTotals {
         var t = MealTotals()
-        for item in items {
+        for item in itemList {
             t.calories += item.calories
             t.protein += item.protein
             t.carbs += item.carbs
@@ -50,7 +58,7 @@ final class Meal {
     /// transcript or a "Scanned label: …" prefix. Falls back to rawText only
     /// if there are somehow no items.
     var displayName: String {
-        let names = items
+        let names = itemList
             .map { $0.name.trimmingCharacters(in: .whitespaces) }
             .filter { !$0.isEmpty }
         guard let last = names.last else { return rawText }
@@ -61,16 +69,16 @@ final class Meal {
 
 @Model
 final class FoodItem {
-    var name: String
-    var quantity: Double
-    var unit: String
-    var calories: Double
-    var protein: Double
-    var carbs: Double
-    var fat: Double
+    var name: String = ""
+    var quantity: Double = 0
+    var unit: String = ""
+    var calories: Double = 0
+    var protein: Double = 0
+    var carbs: Double = 0
+    var fat: Double = 0
     /// "high" when the USDA match and unit conversion were unambiguous, "low" when the
     /// values are a guess and the item should be reviewed manually.
-    var matchConfidence: String
+    var matchConfidence: String = MatchConfidence.low
     /// Micronutrients for this entry's portion, JSON-encoded. Stored as Data so
     /// adding new micronutrient fields later needs no schema migration; access
     /// it through the `micros` computed property below.

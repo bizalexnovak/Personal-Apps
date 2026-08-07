@@ -71,11 +71,11 @@ final class RecipeImporterTests: XCTestCase {
         ))
         let recipe = await RecipeImporter.makeRecipe(from: result, lookup: stub, into: context)
 
-        XCTAssertEqual(recipe.ingredients.count, 1)
+        XCTAssertEqual(recipe.ingredientList.count, 1)
         // 8 oz over 2 servings → 4 oz per serving.
-        XCTAssertEqual(recipe.ingredients.first?.quantity ?? 0, 4, accuracy: 0.001)
+        XCTAssertEqual(recipe.ingredientList.first?.quantity ?? 0, 4, accuracy: 0.001)
         // Macros came from the (USDA) lookup for the single-serving portion.
-        XCTAssertEqual(recipe.ingredients.first?.calories ?? 0, 100, accuracy: 0.001)
+        XCTAssertEqual(recipe.ingredientList.first?.calories ?? 0, 100, accuracy: 0.001)
     }
 
     func testImportUsesProviderMacrosWithoutLookup() async throws {
@@ -99,8 +99,8 @@ final class RecipeImporterTests: XCTestCase {
 
         XCTAssertFalse(lookupCalled, "provider macros were present — no USDA call expected")
         // 400 kcal over 2 servings → 200 per serving (not the stub's 999).
-        XCTAssertEqual(recipe.ingredients.first?.calories ?? 0, 200, accuracy: 0.001)
-        XCTAssertEqual(recipe.ingredients.first?.protein ?? 0, 40, accuracy: 0.001)
+        XCTAssertEqual(recipe.ingredientList.first?.calories ?? 0, 200, accuracy: 0.001)
+        XCTAssertEqual(recipe.ingredientList.first?.protein ?? 0, 40, accuracy: 0.001)
     }
 
     func testImportCarriesInstructions() async throws {

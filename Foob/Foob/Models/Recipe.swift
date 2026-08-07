@@ -38,9 +38,10 @@ enum MealSlot: String, CaseIterable {
 /// the recipe itself never appears in the diary or the day's totals.
 @Model
 final class Recipe {
-    @Attribute(.unique) var id: UUID
-    var name: String
-    var createdAt: Date
+    // CloudKit rules — see the note on `Meal`.
+    var id: UUID = UUID()
+    var name: String = ""
+    var createdAt: Date = Date.distantPast
     /// `MealSlot.rawValue` — which part of the day this recipe suits. Drives
     /// the time-of-day component of the recommender. Defaults to `any`.
     var mealSlot: String = MealSlot.any.rawValue
@@ -53,7 +54,11 @@ final class Recipe {
     /// this when there's something to say.
     var instructions: String = ""
     @Relationship(deleteRule: .cascade, inverse: \RecipeIngredient.recipe)
-    var ingredients: [RecipeIngredient]
+    var ingredients: [RecipeIngredient]?
+
+    /// Non-optional view of `ingredients` (the stored relationship has to be
+    /// optional for CloudKit).
+    var ingredientList: [RecipeIngredient] { ingredients ?? [] }
 
     init(
         id: UUID = UUID(), name: String, createdAt: Date = .now,
@@ -81,23 +86,23 @@ final class Recipe {
         lastLoggedAt = date
     }
 
-    var totalCalories: Double { ingredients.reduce(0) { $0 + $1.calories } }
-    var totalProtein: Double { ingredients.reduce(0) { $0 + $1.protein } }
-    var totalCarbs: Double { ingredients.reduce(0) { $0 + $1.carbs } }
-    var totalFat: Double { ingredients.reduce(0) { $0 + $1.fat } }
+    var totalCalories: Double { ingredientList.reduce(0) { $0 + $1.calories } }
+    var totalProtein: Double { ingredientList.reduce(0) { $0 + $1.protein } }
+    var totalCarbs: Double { ingredientList.reduce(0) { $0 + $1.carbs } }
+    var totalFat: Double { ingredientList.reduce(0) { $0 + $1.fat } }
 
     /// SwiftData to-many relationships are UNORDERED — the array can come back
     /// in any order after a refetch. Every display/index-based use must go
     /// through this stable ordering (sortOrder, assigned at creation).
     var sortedIngredients: [RecipeIngredient] {
-        ingredients.sorted {
+        ingredientList.sorted {
             $0.sortOrder != $1.sortOrder ? $0.sortOrder < $1.sortOrder : $0.name < $1.name
         }
     }
 
     /// The next sortOrder for an ingredient appended to this recipe.
     var nextSortOrder: Int {
-        (ingredients.map(\.sortOrder).max() ?? -1) + 1
+        (ingredientList.map(\.sortOrder).max() ?? -1) + 1
     }
 
     /// A fresh diary entry (timestamped now) built from this recipe. The
@@ -121,7 +126,7 @@ final class Recipe {
     /// The meal's time of day seeds the recipe's slot so a lunch saved as a
     /// recipe starts life tagged as lunch.
     static func from(meal: Meal, named name: String) -> Recipe {
-        let ingredients = meal.items.enumerated().map { index, item in
+        let ingredients = meal.itemList.enumerated().map { index, item in
             RecipeIngredient(
                 name: item.name, quantity: item.quantity, unit: item.unit,
                 calories: item.calories, protein: item.protein,
@@ -140,13 +145,13 @@ final class Recipe {
 /// logged history (and vice versa).
 @Model
 final class RecipeIngredient {
-    var name: String
-    var quantity: Double
-    var unit: String
-    var calories: Double
-    var protein: Double
-    var carbs: Double
-    var fat: Double
+    var name: String = ""
+    var quantity: Double = 0
+    var unit: String = ""
+    var calories: Double = 0
+    var protein: Double = 0
+    var carbs: Double = 0
+    var fat: Double = 0
     /// Carried from the source FoodItem so a recipe round-trip can't launder
     /// a low-confidence estimate into a "verified" entry. Manually entered
     /// ingredients are high — the user typed the numbers.

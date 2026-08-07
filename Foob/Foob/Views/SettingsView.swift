@@ -1,3 +1,4 @@
+import CloudKit
 import SwiftUI
 import UIKit
 
@@ -19,6 +20,11 @@ struct SettingsView: View {
                     GoalsSettingsView()
                 } label: {
                     Label("Daily goals", systemImage: "target")
+                }
+                NavigationLink {
+                    CloudSyncSettingsView()
+                } label: {
+                    Label("iCloud sync", systemImage: "icloud")
                 }
                 NavigationLink {
                     AppearanceSettingsView()
@@ -329,6 +335,47 @@ struct GoalsSettingsView: View {
         Task {
             try? await Task.sleep(for: .seconds(2))
             appliedMessageVisible = false
+        }
+    }
+}
+
+// MARK: - iCloud sync
+
+/// Informational only: shows whether the private CloudKit database is
+/// actually syncing right now, and why not if it isn't. No sign-in button,
+/// no gating — the device's iCloud account is the identity and Foob works
+/// the same either way.
+struct CloudSyncSettingsView: View {
+    @Environment(\.appBackground) private var appBackground
+    // Read inside `body` so @Observable tracks it; a stored/computed property
+    // outside body would also cross the class's @MainActor isolation.
+    @State private var status = CloudSyncStatus.shared
+
+    var body: some View {
+        Form {
+            Section {
+                LabeledContent("Status") {
+                    Label(status.summary, systemImage: status.isOn ? "checkmark.icloud" : "icloud.slash")
+                        .foregroundStyle(status.isOn ? Color.green : Color.secondary)
+                }
+
+                if !status.isOn {
+                    Text("To turn it on: Settings app → your name → iCloud → Apps Using iCloud → Foob.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+            } footer: {
+                Text("Everything you log syncs privately to your own iCloud account, so it comes back if you delete and reinstall the app. Foob works exactly the same signed out of iCloud — it just won't back up. Nothing is ever shared with anyone else, or with Foob's own servers.")
+            }
+        }
+        .appBackground(appBackground)
+        .navigationTitle("iCloud sync")
+        .navigationBarTitleDisplayMode(.inline)
+        .task {
+            await CloudSyncStatus.shared.refresh()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .CKAccountChanged)) { _ in
+            Task { await CloudSyncStatus.shared.refresh() }
         }
     }
 }

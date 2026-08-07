@@ -41,6 +41,8 @@ targets:
         NSMicrophoneUsageDescription: Foob uses the microphone to hear you describe your meal.
         NSSpeechRecognitionUsageDescription: Foob transcribes your meal description so it can be parsed and logged.
         NSCameraUsageDescription: Foob uses the camera to read nutrition facts labels you photograph.
+        UIBackgroundModes:
+          - remote-notification
     dependencies:
       - target: FoobWidgetExtension
 

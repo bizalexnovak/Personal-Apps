@@ -41,7 +41,7 @@ struct EditMealView: View {
                 Text("Original description")
             }
 
-            ForEach(meal.items) { item in
+            ForEach(meal.itemList) { item in
                 FoodItemEditor(item: item) { kind in
                     sheet = EditorSheet(item: item, kind: kind)
                 }
@@ -89,7 +89,7 @@ struct EditMealView: View {
     /// Inserts a fresh copy of this meal (items, macros, micros) timestamped
     /// now, so a repeated meal can be re-logged without re-capturing it.
     private func duplicateToToday() {
-        let copies = meal.items.map { item in
+        let copies = meal.itemList.map { item in
             let copy = FoodItem(
                 name: item.name, quantity: item.quantity, unit: item.unit,
                 calories: item.calories, protein: item.protein,

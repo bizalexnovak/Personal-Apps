@@ -59,6 +59,11 @@ launching after 7 days), plus `docs/privacy-policy.md` ready to host for the
 external-testing requirement. `Foob/PrivacyInfo.xcprivacy` (required
 privacy manifest) ships in the app target.
 
+**iCloud sync:** the diary, food database, and recipes sync privately across
+a person's own devices via SwiftData + CloudKit's private database — see
+`docs/ICLOUD.md` for the model rules this imposes, the entitlements needed,
+and how to verify it on a real device.
+
 ## Siri & voice capture
 
 Capture happens on the **Log** tab, inline — no modal. It's voice by default

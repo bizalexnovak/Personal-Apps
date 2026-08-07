@@ -57,7 +57,7 @@ struct HomeView: View {
             agg.meals.append(meal)
             var mealCalories = 0.0
             var mealWater = 0.0
-            for item in meal.items {
+            for item in meal.itemList {
                 mealCalories += item.calories
                 mealWater += WaterConversion.ounces(for: item)
                 agg.protein += item.protein

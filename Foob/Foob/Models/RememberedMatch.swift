@@ -7,14 +7,18 @@ import os
 /// phrase is logged we skip the (faulty) search and reuse the confirmed food.
 @Model
 final class RememberedMatch {
+    // CloudKit rules — see the note on `Meal`. `phrase` used to be `.unique`;
+    // `remember(phrase:...)` below already upserts by fetching first, and
+    // `lookup` takes the newest row, so duplicates arriving from sync are
+    // harmless and get collapsed on the next write.
     /// Normalized food name the user logged (lowercased, trimmed).
-    @Attribute(.unique) var phrase: String
+    var phrase: String = ""
     /// JSON-encoded USDAFood so we can re-scale it to whatever quantity/unit
     /// comes in next time, not just replay a fixed macro total.
-    var foodJSON: Data
+    var foodJSON: Data = Data()
     /// Human-readable matched description, for diagnostics/logging.
-    var matchedDescription: String
-    var updatedAt: Date
+    var matchedDescription: String = ""
+    var updatedAt: Date = Date.distantPast
 
     init(phrase: String, foodJSON: Data, matchedDescription: String, updatedAt: Date = .now) {
         self.phrase = phrase
@@ -39,7 +43,12 @@ enum RememberedMatchStore {
 
     static func lookup(phrase: String, in context: ModelContext) -> USDAFood? {
         let key = normalize(phrase)
-        var descriptor = FetchDescriptor<RememberedMatch>(predicate: #Predicate { $0.phrase == key })
+        // Newest first: without a unique constraint, sync can briefly leave two
+        // rows for the same phrase — the most recent correction wins.
+        var descriptor = FetchDescriptor<RememberedMatch>(
+            predicate: #Predicate { $0.phrase == key },
+            sortBy: [SortDescriptor(\.updatedAt, order: .reverse)]
+        )
         descriptor.fetchLimit = 1
         guard let row = try? context.fetch(descriptor).first else { return nil }
         guard let food = try? JSONDecoder().decode(USDAFood.self, from: row.foodJSON) else { return nil }
@@ -52,10 +61,13 @@ enum RememberedMatchStore {
         guard let data = try? JSONEncoder().encode(food) else { return }
         // Upsert: replace any existing mapping for this phrase.
         let existing = FetchDescriptor<RememberedMatch>(predicate: #Predicate { $0.phrase == key })
-        if let row = try? context.fetch(existing).first {
+        let rows = (try? context.fetch(existing)) ?? []
+        if let row = rows.first {
             row.foodJSON = data
             row.matchedDescription = food.description
             row.updatedAt = .now
+            // Collapse any duplicates that arrived from another device.
+            for extra in rows.dropFirst() { context.delete(extra) }
         } else {
             context.insert(RememberedMatch(phrase: key, foodJSON: data, matchedDescription: food.description))
         }
