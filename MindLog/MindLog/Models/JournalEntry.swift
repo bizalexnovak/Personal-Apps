@@ -18,6 +18,12 @@ final class JournalEntry {
     /// once at save. nil for check-ins and whenever analysis was unavailable.
     /// Never shown as a judgement — it only feeds the Trends overlay.
     var sentimentScore: Double?
+    /// Optional granularity *beyond* the 1-5 scale — "anxious", "content".
+    /// Always a second, skippable step; the number is still the entry's mood.
+    /// Defaulted so existing rows migrate without losing anything.
+    var emotionWords: [String] = []
+    /// Optional who/what/where context — "work", "alone", "outside".
+    var contextTags: [String] = []
 
     init(
         id: UUID = UUID(),
@@ -25,7 +31,9 @@ final class JournalEntry {
         text: String = "",
         source: String = EntrySource.typed,
         moodScore: Int? = nil,
-        sentimentScore: Double? = nil
+        sentimentScore: Double? = nil,
+        emotionWords: [String] = [],
+        contextTags: [String] = []
     ) {
         self.id = id
         self.timestamp = timestamp
@@ -33,6 +41,8 @@ final class JournalEntry {
         self.source = source
         self.moodScore = moodScore
         self.sentimentScore = sentimentScore
+        self.emotionWords = emotionWords
+        self.contextTags = contextTags
     }
 
     var trimmedText: String {

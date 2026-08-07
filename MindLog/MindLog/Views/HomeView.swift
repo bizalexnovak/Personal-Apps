@@ -23,6 +23,9 @@ struct HomeView: View {
     @State private var showCalendar = false
     @State private var showActivitySheet = false
     @State private var editingEntry: JournalEntry?
+    /// The just-saved check-in, if any, offered the optional detail step.
+    /// Set only after the entry already exists in the store — see saveCheckIn.
+    @State private var detailEntry: JournalEntry?
 
     private var calendar: Calendar { .current }
     private var isToday: Bool { calendar.isDateInToday(selectedDay) }
@@ -73,6 +76,24 @@ struct HomeView: View {
         }
         .sheet(item: $editingEntry) { entry in
             JournalEntryDetailView(entry: entry)
+        }
+        .sheet(item: $detailEntry) { entry in
+            // The check-in it describes is already saved — this sheet only
+            // ever adds optional colour on top. Swiping away does nothing.
+            MoodDetailStep(
+                mood: entry.moodScore ?? 3,
+                emotionWords: Binding(
+                    get: { entry.emotionWords },
+                    set: { entry.emotionWords = $0 }
+                ),
+                contextTags: Binding(
+                    get: { entry.contextTags },
+                    set: { entry.contextTags = $0 }
+                )
+            ) {
+                detailEntry = nil
+            }
+            .presentationDetents([.medium])
         }
     }
 
@@ -204,22 +225,21 @@ struct HomeView: View {
             Text(dayMoods.isEmpty ? (isToday ? "How are you feeling?" : "Mood") : "Mood")
                 .font(.headline)
             if dayMoods.isEmpty {
-                if isToday {
-                    MoodPicker(selection: Binding(
-                        get: { nil },
-                        set: { newValue in
-                            if let newValue { saveCheckIn(newValue) }
-                        }
-                    ))
-                    .frame(maxWidth: .infinity)
-                    Text("One tap — it's saved to your journal as a check-in.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                } else {
-                    Text("No mood recorded this day.")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
+                // Same picker whether the day shown is today or a past day —
+                // a forgotten day is still worth logging, so this always
+                // offers a working check-in rather than a dead-end label.
+                MoodPicker(selection: Binding(
+                    get: { nil },
+                    set: { newValue in
+                        if let newValue { saveCheckIn(newValue) }
+                    }
+                ))
+                .frame(maxWidth: .infinity)
+                Text(isToday
+                     ? "One tap — it's saved to your journal as a check-in."
+                     : "One tap — it's saved to this day, not today.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             } else {
                 HStack(spacing: 14) {
                     ForEach(dayMoods) { entry in
@@ -249,9 +269,17 @@ struct HomeView: View {
     }
 
     private func saveCheckIn(_ score: Int) {
-        let entry = JournalEntry(source: EntrySource.checkIn, moodScore: score)
+        // Backdated when the shown day isn't today — same entry shape, just
+        // timestamped onto the selected day, keeping the current time of
+        // day. This is what makes "an entry can be created for yesterday"
+        // true from the mood card, not just from the detail sheet.
+        let timestamp = isToday ? Date.now : EntryEditing.backdated(toDayOf: selectedDay)
+        let entry = JournalEntry(timestamp: timestamp, source: EntrySource.checkIn, moodScore: score)
         context.insert(entry)
         UINotificationFeedbackGenerator().notificationOccurred(.success)
+        // The five-second promise: save first, offer detail after. This
+        // sheet never blocks or delays the save above.
+        detailEntry = entry
     }
 
     // MARK: - Activities

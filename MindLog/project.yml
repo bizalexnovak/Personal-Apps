@@ -17,12 +17,16 @@ targets:
     platform: iOS
     sources:
       - MindLog
+      - Shared
     settings:
       base:
         TARGETED_DEVICE_FAMILY: "1"
         SUPPORTS_MACCATALYST: false
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         INFOPLIST_KEY_UISupportedInterfaceOrientations: UIInterfaceOrientationPortrait
+        CODE_SIGN_ENTITLEMENTS: MindLog.entitlements
+    dependencies:
+      - target: MindLogWidgetExtension
     info:
       path: MindLog/Info.plist
       properties:
@@ -31,6 +35,30 @@ targets:
         ITSAppUsesNonExemptEncryption: false
         NSMicrophoneUsageDescription: MindLog uses the microphone so you can speak your journal entries out loud.
         NSSpeechRecognitionUsageDescription: MindLog transcribes what you say into a journal entry. On-device recognition is used whenever your language supports it, so your words stay on this phone.
+        NSHealthShareUsageDescription: MindLog can read your sleep and step counts so a day's mood sits next to how you slept and moved. It's read-only, stays on this phone, and the app works fine if you say no.
+        NSHealthUpdateUsageDescription: MindLog does not write anything to Health.
+
+  # WidgetKit extension: lock-screen and home-screen mood check-ins. Shares the
+  # Shared/ folder (App Group hand-off types) with the app but none of its
+  # SwiftData stack, so the widget process stays tiny.
+  MindLogWidgetExtension:
+    type: app-extension
+    platform: iOS
+    sources:
+      - MindLogWidget
+      - Shared
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.alexnovak.MindLog.Widget
+        TARGETED_DEVICE_FAMILY: "1"
+        SUPPORTS_MACCATALYST: false
+        CODE_SIGN_ENTITLEMENTS: MindLogWidget.entitlements
+    info:
+      path: MindLogWidget/Info.plist
+      properties:
+        CFBundleDisplayName: MindLog
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
 
   MindLogTests:
     type: bundle.unit-test
@@ -45,6 +73,7 @@ schemes:
     build:
       targets:
         MindLog: all
+        MindLogWidgetExtension: all
         MindLogTests: [test]
     run:
       config: Debug

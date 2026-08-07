@@ -38,6 +38,19 @@ struct SettingsView: View {
                     } label: {
                         Label("Reminders", systemImage: "bell")
                     }
+                    NavigationLink {
+                        CheckInWindowSettingsView()
+                    } label: {
+                        Label("Check-ins", systemImage: "bell.badge")
+                    }
+                }
+
+                // A soft ask, never a gate: the card hides itself on devices
+                // without Health, and the app is complete without it.
+                Section("Health") {
+                    HealthAccessCard()
+                        .listRowInsets(EdgeInsets())
+                        .listRowBackground(Color.clear)
                 }
 
                 Section("Appearance") {
