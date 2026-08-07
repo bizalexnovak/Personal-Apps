@@ -1,0 +1,6 @@
+// Xcode writes DEVELOPMENT_TEAM into MindLog.xcodeproj when you pick a team in
+// Signing & Capabilities — but `xcodegen generate` rebuilds that file from
+// project.yml and throws the choice away. Keeping it here means the team
+// survives regeneration. Same pattern as Foob's Signing.xcconfig.
+DEVELOPMENT_TEAM = BFJ3275D2P
+CODE_SIGN_STYLE = Automatic
