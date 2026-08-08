@@ -17,9 +17,57 @@ xcodegen generate
 open MindLog.xcodeproj
 ```
 
-Then select your development team under Signing & Capabilities and run on a
-device or simulator. Run the unit tests with **⌘U** (pure logic + in-memory
-models — no network, no keys, no special setup).
+Signing is already wired up: the Team ID lives in `Signing.xcconfig`, which
+both the Debug and Release configs pull in, so `xcodegen generate` can't throw
+it away. Run on a device or simulator with **⌘R**, and the unit tests with
+**⌘U** (pure logic + in-memory models — no network, no keys, no special setup).
+
+## Updating on your phone
+
+MindLog isn't on the App Store or TestFlight — it's built on your Mac and
+installed straight onto your phone. After one cabled install, every update
+after that goes over Wi-Fi with a single command.
+
+### One-time setup
+
+1. **Team ID.** Put your 10-character Apple Developer Team ID in
+   `Signing.xcconfig` (developer.apple.com → Membership, or the code in
+   parentheses in Xcode's team dropdown).
+2. **Developer Mode on the phone.** Settings → Privacy & Security → Developer
+   Mode → on, then restart the phone when it asks.
+3. **Plug the phone in once** and run the app from Xcode (**⌘R**) with the
+   phone selected as the destination. This is the cabled install; it's also
+   what pairs the phone with this Mac. On the phone, trust the developer
+   certificate if prompted (Settings → General → VPN & Device Management).
+4. **Turn on wireless.** With the cable still attached, open Xcode → Window →
+   **Devices and Simulators**, select the phone, and tick **Connect via
+   network**. A globe appears next to its name once it's reachable wirelessly.
+   Now unplug it.
+
+### Every update after that
+
+Same Wi-Fi, phone unlocked, one command:
+
+```sh
+cd MindLog && bash bin/deploy-phone.sh
+```
+
+That regenerates the project, builds Release for the device, installs over the
+network, and launches the app — the phone lights up with the new build a
+minute or so later. Running it twice in a row is harmless: the install replaces
+the app in place and the launch terminates any running copy first.
+
+If you have more than one paired device, or the script picks the wrong one,
+name the phone explicitly:
+
+```sh
+DEVICE_NAME="Nova" bash bin/deploy-phone.sh
+```
+
+The script checks its preconditions before it does any work, so the common
+failures — no Team ID, phone not reachable, build broken — come back as a
+plain-English explanation of what to fix rather than a wall of xcodebuild
+output.
 
 ## The two halves
 
