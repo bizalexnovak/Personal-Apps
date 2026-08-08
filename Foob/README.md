@@ -53,6 +53,9 @@ On first launch the app asks how it should reach Claude — two paths
 
 Codes and keys are stored in the iOS Keychain, never in UserDefaults.
 
+**Updating your own phone:** after one cabled install, `bin/deploy-phone.sh`
+ships every later build over Wi-Fi — see [Updating on your phone](#updating-on-your-phone).
+
 **Distributing to testers:** see `docs/TESTFLIGHT.md` for the full
 enroll → archive → TestFlight walkthrough (and why free-signed builds stop
 launching after 7 days), plus `docs/privacy-policy.md` ready to host for the
@@ -63,6 +66,55 @@ privacy manifest) ships in the app target.
 a person's own devices via SwiftData + CloudKit's private database — see
 `docs/ICLOUD.md` for the model rules this imposes, the entitlements needed,
 and how to verify it on a real device.
+
+## Updating on your phone
+
+TestFlight is for other people. To put a build you just wrote onto *your own*
+iPhone, there's a shorter path: the Mac talks to the phone over Wi-Fi.
+
+```sh
+cd Foob
+bin/deploy-phone.sh
+```
+
+That regenerates the project, builds **Release** signed with the team in
+`Signing.xcconfig`, installs over the network with `xcrun devicectl`, and
+launches the app. No cable, no TestFlight round trip, no waiting for review.
+Running it twice in a row is harmless — the install replaces the app in place
+and the launch restarts it.
+
+(If the shell says *permission denied*, the executable bit didn't survive the
+checkout: `chmod +x bin/deploy-phone.sh` once and it's fixed for good.)
+
+If more than one iPhone is paired with the Mac, name the one you mean (its
+name in Settings → General → About → Name, or its UDID):
+
+```sh
+bin/deploy-phone.sh "Nova"
+```
+
+### One-time setup
+
+Only needed once per Mac + phone pair. After this, the command above is the
+whole story.
+
+1. **Team ID.** Put your 10-character Team ID in `Foob/Signing.xcconfig`
+   (`DEVELOPMENT_TEAM = ABCDE12345`) — `docs/TESTFLIGHT.md` → Step 1 has where
+   to find it. The script refuses to build without it rather than dumping a
+   wall of provisioning errors.
+2. **Developer Mode on the phone.** iPhone → Settings → Privacy & Security →
+   **Developer Mode** → on, then restart the phone when it asks. (This option
+   only appears once the phone has been connected to Xcode at least once.)
+3. **First install over the cable.** Plug the phone in, unlock it, tap
+   **Trust**, then run `bin/deploy-phone.sh`. The first build is also what
+   registers the device with your provisioning profile.
+4. **Connect via network.** With the phone still plugged in: Xcode → Window →
+   **Devices and Simulators** → select the phone → tick **Connect via
+   network**. Wait for the globe icon to appear next to it, then unplug.
+
+From then on the phone just needs to be unlocked and on the same Wi-Fi as the
+Mac. If it isn't reachable the script says so and lists exactly these things
+to check; plugging the cable in for one run re-establishes the pairing.
 
 ## Siri & voice capture
 
