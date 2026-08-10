@@ -88,7 +88,7 @@ final class RecipeSeedTests: XCTestCase {
         let recipes = RecipeSeed.build()
         XCTAssertGreaterThanOrEqual(recipes.count, 20)
         for recipe in recipes {
-            XCTAssertFalse(recipe.ingredients.isEmpty, "\(recipe.name) has no ingredients")
+            XCTAssertFalse(recipe.ingredientList.isEmpty, "\(recipe.name) has no ingredients")
             XCTAssertGreaterThan(recipe.totalCalories, 0, "\(recipe.name) has no calories")
         }
     }

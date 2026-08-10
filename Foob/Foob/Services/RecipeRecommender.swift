@@ -60,7 +60,7 @@ enum RecipeRecommender {
         limit: Int = 4
     ) -> [RecipeRecommendation] {
         // Empty recipes (no ingredients / no calories) can't be a meal.
-        let candidates = recipes.filter { $0.totalCalories > 0 && !$0.ingredients.isEmpty }
+        let candidates = recipes.filter { $0.totalCalories > 0 && !$0.ingredientList.isEmpty }
         guard !candidates.isEmpty else { return [] }
 
         let slot = MealSlot.current(now, calendar: calendar)

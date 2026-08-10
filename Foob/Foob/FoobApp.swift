@@ -105,6 +105,10 @@ struct ContentView: View {
             RecipeSeed.seedIfNeeded(in: context)
             CustomFoodSeed.seedIfNeeded(in: context)
             await CommunitySync.syncNow(context: context)
+            // CloudKit's private database can't enforce uniqueness, so an
+            // identical CustomFood row can arrive from another device after
+            // sync — clean those up once freshly-synced rows are in.
+            CustomFoodStore.dedupe(in: context)
         }
         // Re-evaluate the end-of-day reminder as the app backgrounds/foregrounds
         // so it reflects the latest totals and time of day.

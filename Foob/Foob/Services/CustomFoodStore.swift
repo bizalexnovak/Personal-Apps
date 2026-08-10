@@ -170,6 +170,38 @@ enum CustomFoodStore {
         }
     }
 
+    /// Collapse rows that share a `nameKey`. CloudKit's private database can't
+    /// enforce uniqueness the way `@Attribute(.unique)` did locally, so two
+    /// devices can each insert the same food before either has synced — this
+    /// cleans that up after the fact. Keeps the oldest row per key (by
+    /// `createdAt`); if any duplicate in the group hadn't synced yet, the
+    /// survivor is left unsynced too so it still gets pushed.
+    @MainActor
+    static func dedupe(in context: ModelContext) {
+        let all = (try? context.fetch(FetchDescriptor<CustomFood>())) ?? []
+        let groups = Dictionary(grouping: all, by: \.nameKey)
+        var deletedAny = false
+        for (_, rows) in groups where rows.count > 1 {
+            // The id tiebreak matters: every device runs this independently and
+            // must pick the SAME survivor, or they delete each other's copy.
+            let sorted = rows.sorted {
+                $0.createdAt != $1.createdAt
+                    ? $0.createdAt < $1.createdAt
+                    : $0.id.uuidString < $1.id.uuidString
+            }
+            let survivor = sorted[0]
+            let losers = sorted.dropFirst()
+            if losers.contains(where: { !$0.synced }) {
+                survivor.synced = false
+            }
+            for loser in losers {
+                context.delete(loser)
+            }
+            deletedAny = true
+        }
+        if deletedAny { try? context.save() }
+    }
+
     // MARK: - CSV import
 
     /// Import a nutrition sheet. Expected header (case-insensitive):

@@ -132,7 +132,7 @@ final class MealCaptureCoordinatorTests: XCTestCase {
         let meals = try savedMeals(in: context)
         XCTAssertEqual(meals.count, 1)
         XCTAssertEqual(meals.first?.rawText, "two eggs")
-        XCTAssertEqual(meals.first?.items.first?.calories ?? 0, 143, accuracy: 0.01)
+        XCTAssertEqual(meals.first?.itemList.first?.calories ?? 0, 143, accuracy: 0.01)
     }
 
     // MARK: - Unmatched items
@@ -165,7 +165,7 @@ final class MealCaptureCoordinatorTests: XCTestCase {
         XCTAssertTrue(coordinator.canSaveAll)
 
         await coordinator.saveAll()
-        let item = try XCTUnwrap(try savedMeals(in: context).first?.items.first)
+        let item = try XCTUnwrap(try savedMeals(in: context).first?.itemList.first)
         XCTAssertEqual(item.calories, 10, accuracy: 0.01, "the entered value is saved, never zero")
         XCTAssertEqual(item.matchConfidence, MatchConfidence.high)
     }
@@ -257,8 +257,8 @@ final class MealCaptureCoordinatorTests: XCTestCase {
 
         await coordinator.saveAll()
         let meals = try savedMeals(in: context)
-        XCTAssertEqual(meals.first?.items.count, 1)
-        XCTAssertEqual(meals.first?.items.first?.name, "eggs")
+        XCTAssertEqual(meals.first?.itemList.count, 1)
+        XCTAssertEqual(meals.first?.itemList.first?.name, "eggs")
     }
 
     func testRemovingEveryItemDisablesSave() async throws {
@@ -403,8 +403,8 @@ final class MealCaptureCoordinatorTests: XCTestCase {
         context.insert(recipe)
 
         let relogged = recipe.makeMeal()
-        XCTAssertEqual(relogged.items.first?.matchConfidence, MatchConfidence.low)
-        XCTAssertEqual(relogged.items.first?.calories ?? 0, 400, accuracy: 0.001)
+        XCTAssertEqual(relogged.itemList.first?.matchConfidence, MatchConfidence.low)
+        XCTAssertEqual(relogged.itemList.first?.calories ?? 0, 400, accuracy: 0.001)
     }
 
     func testCaloricSupplementNamedFoodGoesToLookup() async throws {
@@ -501,7 +501,7 @@ final class MealCaptureCoordinatorTests: XCTestCase {
         await coordinator.saveAll()
 
         let meal = try XCTUnwrap(try savedMeals(in: context).first)
-        let item = try XCTUnwrap(meal.items.first)
+        let item = try XCTUnwrap(meal.itemList.first)
         XCTAssertEqual(item.micros.saturatedFat ?? 0, 6, accuracy: 0.001)
         XCTAssertEqual(item.micros.fiber ?? 0, 4, accuracy: 0.001)
         XCTAssertEqual(item.micros.sodium ?? 0, 800, accuracy: 0.001)

@@ -51,7 +51,7 @@ enum MealSuggestions {
         for meal in meals {
             let hour = cal.component(.hour, from: meal.timestamp)
             let nearNow = circularHourDistance(hour, nowHour) <= nearNowWindowHours
-            for item in meal.items {
+            for item in meal.itemList {
                 let name = item.name.trimmingCharacters(in: .whitespaces)
                 guard !name.isEmpty else { continue }
                 let key = "\(name.lowercased())|\(item.unit.lowercased())"

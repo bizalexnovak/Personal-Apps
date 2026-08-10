@@ -147,7 +147,7 @@ struct RecipesView: View {
     private func recipeRow(_ recipe: Recipe) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(recipe.name)
-            Text("\(recipe.ingredients.count) ingredient\(recipe.ingredients.count == 1 ? "" : "s") · \(Int(recipe.totalCalories.rounded())) kcal")
+            Text("\(recipe.ingredientList.count) ingredient\(recipe.ingredientList.count == 1 ? "" : "s") · \(Int(recipe.totalCalories.rounded())) kcal")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
@@ -228,7 +228,7 @@ struct RecipeDetailView: View {
             } header: {
                 Text("Ingredients")
             } footer: {
-                if !recipe.ingredients.isEmpty {
+                if !recipe.ingredientList.isEmpty {
                     Text("Total: \(Int(recipe.totalCalories.rounded())) kcal · P \(Int(recipe.totalProtein.rounded()))g · C \(Int(recipe.totalCarbs.rounded()))g · F \(Int(recipe.totalFat.rounded()))g")
                 }
             }
@@ -257,7 +257,7 @@ struct RecipeDetailView: View {
                         systemImage: justLogged ? "checkmark.circle.fill" : "plus.square.on.square"
                     )
                 }
-                .disabled(justLogged || recipe.ingredients.isEmpty)
+                .disabled(justLogged || recipe.ingredientList.isEmpty)
 
                 // Only invite-code installs have a shared server to publish to.
                 if ClaudeEndpoint.proxyConfig != nil {
@@ -271,7 +271,7 @@ struct RecipeDetailView: View {
                         case .failed: Label("Couldn't share — tap to retry", systemImage: "arrow.clockwise")
                         }
                     }
-                    .disabled(shareState == .sharing || shareState == .shared || recipe.ingredients.isEmpty)
+                    .disabled(shareState == .sharing || shareState == .shared || recipe.ingredientList.isEmpty)
                 }
             } footer: {
                 Text(ClaudeEndpoint.proxyConfig != nil
@@ -290,7 +290,7 @@ struct RecipeDetailView: View {
                 // on relationship-cascade insert for an object appended to an
                 // already-persisted parent is flaky on some SwiftData builds.
                 modelContext.insert(ingredient)
-                recipe.ingredients.append(ingredient)
+                recipe.ingredients = recipe.ingredientList + [ingredient]
                 try? modelContext.save()
             }
         }
