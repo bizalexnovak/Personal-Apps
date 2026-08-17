@@ -28,73 +28,79 @@ struct OnboardingView: View {
     }
 
     var body: some View {
-        NavigationStack {
-            Form {
-                Section {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Image(systemName: "fork.knife.circle.fill")
-                            .font(.largeTitle)
-                            .foregroundStyle(.orange)
-                        Text("Welcome to Foob")
-                            .font(.title2.bold())
-                        Text("Describe meals in plain English — by voice, Siri, or typing — and Foob parses them with AI and looks up macros in the USDA food database.")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                    }
-                    .listRowBackground(Color.clear)
-                }
+        LuxSheet {
+            ScrollView {
+                VStack(spacing: 0) {
+                    Text("WELCOME")
+                        .font(Lux.title(24))
+                        .tracking(3)
+                        .engravedFill()
+                        .padding(.top, 26)
 
-                Section {
-                    Picker("How will you connect?", selection: $path) {
-                        ForEach(Path.allCases) { p in Text(p.rawValue).tag(p) }
-                    }
-                    .pickerStyle(.segmented)
-                    .listRowBackground(Color.clear)
-                }
+                    LuxNote(
+                        "Describe meals in plain English — by voice, Siri, or typing. Foob parses them and looks the macros up for you.",
+                        size: 16
+                    )
+                    .multilineTextAlignment(.center)
+                    .padding(.top, 12)
 
-                switch path {
-                case .invite:
-                    Section {
-                        TextField("e.g. MOM-7291", text: $inviteCode)
-                            .textInputAutocapitalization(.characters)
-                            .autocorrectionDisabled()
-                    } header: {
-                        Text("Invite code")
-                    } footer: {
-                        Text("The code you were given by whoever shared Foob with you. That's all you need — AI requests are handled for you.")
-                    }
-                case .ownKey:
-                    Section {
-                        SecureField("sk-ant-…", text: $claudeKey)
-                            .textInputAutocapitalization(.never)
-                            .autocorrectionDisabled()
-                    } header: {
-                        Text("Claude API key")
-                    } footer: {
-                        Text("Create one at console.anthropic.com. Stored in the iOS Keychain.")
-                    }
+                    LuxSwitcher(
+                        options: [(Path.invite, "INVITE CODE"), (Path.ownKey, "MY OWN API KEY")],
+                        selection: $path,
+                        spacing: 22
+                    )
+                    .padding(.top, 26)
 
-                    Section {
-                        SecureField("Leave empty to use DEMO_KEY", text: $usdaKey)
-                            .textInputAutocapitalization(.never)
-                            .autocorrectionDisabled()
-                    } header: {
-                        Text("USDA API key (optional)")
-                    } footer: {
-                        Text("The free public DEMO_KEY works out of the box but is rate-limited. Get your own free key at api.data.gov when you're ready.")
-                    }
-                }
+                    fields
+                        .padding(.top, 26)
 
-                Button("Get started") {
-                    save()
-                    dismiss()
+                    Button("GET STARTED") {
+                        save()
+                        dismiss()
+                    }
+                    .buttonStyle(GoldCapsule(enabled: canStart))
+                    .disabled(!canStart)
+                    .padding(.top, 30)
                 }
-                .disabled(!canStart)
-                .frame(maxWidth: .infinity)
+                .padding(.horizontal, Lux.hPad)
+                .padding(.bottom, 40)
             }
-            .keyboardDismissBar()
+            .scrollDismissesKeyboard(.interactively)
         }
         .interactiveDismissDisabled(!canStart)
+    }
+
+    @ViewBuilder
+    private var fields: some View {
+        switch path {
+        case .invite:
+            VStack(alignment: .leading, spacing: 10) {
+                LuxFieldLabel(text: "INVITE CODE")
+                LuxUnderlinedField(
+                    placeholder: "e.g. MOM-7291",
+                    text: $inviteCode,
+                    autocapitalization: .characters
+                )
+                LuxNote("The code you were given by whoever shared Foob with you. That's all you need — AI requests are handled for you.")
+            }
+        case .ownKey:
+            VStack(alignment: .leading, spacing: 26) {
+                VStack(alignment: .leading, spacing: 10) {
+                    LuxFieldLabel(text: "CLAUDE API KEY")
+                    LuxUnderlinedField(placeholder: "sk-ant-…", text: $claudeKey, secure: true)
+                    LuxNote("Create one at console.anthropic.com. Stored in the iOS Keychain.")
+                }
+                VStack(alignment: .leading, spacing: 10) {
+                    LuxFieldLabel(text: "USDA API KEY (OPTIONAL)")
+                    LuxUnderlinedField(
+                        placeholder: "Leave empty to use DEMO_KEY",
+                        text: $usdaKey,
+                        secure: true
+                    )
+                    LuxNote("The free public DEMO_KEY works out of the box but is rate-limited. Get your own free key at api.data.gov when you're ready.")
+                }
+            }
+        }
     }
 
     private func save() {

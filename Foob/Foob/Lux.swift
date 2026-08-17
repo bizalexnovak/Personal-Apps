@@ -304,6 +304,9 @@ struct LuxUnderlinedField: View {
     let placeholder: String
     @Binding var text: String
     var size: CGFloat = 21
+    /// API keys and other secrets mask as you type.
+    var secure: Bool = false
+    var autocapitalization: TextInputAutocapitalization = .never
 
     var body: some View {
         VStack(spacing: 8) {
@@ -313,13 +316,76 @@ struct LuxUnderlinedField: View {
                         .font(Lux.serifItalic(size))
                         .foregroundStyle(Lux.cream.opacity(0.35))
                 }
-                TextField("", text: $text)
-                    .font(Lux.serif(size))
-                    .foregroundStyle(Lux.cream)
-                    .tint(Lux.gold)
+                Group {
+                    if secure {
+                        SecureField("", text: $text)
+                    } else {
+                        TextField("", text: $text)
+                    }
+                }
+                .font(Lux.serif(size))
+                .foregroundStyle(Lux.cream)
+                .tint(Lux.gold)
+                .textInputAutocapitalization(autocapitalization)
+                .autocorrectionDisabled()
             }
             Rectangle().fill(Lux.goldLabel.opacity(0.5)).frame(height: 1)
         }
+    }
+}
+
+/// Small uppercase label above a field or beside a value.
+struct LuxFieldLabel: View {
+    let text: String
+    var body: some View {
+        Text(text)
+            .font(Lux.smallcaps(8))
+            .tracking(2)
+            .foregroundStyle(Lux.cream.opacity(0.45))
+    }
+}
+
+/// Italic serif explanatory text — the voice this design uses for anything
+/// conversational, in place of a system footnote.
+struct LuxNote: View {
+    let text: String
+    var size: CGFloat = 13
+    init(_ text: String, size: CGFloat = 13) {
+        self.text = text
+        self.size = size
+    }
+    var body: some View {
+        Text(text)
+            .font(Lux.serifItalic(size))
+            .foregroundStyle(Lux.cream.opacity(0.45))
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+/// Sheet chrome shared by Onboarding and the typed-entry sheet: emerald
+/// ground, a gold top border, and a gold grab handle.
+struct LuxSheet<Content: View>: View {
+    @ViewBuilder var content: Content
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Capsule()
+                .fill(Lux.goldLabel.opacity(0.4))
+                .frame(width: 40, height: 4)
+                .padding(.top, 10)
+            content
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .background(Lux.sheet.ignoresSafeArea())
+        .overlay(alignment: .top) {
+            Rectangle()
+                .fill(Lux.goldLabel.opacity(0.3))
+                .frame(height: 1)
+        }
+        // Paints the presentation surface itself, not just our content, so the
+        // system's default sheet material doesn't show at the rounded corners.
+        .presentationBackground(Lux.sheet)
     }
 }
 
