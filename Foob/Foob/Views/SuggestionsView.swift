@@ -6,7 +6,6 @@ import SwiftUI
 /// suggestion nudges toward voting/commenting on that one instead — with a
 /// "post anyway" override, so similar-but-different ideas are never blocked.
 struct SuggestionsView: View {
-    @Environment(\.appBackground) private var appBackground
 
     @State private var suggestions: [SuggestionsService.Suggestion] = []
     @State private var votedIDs: Set<Int> = []
@@ -21,93 +20,138 @@ struct SuggestionsView: View {
 
     private let service = SuggestionsService()
 
+    @Environment(\.dismiss) private var dismiss
+    /// Suggestion tapped → its thread. Held by ID so the row stays a plain
+    /// button rather than a NavigationLink with a system chevron.
+    @State private var openSuggestion: SuggestionsService.Suggestion?
+
     var body: some View {
         Group {
             if ClaudeEndpoint.proxyConfig == nil {
-                ContentUnavailableView(
-                    "Needs an invite code",
-                    systemImage: "lightbulb",
-                    description: Text("The suggestions board lives on the shared server. Add your invite code under Settings \u{2192} API keys.")
-                )
+                VStack(spacing: 14) {
+                    Image(systemName: "lightbulb")
+                        .font(.system(size: 34, weight: .light))
+                        .foregroundStyle(Lux.goldLabel)
+                    Text("NEEDS AN INVITE CODE")
+                        .font(Lux.smallcaps(9))
+                        .tracking(2.5)
+                        .foregroundStyle(Lux.goldLabel)
+                    LuxNote("The suggestions board lives on the shared server. Add your invite code under Settings → API keys.", size: 15)
+                        .multilineTextAlignment(.center)
+                }
+                .padding(.horizontal, Lux.hPad)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 board
             }
         }
-        .appBackground(appBackground)
-        .navigationTitle("Suggestions")
-        .navigationBarTitleDisplayMode(.inline)
+        .luxScreen()
+        .safeAreaInset(edge: .top, spacing: 0) {
+            LuxHeader(title: "SUGGESTIONS", subtitle: "What should Foob do next?") {
+                LuxBackButton { dismiss() }
+            } trailing: {
+                if ClaudeEndpoint.proxyConfig != nil {
+                    Button { draft = ""; showCompose = true } label: {
+                        Image(systemName: "plus")
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundStyle(Lux.cream)
+                    }
+                    .accessibilityLabel("New suggestion")
+                }
+            }
+            .padding(.bottom, 8)
+            .background(Lux.ground)
+        }
+        .toolbar(.hidden, for: .navigationBar)
     }
 
     private var board: some View {
         List {
-            if let errorMessage {
-                Section {
-                    Label(errorMessage, systemImage: "exclamationmark.triangle")
-                        .font(.subheadline)
-                        .foregroundStyle(.orange)
-                }
-            }
-            Section {
-                if loading && suggestions.isEmpty {
-                    HStack { ProgressView(); Text("Loading…").foregroundStyle(.secondary) }
-                } else if suggestions.isEmpty {
-                    Text("No suggestions yet — start the board with the + button.")
-                        .foregroundStyle(.secondary)
-                } else {
-                    ForEach(suggestions) { suggestion in
-                        row(suggestion)
+            Group {
+                if let errorMessage {
+                    HStack(spacing: 7) {
+                        Image(systemName: "exclamationmark.triangle")
+                            .font(.system(size: 11))
+                        Text(errorMessage)
+                            .font(Lux.serifItalic(14))
                     }
+                    .foregroundStyle(Lux.ember)
+                    .padding(.top, 12)
                 }
-            } footer: {
-                Text("Ranked by votes. Vote for what you want built next; tap a suggestion to discuss.")
+
+                if loading && suggestions.isEmpty {
+                    LuxNote("Loading…").padding(.top, 20)
+                } else if suggestions.isEmpty {
+                    LuxNote("No suggestions yet — start the board with the + button.", size: 15)
+                        .padding(.top, 20)
+                }
             }
+            .luxRowChrome()
+
+            ForEach(suggestions) { suggestion in
+                row(suggestion)
+                    .luxRowChrome()
+            }
+
+            Group {
+                LuxNote("Ranked by votes. Vote for what you want built next; tap one to discuss.")
+                    .padding(.top, 14)
+                    .padding(.bottom, 40)
+            }
+            .luxRowChrome()
         }
+        .luxList()
         .refreshable { await load() }
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Button { draft = ""; showCompose = true } label: {
-                    Image(systemName: "plus")
-                }
-                .accessibilityLabel("New suggestion")
-            }
+        .navigationDestination(item: $openSuggestion) { suggestion in
+            SuggestionDetailView(
+                suggestion: suggestion,
+                voted: votedIDs.contains(suggestion.id),
+                onChanged: { Task { await load() } }
+            )
         }
-        .sheet(isPresented: $showCompose) { composeSheet }
-        .sheet(isPresented: $showSimilar) { similarSheet }
+        .sheet(isPresented: $showCompose) { composeSheet.luxSheetChrome() }
+        .sheet(isPresented: $showSimilar) { similarSheet.luxSheetChrome() }
         .task { await load() }
     }
 
     private func row(_ suggestion: SuggestionsService.Suggestion) -> some View {
-        HStack(alignment: .top, spacing: 12) {
+        let voted = votedIDs.contains(suggestion.id)
+        return HStack(alignment: .top, spacing: 12) {
             Button {
                 toggleVote(suggestion)
             } label: {
-                VStack(spacing: 2) {
-                    Image(systemName: votedIDs.contains(suggestion.id)
-                        ? "arrowtriangle.up.fill" : "arrowtriangle.up")
+                VStack(spacing: 3) {
+                    Image(systemName: voted ? "arrowtriangle.up.fill" : "arrowtriangle.up")
+                        .font(.system(size: 12))
                     Text("\(suggestion.votes)")
-                        .font(.subheadline.monospacedDigit().weight(.semibold))
+                        .font(Lux.serif(19))
+                        .monospacedDigit()
                 }
-                .foregroundStyle(votedIDs.contains(suggestion.id) ? Color.accentColor : .secondary)
+                .foregroundStyle(voted ? Lux.gold : Lux.cream.opacity(0.6))
                 .frame(minWidth: 34)
             }
-            .buttonStyle(.borderless)
-            .accessibilityLabel("Vote for this suggestion")
+            .buttonStyle(.plain)
+            .accessibilityLabel(voted ? "Remove your vote" : "Vote for this suggestion")
 
-            NavigationLink {
-                SuggestionDetailView(
-                    suggestion: suggestion,
-                    voted: votedIDs.contains(suggestion.id),
-                    onChanged: { Task { await load() } }
-                )
+            Button {
+                openSuggestion = suggestion
             } label: {
                 VStack(alignment: .leading, spacing: 3) {
                     Text(suggestion.text)
-                    Text("\(suggestion.author) · \(suggestion.createdDate.formatted(date: .abbreviated, time: .omitted)) · \(suggestion.comments) comment\(suggestion.comments == 1 ? "" : "s")")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .font(Lux.serif(17))
+                        .foregroundStyle(Lux.cream)
+                        .multilineTextAlignment(.leading)
+                    Text("\(suggestion.author.uppercased()) · \(suggestion.createdDate.formatted(date: .abbreviated, time: .omitted).uppercased()) · \(suggestion.comments) COMMENT\(suggestion.comments == 1 ? "" : "S")")
+                        .font(Lux.smallcaps(8))
+                        .tracking(1.5)
+                        .foregroundStyle(Lux.cream.opacity(0.45))
+                        .multilineTextAlignment(.leading)
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
+            .buttonStyle(.plain)
         }
+        .luxRow(vertical: 12)
     }
 
     private var composeSheet: some View {
@@ -256,7 +300,6 @@ struct SuggestionDetailView: View {
     /// Tells the board to refresh after a vote/comment here.
     var onChanged: () -> Void
 
-    @Environment(\.appBackground) private var appBackground
     @State private var votes: Int
     @State private var comments: [SuggestionsService.Comment] = []
     @State private var newComment = ""
@@ -314,7 +357,7 @@ struct SuggestionDetailView: View {
             }
         }
         .keyboardDismissBar()
-        .appBackground(appBackground)
+        .luxSheetChrome()
         .navigationTitle("Suggestion")
         .navigationBarTitleDisplayMode(.inline)
         .task { comments = (try? await service.comments(for: suggestion.id)) ?? [] }

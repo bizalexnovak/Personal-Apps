@@ -7,7 +7,6 @@ import SwiftData
 struct RecipeSearchView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.appBackground) private var appBackground
 
     @State private var query = ""
     @State private var results: [RecipeSearchResult] = []
@@ -49,7 +48,7 @@ struct RecipeSearchView: View {
                     }
                 }
             }
-            .appBackground(appBackground)
+            .luxSheetChrome()
             .navigationTitle("Find a recipe")
             .navigationBarTitleDisplayMode(.inline)
             .searchable(text: $query, prompt: "Search recipes (e.g. \u{201C}chicken burrito\u{201D})")

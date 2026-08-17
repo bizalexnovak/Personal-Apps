@@ -8,7 +8,7 @@ import Foundation
 struct SuggestionsService {
     var session: URLSession = .shared
 
-    struct Suggestion: Identifiable, Decodable, Equatable {
+    struct Suggestion: Identifiable, Decodable, Equatable, Hashable {
         let id: Int
         let text: String
         let author: String

@@ -32,6 +32,7 @@ struct DebugLogView: View {
                 }
             }
         }
+        .luxSheetChrome()
         .navigationTitle("Match Diagnostics")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {

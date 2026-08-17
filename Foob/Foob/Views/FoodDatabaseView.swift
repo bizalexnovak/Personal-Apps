@@ -8,7 +8,6 @@ import UniformTypeIdentifiers
 /// and — for invite-code installs — the shared community database.
 struct FoodDatabaseView: View {
     @Environment(\.modelContext) private var modelContext
-    @Environment(\.appBackground) private var appBackground
     @Query(sort: \CustomFood.name) private var foods: [CustomFood]
 
     @State private var query = ""
@@ -25,53 +24,78 @@ struct FoodDatabaseView: View {
         }
     }
 
+    @Environment(\.dismiss) private var dismiss
+
     var body: some View {
         List {
-            Section {
-                LabeledContent("Foods stored") { Text("\(foods.count)").monospacedDigit() }
-                Button {
-                    showImporter = true
-                } label: {
-                    Label("Import nutrition sheet (CSV)", systemImage: "square.and.arrow.down")
-                }
-                if ClaudeEndpoint.proxyConfig != nil {
-                    Button {
-                        syncNow()
-                    } label: {
-                        if syncing {
-                            HStack { ProgressView(); Text("Syncing…") }
-                        } else {
-                            Label("Sync with community now", systemImage: "arrow.triangle.2.circlepath")
-                        }
+            Group {
+                // The search field is part of the page rather than a system
+                // searchable bar, which would arrive with its own chrome and
+                // its own idea of what a text field looks like.
+                LuxUnderlinedField(
+                    placeholder: "Search your database",
+                    text: $query,
+                    size: 18,
+                    autocapitalization: .sentences
+                )
+                .padding(.top, 16)
+
+                HStack(spacing: 8) {
+                    Button("IMPORT CSV") { showImporter = true }
+                        .buttonStyle(GhostCapsule(gold: true))
+                    if ClaudeEndpoint.proxyConfig != nil {
+                        Button(syncing ? "SYNCING…" : "SYNC COMMUNITY") { syncNow() }
+                            .buttonStyle(GhostCapsule())
+                            .disabled(syncing)
                     }
-                    .disabled(syncing)
+                    Spacer()
                 }
+                .padding(.top, 18)
+
                 if let importMessage {
-                    Text(importMessage)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                    LuxNote(importMessage, size: 14)
+                        .padding(.top, 10)
                 }
-            } footer: {
-                Text("Scanned labels are added automatically (no duplicates). CSV format: a header row of name, brand, serving, calories, protein, carbs, fat — plus optional micronutrient columns like caffeine or sodium. Values are per serving.")
+
+                LuxSectionHeader(text: "FOODS")
+                    .padding(.top, 24)
+                    .padding(.bottom, 2)
+            }
+            .luxRowChrome()
+
+            if filtered.isEmpty {
+                LuxNote(query.isEmpty
+                        ? "Nothing here yet — scan a label or import a sheet."
+                        : "No matches.", size: 15)
+                    .padding(.top, 8)
+                    .luxRowChrome()
+            } else {
+                ForEach(filtered) { food in
+                    foodRow(food)
+                        .luxRowChrome()
+                }
+                .onDelete(perform: deleteFoods)
             }
 
-            Section("Foods (searched before USDA)") {
-                if filtered.isEmpty {
-                    Text(query.isEmpty ? "Nothing here yet — scan a label or import a sheet." : "No matches.")
-                        .foregroundStyle(.secondary)
-                } else {
-                    ForEach(filtered) { food in
-                        foodRow(food)
-                    }
-                    .onDelete(perform: deleteFoods)
-                }
+            Group {
+                LuxNote("Scanned labels are added automatically, without duplicates. A CSV needs a header row of name, brand, serving, calories, protein, carbs, fat — plus optional micronutrient columns like caffeine or sodium. Values are per serving.")
+                    .padding(.top, 16)
+                    .padding(.bottom, 40)
             }
+            .luxRowChrome()
         }
-        .searchable(text: $query, prompt: "Search your database")
+        .luxList()
+        .safeAreaInset(edge: .top, spacing: 0) {
+            LuxHeader(title: "FOOD DATABASE", subtitle: subtitle) {
+                LuxBackButton { dismiss() }
+            } trailing: {
+                EmptyView()
+            }
+            .padding(.bottom, 8)
+            .background(Lux.ground)
+        }
+        .toolbar(.hidden, for: .navigationBar)
         .keyboardDismissBar()
-        .appBackground(appBackground)
-        .navigationTitle("Food database")
-        .navigationBarTitleDisplayMode(.inline)
         .fileImporter(
             isPresented: $showImporter,
             allowedContentTypes: [.commaSeparatedText, .plainText],
@@ -81,16 +105,30 @@ struct FoodDatabaseView: View {
         }
     }
 
+    /// "220 foods on file, searched before USDA." — what's here and why it
+    /// matters, which the old section header said in passing.
+    private var subtitle: String {
+        let n = foods.count
+        guard n > 0 else { return "Nothing on file yet." }
+        return "\(n) food\(n == 1 ? "" : "s") on file, searched before USDA."
+    }
+
     private func foodRow(_ food: CustomFood) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: 3) {
             Text(food.displayName)
-            Text("\(food.serving) · \(Int(food.calories.rounded())) kcal · P \(Int(food.protein.rounded()))g · C \(Int(food.carbs.rounded()))g · F \(Int(food.fat.rounded()))g")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            Text(sourceLabel(food.source))
-                .font(.caption2)
-                .foregroundStyle(.tertiary)
+                .font(Lux.serif(17))
+                .foregroundStyle(Lux.cream)
+            Text("\(food.serving.uppercased()) · \(Int(food.calories.rounded())) KCAL · P \(Int(food.protein.rounded())) · C \(Int(food.carbs.rounded())) · F \(Int(food.fat.rounded()))")
+                .font(Lux.smallcaps(8))
+                .tracking(1.5)
+                .foregroundStyle(Lux.cream.opacity(0.45))
+            Text(sourceLabel(food.source).uppercased())
+                .font(Lux.smallcaps(7))
+                .tracking(2)
+                .foregroundStyle(Lux.goldLabel)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .luxRow(vertical: 11)
     }
 
     private func sourceLabel(_ source: String) -> String {

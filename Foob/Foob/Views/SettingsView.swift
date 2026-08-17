@@ -1,59 +1,94 @@
 import SwiftUI
+import SwiftData
 import UIKit
 
 /// Settings root: a short menu that drills into focused sub-screens instead of
 /// one long scroll. Profile (you + body metrics), Daily goals (targets and the
 /// recommended values), API keys, and Developer tools.
 struct SettingsView: View {
-    @Environment(\.appBackground) private var appBackground
+    @Query private var meals: [Meal]
+    @Query private var foods: [CustomFood]
+
+    /// Destination pushed from the root. Routed by case rather than
+    /// NavigationLink so rows keep the design's gold chevron instead of the
+    /// system disclosure indicator.
+    private enum Destination: Hashable {
+        case profile, goals, appearance, reminders, foodDatabase, suggestions, apiKeys, developer
+    }
+
+    @State private var path: [Destination] = []
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             List {
-                NavigationLink {
-                    ProfileSettingsView()
-                } label: {
-                    Label("Profile", systemImage: "person.crop.circle")
+                Group {
+                    group("YOU", [
+                        (.profile, "Profile"),
+                        (.goals, "Daily goals"),
+                    ])
+                    group("APPEARANCE & ALERTS", [
+                        (.appearance, "Appearance"),
+                        (.reminders, "Reminders"),
+                    ])
+                    group("DATA", [
+                        (.foodDatabase, "Food database"),
+                        (.suggestions, "Community suggestions"),
+                        (.apiKeys, "API keys"),
+                    ])
+                    group("DEVELOPER", [
+                        (.developer, "Developer"),
+                    ])
+
+                    colophon
+                        .padding(.top, 30)
+                        .padding(.bottom, OrbNavBar.orbOnlyClearance)
                 }
-                NavigationLink {
-                    GoalsSettingsView()
-                } label: {
-                    Label("Daily goals", systemImage: "target")
-                }
-                NavigationLink {
-                    AppearanceSettingsView()
-                } label: {
-                    Label("Appearance", systemImage: "paintpalette")
-                }
-                NavigationLink {
-                    RemindersSettingsView()
-                } label: {
-                    Label("Reminders", systemImage: "bell")
-                }
-                NavigationLink {
-                    FoodDatabaseView()
-                } label: {
-                    Label("Food database", systemImage: "archivebox")
-                }
-                NavigationLink {
-                    SuggestionsView()
-                } label: {
-                    Label("Community suggestions", systemImage: "lightbulb")
-                }
-                NavigationLink {
-                    APIKeysSettingsView()
-                } label: {
-                    Label("API keys", systemImage: "key.fill")
-                }
-                NavigationLink {
-                    DeveloperSettingsView()
-                } label: {
-                    Label("Developer", systemImage: "wrench.and.screwdriver")
+                .luxRowChrome()
+            }
+            .luxList()
+            .safeAreaInset(edge: .top, spacing: 0) {
+                LuxHeader(title: "SETTINGS", subtitle: "Preferences & your data.")
+                    .padding(.bottom, 8)
+                    .background(Lux.ground)
+            }
+            .toolbar(.hidden, for: .navigationBar)
+            .navigationDestination(for: Destination.self) { destination in
+                switch destination {
+                case .profile: ProfileSettingsView()
+                case .goals: GoalsSettingsView()
+                case .appearance: AppearanceSettingsView()
+                case .reminders: RemindersSettingsView()
+                case .foodDatabase: FoodDatabaseView()
+                case .suggestions: SuggestionsView()
+                case .apiKeys: APIKeysSettingsView()
+                case .developer: DeveloperSettingsView()
                 }
             }
-            .appBackground(appBackground)
-            .navigationTitle("Settings")
         }
+    }
+
+    @ViewBuilder
+    private func group(_ header: String, _ rows: [(Destination, String)]) -> some View {
+        LuxSectionHeader(text: header)
+            .padding(.top, 22)
+            .padding(.bottom, 2)
+        ForEach(rows, id: \.0) { destination, title in
+            Button { path.append(destination) } label: {
+                LuxNavRow(title: title)
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    /// A quiet line of provenance at the foot of the screen — what the app is
+    /// currently holding, rather than a version number nobody reads.
+    private var colophon: some View {
+        let today = meals.filter { Calendar.current.isDateInToday($0.timestamp) }.count
+        return Text("\(today) MEAL\(today == 1 ? "" : "S") TODAY · \(foods.count) FOOD\(foods.count == 1 ? "" : "S") ON FILE")
+            .font(Lux.smallcaps(8))
+            .tracking(2)
+            .foregroundStyle(Lux.cream.opacity(0.4))
+            .frame(maxWidth: .infinity)
     }
 }
 
@@ -76,7 +111,6 @@ func blankableNumber(_ value: Binding<Double>) -> Binding<String> {
 
 /// Your name and the body metrics that feed the recommended-goal formula.
 struct ProfileSettingsView: View {
-    @Environment(\.appBackground) private var appBackground
     @AppStorage(ProfileKeys.firstName) private var firstName = ""
     @AppStorage(ProfileKeys.lastName) private var lastName = ""
     @AppStorage(ProfileKeys.name) private var legacyName = ""
@@ -105,41 +139,110 @@ struct ProfileSettingsView: View {
     }
     private var inchesRemainder: Double { heightInches - (heightInches / 12).rounded(.down) * 12 }
 
-    var body: some View {
-        Form {
-            Section("You") {
-                TextField("First name", text: $firstName)
-                    .textContentType(.givenName)
-                TextField("Last name", text: $lastName)
-                    .textContentType(.familyName)
-            }
+    @Environment(\.dismiss) private var dismiss
 
-            Section {
-                heightRow
-                weightRow
-                LabeledContent("Age") {
-                    HStack(spacing: 4) {
-                        numberField("yr", value: $age, width: 72)
-                        Text("yr").foregroundStyle(.secondary)
+    var body: some View {
+        List {
+            Group {
+                LuxSectionHeader(text: "NAME")
+                    .padding(.top, 18)
+                    .padding(.bottom, 2)
+
+                LuxValueRow(label: "FIRST") {
+                    TextField("", text: $firstName)
+                        .textContentType(.givenName)
+                        .font(Lux.serif(19))
+                        .foregroundStyle(Lux.cream)
+                        .tint(Lux.gold)
+                        .multilineTextAlignment(.trailing)
+                }
+                LuxValueRow(label: "LAST") {
+                    TextField("", text: $lastName)
+                        .textContentType(.familyName)
+                        .font(Lux.serif(19))
+                        .foregroundStyle(Lux.cream)
+                        .tint(Lux.gold)
+                        .multilineTextAlignment(.trailing)
+                }
+
+                LuxSectionHeader(text: "BODY")
+                    .padding(.top, 26)
+                    .padding(.bottom, 2)
+
+                // Height and weight keep their wheel pickers — they're bounded
+                // values people scrub to, not type.
+                Button { showHeightPicker = true } label: {
+                    LuxValueRow(label: "HEIGHT") {
+                        Text(heightLabel)
+                            .font(Lux.serif(19))
+                            .foregroundStyle(Lux.cream)
                     }
                 }
-                Picker("Sex", selection: $sexRaw) {
-                    ForEach(BiologicalSex.allCases) { Text($0.title).tag($0.rawValue) }
+                .buttonStyle(.plain)
+
+                Button { showWeightPicker = true } label: {
+                    LuxValueRow(label: "WEIGHT") {
+                        Text(weightLabel)
+                            .font(Lux.serif(19))
+                            .foregroundStyle(Lux.cream)
+                    }
                 }
-                Picker("Activity", selection: $activityRaw) {
-                    ForEach(ActivityLevel.allCases) { Text($0.title).tag($0.rawValue) }
+                .buttonStyle(.plain)
+
+                LuxValueRow(label: "AGE") {
+                    HStack(spacing: 5) {
+                        TextField("", text: blankableNumber($age))
+                            .keyboardType(.numberPad)
+                            .font(Lux.serif(19))
+                            .monospacedDigit()
+                            .foregroundStyle(Lux.cream)
+                            .tint(Lux.gold)
+                            .multilineTextAlignment(.trailing)
+                            .frame(maxWidth: 60)
+                        Text("YR")
+                            .font(Lux.smallcaps(8))
+                            .tracking(1.5)
+                            .foregroundStyle(Lux.cream.opacity(0.45))
+                    }
                 }
-            } header: {
-                Text("Body")
-            } footer: {
-                Text("These feed the recommended daily goals under Settings → Daily goals (Mifflin-St Jeor estimate).")
+
+                LuxValueRow(label: "SEX") {
+                    Picker("", selection: $sexRaw) {
+                        ForEach(BiologicalSex.allCases) { Text($0.title).tag($0.rawValue) }
+                    }
+                    .labelsHidden()
+                    .tint(Lux.gold)
+                }
+
+                LuxValueRow(label: "ACTIVITY") {
+                    Picker("", selection: $activityRaw) {
+                        ForEach(ActivityLevel.allCases) { Text($0.title).tag($0.rawValue) }
+                    }
+                    .labelsHidden()
+                    .tint(Lux.gold)
+                }
+
+                LuxNote("These feed the recommended daily goals under Daily goals — a Mifflin-St Jeor estimate.")
+                    .padding(.top, 14)
+                    .padding(.bottom, 40)
             }
+            .luxRowChrome()
         }
+        .luxList()
+        .safeAreaInset(edge: .top, spacing: 0) {
+            LuxHeader(title: "PROFILE", subtitle: "You, and the numbers behind your goals.") {
+                LuxBackButton { dismiss() }
+            } trailing: {
+                EmptyView()
+            }
+            .padding(.bottom, 8)
+            .background(Lux.ground)
+        }
+        .toolbar(.hidden, for: .navigationBar)
         .scrollDismissesKeyboard(.interactively)
         .keyboardDismissBar()
-        .appBackground(appBackground)
-        .navigationTitle("Profile")
-        .navigationBarTitleDisplayMode(.inline)
+        .sheet(isPresented: $showHeightPicker) { heightPicker }
+        .sheet(isPresented: $showWeightPicker) { weightPicker }
         .onAppear(perform: migrateLegacyName)
     }
 
@@ -150,10 +253,17 @@ struct ProfileSettingsView: View {
         return "\(Int(feet.wrappedValue)) ft \(min(Int(inchesRemainder.rounded()), 11)) in"
     }
 
+    private var weightLabel: String {
+        weightPounds > 0 ? "\(Int(weightPounds.rounded())) lb" : "—"
+    }
+
     // The wheel bindings clamp into the pickers' ranges so an unset value (0)
     // or legacy fractional inches never leave the wheel without a valid
     // selection; nothing is written back until the user actually scrolls.
-    private var heightRow: some View {
+    //
+    // These were inline DisclosureGroups; as sheets the ruled rows stay a
+    // uniform height instead of one of them growing a 130pt wheel mid-list.
+    private var heightPicker: some View {
         let feetInt = Binding(
             get: { min(max(Int(feet.wrappedValue), 1), 8) },
             set: { feet.wrappedValue = Double($0) }
@@ -162,7 +272,7 @@ struct ProfileSettingsView: View {
             get: { min(max(Int(inchesRemainder.rounded()), 0), 11) },
             set: { inches.wrappedValue = Double($0) }
         )
-        return DisclosureGroup(isExpanded: $showHeightPicker) {
+        return wheelSheet(title: "HEIGHT") {
             HStack(spacing: 0) {
                 Picker("Feet", selection: feetInt) {
                     ForEach(1...8, id: \.self) { Text("\($0) ft").tag($0) }
@@ -175,26 +285,39 @@ struct ProfileSettingsView: View {
                 .pickerStyle(.wheel)
                 .frame(maxWidth: .infinity)
             }
-            .frame(height: 130)
-        } label: {
-            LabeledContent("Height", value: heightLabel)
         }
     }
 
-    private var weightRow: some View {
+    private var weightPicker: some View {
         let weightInt = Binding(
             get: { min(max(Int(weightPounds.rounded()), 50), 600) },
             set: { weightPounds = Double($0) }
         )
-        return DisclosureGroup(isExpanded: $showWeightPicker) {
+        return wheelSheet(title: "WEIGHT") {
             Picker("Weight", selection: weightInt) {
                 ForEach(50...600, id: \.self) { Text("\($0) lb").tag($0) }
             }
             .pickerStyle(.wheel)
-            .frame(height: 130)
-        } label: {
-            LabeledContent("Weight", value: weightPounds > 0 ? "\(Int(weightPounds.rounded())) lb" : "—")
         }
+    }
+
+    private func wheelSheet<Wheel: View>(title: String, @ViewBuilder wheel: () -> Wheel) -> some View {
+        LuxSheet {
+            VStack(spacing: 0) {
+                Text(title)
+                    .font(Lux.title(20))
+                    .tracking(3)
+                    .engravedFill()
+                    .padding(.top, 20)
+                wheel()
+                    .frame(height: 150)
+                    .tint(Lux.cream)
+                    .padding(.top, 10)
+                Spacer()
+            }
+            .padding(.horizontal, Lux.hPad)
+        }
+        .presentationDetents([.height(280)])
     }
 
     /// One-time split of the old single "name" field into first/last.
@@ -205,20 +328,14 @@ struct ProfileSettingsView: View {
         lastName = parts.dropFirst().joined(separator: " ")
     }
 
-    private func numberField(_ label: String, value: Binding<Double>, width: CGFloat) -> some View {
-        TextField(label, text: blankableNumber(value))
-            .keyboardType(.decimalPad)
-            .multilineTextAlignment(.trailing)
-            .frame(maxWidth: width)
-    }
 }
+
 
 // MARK: - Daily goals
 
 /// The goal type + recommended values derived from Profile, and the manual
 /// daily targets that drive the Today rings and Trends chart.
 struct GoalsSettingsView: View {
-    @Environment(\.appBackground) private var appBackground
     @AppStorage(TargetKeys.calories) private var calorieTarget = 2000.0
     @AppStorage(TargetKeys.protein) private var proteinTarget = 150.0
     @AppStorage(TargetKeys.carbs) private var carbTarget = 250.0
@@ -245,75 +362,107 @@ struct GoalsSettingsView: View {
         )
     }
 
+    @Environment(\.dismiss) private var dismiss
+
     var body: some View {
-        Form {
-            Section {
-                Picker("Goal", selection: $goalRaw) {
-                    ForEach(GoalType.allCases) { Text($0.title).tag($0.rawValue) }
-                }
-            } header: {
-                Text("Goal")
-            } footer: {
-                Text("Maintain keeps your current weight; Lose trims ~500 kcal/day, Gain adds ~300.")
-            }
+        List {
+            Group {
+                LuxSwitcher(
+                    options: GoalType.allCases.map { ($0.rawValue, $0.title.uppercased()) },
+                    selection: $goalRaw,
+                    spacing: 22,
+                    size: 10
+                )
+                .frame(maxWidth: .infinity)
+                .padding(.top, 18)
 
-            Section {
+                LuxNote("Maintain keeps your current weight; Lose trims ~500 kcal a day, Gain adds ~300.")
+                    .multilineTextAlignment(.center)
+                    .padding(.top, 12)
+
+                LuxSectionHeader(text: "RECOMMENDED FOR YOU")
+                    .padding(.top, 26)
+                    .padding(.bottom, 2)
+
                 if let rec = recommended {
-                    recommendedRow("Calories", "\(Int(rec.calories)) kcal")
-                    recommendedRow("Protein", "\(Int(rec.protein)) g")
-                    recommendedRow("Carbs", "\(Int(rec.carbs)) g")
-                    recommendedRow("Fat", "\(Int(rec.fat)) g")
-                    recommendedRow("Water", "\(Int(rec.waterOunces)) oz")
+                    recommendedRow("CALORIES", "\(Int(rec.calories)) kcal")
+                    recommendedRow("PROTEIN", "\(Int(rec.protein)) g")
+                    recommendedRow("CARBS", "\(Int(rec.carbs)) g")
+                    recommendedRow("FAT", "\(Int(rec.fat)) g")
+                    recommendedRow("WATER", "\(Int(rec.waterOunces)) oz")
 
-                    Button("Apply to my targets") {
-                        applyRecommended(rec)
-                    }
+                    Button("APPLY TO MY TARGETS") { applyRecommended(rec) }
+                        .buttonStyle(GhostCapsule(gold: true))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.top, 14)
 
                     if appliedMessageVisible {
-                        Label("Targets updated", systemImage: "checkmark.circle.fill")
-                            .foregroundStyle(.green)
-                            .font(.subheadline)
+                        HStack(spacing: 6) {
+                            Image(systemName: "checkmark")
+                                .font(.system(size: 10, weight: .semibold))
+                            Text("TARGETS UPDATED")
+                                .font(Lux.smallcaps(8))
+                                .tracking(2)
+                        }
+                        .foregroundStyle(Lux.gold)
+                        .padding(.top, 10)
                     }
-                } else {
-                    Text("Add your height, weight, and age under Settings → Profile to see recommended goals.")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
-            } header: {
-                Text("Recommended")
-            } footer: {
-                Text("A 30% protein / 40% carbs / 30% fat split of your goal calories, and about half your body weight in ounces of water.")
-            }
 
-            Section {
-                targetField("Calories (kcal)", value: $calorieTarget)
-                targetField("Protein (g)", value: $proteinTarget)
-                targetField("Carbs (g)", value: $carbTarget)
-                targetField("Fat (g)", value: $fatTarget)
-                targetField("Water (oz)", value: $waterTarget)
-            } header: {
-                Text("Daily targets")
-            } footer: {
-                Text("These are what the Today rings and Trends chart measure against. Apply the recommended values above, or set them by hand.")
+                    LuxNote("A 30 / 40 / 30 split of your goal calories across protein, carbs and fat, and about half your body weight in ounces of water.")
+                        .padding(.top, 12)
+                } else {
+                    LuxNote("Add your height, weight, and age under Profile to see recommended goals.", size: 15)
+                        .padding(.top, 6)
+                }
+
+                LuxSectionHeader(text: "DAILY TARGETS")
+                    .padding(.top, 26)
+                    .padding(.bottom, 2)
+
+                targetField("CALORIES", value: $calorieTarget)
+                targetField("PROTEIN (G)", value: $proteinTarget)
+                targetField("CARBS (G)", value: $carbTarget)
+                targetField("FAT (G)", value: $fatTarget)
+                targetField("WATER (OZ)", value: $waterTarget)
+
+                LuxNote("These are what the Today rings and the Trends chart measure against.")
+                    .padding(.top, 14)
+                    .padding(.bottom, 40)
             }
+            .luxRowChrome()
         }
+        .luxList()
+        .safeAreaInset(edge: .top, spacing: 0) {
+            LuxHeader(title: "DAILY GOALS", subtitle: "What a good day looks like.") {
+                LuxBackButton { dismiss() }
+            } trailing: {
+                EmptyView()
+            }
+            .padding(.bottom, 8)
+            .background(Lux.ground)
+        }
+        .toolbar(.hidden, for: .navigationBar)
         .scrollDismissesKeyboard(.interactively)
         .keyboardDismissBar()
-        .appBackground(appBackground)
-        .navigationTitle("Daily goals")
-        .navigationBarTitleDisplayMode(.inline)
     }
 
     private func recommendedRow(_ label: String, _ value: String) -> some View {
-        LabeledContent(label) {
-            Text(value).foregroundStyle(.secondary)
+        LuxValueRow(label: label) {
+            Text(value)
+                .font(Lux.serif(19))
+                .monospacedDigit()
+                .foregroundStyle(Lux.cream.opacity(0.75))
         }
     }
 
     private func targetField(_ label: String, value: Binding<Double>) -> some View {
-        LabeledContent(label) {
-            TextField(label, text: blankableNumber(value))
+        LuxValueRow(label: label) {
+            TextField("", text: blankableNumber(value))
                 .keyboardType(.decimalPad)
+                .font(Lux.serif(21))
+                .monospacedDigit()
+                .foregroundStyle(Lux.gold)
+                .tint(Lux.gold)
                 .multilineTextAlignment(.trailing)
                 .frame(maxWidth: 100)
         }
@@ -335,91 +484,145 @@ struct GoalsSettingsView: View {
 
 // MARK: - Appearance
 
-/// Light/dark preference and the customizable metric colors used by the Today
-/// rings/bar and the Trends chart.
+/// Theme preference and the custom background colour. The metric colours are
+/// no longer adjustable — see the note in the body.
 struct AppearanceSettingsView: View {
-    @Environment(\.appBackground) private var appBackground
+    @Environment(\.dismiss) private var dismiss
     @AppStorage(ThemeKeys.appearance) private var appearanceRaw = AppearanceMode.dark.rawValue
-    @AppStorage(ThemeKeys.appAccent) private var colorAppAccent = ""
     @AppStorage(ThemeKeys.background) private var colorBackground = ""
-    @AppStorage(ThemeKeys.colorCalories) private var colorCalories = ""
-    @AppStorage(ThemeKeys.colorProtein) private var colorProtein = ""
-    @AppStorage(ThemeKeys.colorCarbs) private var colorCarbs = ""
-    @AppStorage(ThemeKeys.colorFat) private var colorFat = ""
-    @AppStorage(ThemeKeys.colorWater) private var colorWater = ""
 
     var body: some View {
-        Form {
-            Section {
-                Picker("Theme", selection: $appearanceRaw) {
-                    ForEach(AppearanceMode.allCases) { Text($0.title).tag($0.rawValue) }
+        List {
+            Group {
+                LuxSectionHeader(text: "THEME")
+                    .padding(.top, 18)
+                    .padding(.bottom, 10)
+
+                HStack(spacing: 10) {
+                    ForEach(AppearanceMode.allCases) { mode in
+                        themeSwatch(mode)
+                    }
                 }
-                .pickerStyle(.segmented)
-            } header: {
-                Text("Theme")
-            } footer: {
-                Text("Light and Dark are fixed. Auto follows the time of day. Custom uses your background colour below.")
-            }
 
-            Section {
-                colorRow("App color", store: $colorAppAccent, default: MetricPalette.defaultAppAccent)
-                Button("Reset app color", role: .destructive) { colorAppAccent = "" }
-            } header: {
-                Text("App color")
-            } footer: {
-                Text("Tints buttons, the active tab, and the capture controls.")
-            }
+                LuxNote("Light and Dark are fixed. Auto follows the time of day. Custom uses your background colour below.")
+                    .padding(.top, 12)
 
-            Section {
-                colorRow("Background", store: $colorBackground, default: defaultBackgroundSwatch)
+                LuxSectionHeader(text: "METALWORK")
+                    .padding(.top, 26)
+                    .padding(.bottom, 2)
+
+                HStack(spacing: 12) {
+                    Text("Gold & emerald")
+                        .font(Lux.serif(18))
+                        .foregroundStyle(Lux.cream)
+                    Spacer()
+                    Circle().fill(Lux.goldFill).frame(width: 16, height: 16)
+                    Circle().fill(Lux.panel)
+                        .overlay(Circle().stroke(Lux.controlBorder, lineWidth: 1))
+                        .frame(width: 16, height: 16)
+                }
+                .luxRow()
+
+                // The app accent and the five per-metric pickers were retired
+                // with this design: the gold ladder is load-bearing now. Trends
+                // leans on it for series identity and the Today rings for their
+                // own tracks, so a user-chosen hue would break the chart rather
+                // than personalise it. Any colours previously stored are simply
+                // ignored — nothing to migrate.
+                LuxNote("Metric colours follow the gold ladder and are no longer adjustable — the Trends chart uses them to tell its five lines apart.")
+                    .padding(.top, 12)
+
+                LuxSectionHeader(text: "CUSTOM BACKGROUND")
+                    .padding(.top, 26)
+                    .padding(.bottom, 2)
+
+                LuxValueRow(label: "BACKGROUND") {
+                    ColorPicker(
+                        "",
+                        selection: Binding(
+                            get: { Color(hex: colorBackground) ?? Lux.ground },
+                            set: { colorBackground = $0.hexString }
+                        ),
+                        supportsOpacity: false
+                    )
+                    .labelsHidden()
+                }
+
                 if !colorBackground.isEmpty {
-                    Button("Reset background", role: .destructive) { colorBackground = "" }
+                    Button("RESET BACKGROUND") { colorBackground = "" }
+                        .buttonStyle(GhostCapsule())
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.top, 12)
                 }
-                if appearance != .custom {
-                    Button("Switch to Custom theme") { appearanceRaw = AppearanceMode.custom.rawValue }
-                        .font(.subheadline)
-                }
-            } header: {
-                Text("Custom background")
-            } footer: {
-                Text("Used when Theme is set to Custom. Text automatically switches to light or dark based on how dark this colour is.")
-            }
 
-            Section {
-                colorRow("Calories", store: $colorCalories, default: MetricPalette.default.calories)
-                colorRow("Protein", store: $colorProtein, default: MetricPalette.default.protein)
-                colorRow("Carbs", store: $colorCarbs, default: MetricPalette.default.carbs)
-                colorRow("Fat", store: $colorFat, default: MetricPalette.default.fat)
-                colorRow("Water", store: $colorWater, default: MetricPalette.default.water)
-
-                Button("Reset to defaults", role: .destructive) {
-                    colorCalories = ""; colorProtein = ""; colorCarbs = ""
-                    colorFat = ""; colorWater = ""
-                }
-            } header: {
-                Text("Colors")
-            } footer: {
-                Text("Used for the Today rings and bar and the Trends chart lines.")
+                LuxNote("Used when Theme is set to Custom. Text switches to light or dark based on how dark this colour is.")
+                    .padding(.top, 12)
+                    .padding(.bottom, 40)
             }
+            .luxRowChrome()
         }
-        .appBackground(appBackground)
-        .navigationTitle("Appearance")
-        .navigationBarTitleDisplayMode(.inline)
+        .luxList()
+        .safeAreaInset(edge: .top, spacing: 0) {
+            LuxHeader(title: "APPEARANCE", subtitle: "How Foob looks.") {
+                LuxBackButton { dismiss() }
+            } trailing: {
+                EmptyView()
+            }
+            .padding(.bottom, 8)
+            .background(Lux.ground)
+        }
+        .toolbar(.hidden, for: .navigationBar)
     }
-
-    private var defaultBackgroundSwatch: Color { Color(uiColor: .systemBackground) }
 
     private var appearance: AppearanceMode { AppearanceMode(rawValue: appearanceRaw) ?? .dark }
 
-    private func colorRow(_ label: String, store: Binding<String>, default def: Color) -> some View {
-        ColorPicker(
-            label,
-            selection: Binding(
-                get: { Color(hex: store.wrappedValue) ?? def },
-                set: { store.wrappedValue = $0.hexString }
-            ),
-            supportsOpacity: false
-        )
+    /// Each theme as a swatch card showing what it actually looks like, rather
+    /// than a word in a segmented control.
+    private func themeSwatch(_ mode: AppearanceMode) -> some View {
+        let selected = appearance == mode
+        return Button {
+            appearanceRaw = mode.rawValue
+        } label: {
+            VStack(spacing: 8) {
+                swatchFill(mode)
+                    .frame(height: 46)
+                    .clipShape(RoundedRectangle(cornerRadius: Lux.panelRadius))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: Lux.panelRadius)
+                            .stroke(selected ? Lux.gold : Lux.controlBorder,
+                                    lineWidth: selected ? 1.5 : 1))
+                Text(mode.title.uppercased())
+                    .font(Lux.smallcaps(8))
+                    .tracking(2)
+                    .foregroundStyle(selected ? Lux.cream : Lux.cream.opacity(0.45))
+            }
+            .padding(6)
+            .background(
+                RoundedRectangle(cornerRadius: Lux.panelRadius)
+                    .fill(selected ? Lux.gold.opacity(0.06) : .clear))
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
+    }
+
+    @ViewBuilder
+    private func swatchFill(_ mode: AppearanceMode) -> some View {
+        switch mode {
+        case .light:
+            Color(hex: "#f2ead9")!
+        case .dark:
+            Lux.ground
+        case .auto:
+            // Split down the middle: parchment by day, emerald by night.
+            HStack(spacing: 0) {
+                Color(hex: "#f2ead9")!
+                Lux.ground
+            }
+        case .custom:
+            AngularGradient(
+                colors: [Lux.goldBright, Lux.gold, Lux.bronze, Lux.panel, Lux.goldBright],
+                center: .center)
+        }
     }
 }
 
@@ -429,7 +632,6 @@ struct AppearanceSettingsView: View {
 /// (interval within a waking-hours window) notifications, each with an
 /// optional custom message. Scheduling lives in ReminderManager.
 struct RemindersSettingsView: View {
-    @Environment(\.appBackground) private var appBackground
     @State private var rules: [ReminderRule] = []
     @State private var editorTarget: EditorTarget?
     @State private var showDenied = false
@@ -448,32 +650,42 @@ struct RemindersSettingsView: View {
         }
     }
 
+    @Environment(\.dismiss) private var dismiss
+
     var body: some View {
         List {
-            Section {
+            Group {
                 if rules.isEmpty {
-                    Text("No reminders yet — add one below.")
-                        .foregroundStyle(.secondary)
+                    LuxNote("No reminders yet — add one below.", size: 15)
+                        .padding(.top, 24)
                 }
                 ForEach($rules) { $rule in
                     ruleRow($rule)
                 }
                 .onDelete { rules.remove(atOffsets: $0) }
-            } footer: {
-                Text("Once-a-day reminders are skipped when that goal is already met. Recurring ones repeat on their interval, but only between their start and stop times — so nights stay quiet.")
-            }
 
-            Section {
-                Button {
-                    editorTarget = .new
-                } label: {
-                    Label("Add reminder", systemImage: "plus")
-                }
+                Button("ADD REMINDER") { editorTarget = .new }
+                    .buttonStyle(GhostCapsule(gold: true))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.top, 18)
+
+                LuxNote("Once-a-day reminders are skipped when that goal is already met. Recurring ones repeat on their interval, but only between their start and stop times — so nights stay quiet.")
+                    .padding(.top, 14)
+                    .padding(.bottom, 40)
             }
+            .luxRowChrome()
         }
-        .appBackground(appBackground)
-        .navigationTitle("Reminders")
-        .navigationBarTitleDisplayMode(.inline)
+        .luxList()
+        .safeAreaInset(edge: .top, spacing: 0) {
+            LuxHeader(title: "REMINDERS", subtitle: "Nudges, on your terms.") {
+                LuxBackButton { dismiss() }
+            } trailing: {
+                EmptyView()
+            }
+            .padding(.bottom, 8)
+            .background(Lux.ground)
+        }
+        .toolbar(.hidden, for: .navigationBar)
         .onAppear {
             guard savedRules.isEmpty, rules.isEmpty else { return }
             rules = ReminderRulesStore.load()
@@ -486,12 +698,15 @@ struct RemindersSettingsView: View {
             ReminderManager.refresh()
         }
         .sheet(item: $editorTarget) { target in
-            switch target {
-            case .new:
-                ReminderEditorView(rule: ReminderRule(), title: "New Reminder") { upsert($0) }
-            case .edit(let rule):
-                ReminderEditorView(rule: rule, title: "Edit Reminder") { upsert($0) }
+            Group {
+                switch target {
+                case .new:
+                    ReminderEditorView(rule: ReminderRule(), title: "New Reminder") { upsert($0) }
+                case .edit(let rule):
+                    ReminderEditorView(rule: rule, title: "Edit Reminder") { upsert($0) }
+                }
             }
+            .luxSheetChrome()
         }
         .alert("Notifications are off", isPresented: $showDenied) {
             Button("Open Settings") {
@@ -505,33 +720,38 @@ struct RemindersSettingsView: View {
         }
     }
 
-    /// Name + schedule (tap to edit) with an enable toggle on the right.
+    /// Metric + schedule (tap to edit) with an enable toggle on the right.
     private func ruleRow(_ rule: Binding<ReminderRule>) -> some View {
         HStack(spacing: 12) {
-            VStack(alignment: .leading, spacing: 2) {
-                Label(rule.wrappedValue.metric.title, systemImage: rule.wrappedValue.metric.icon)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(rule.wrappedValue.metric.title.uppercased())
+                    .font(Lux.smallcaps(9))
+                    .tracking(2)
+                    .foregroundStyle(Lux.goldLabel)
                 Text(rule.wrappedValue.scheduleSummary)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .font(Lux.serif(18))
+                    .foregroundStyle(Lux.cream)
                 if !rule.wrappedValue.trimmedCustomMessage.isEmpty {
                     Text("\u{201C}\(rule.wrappedValue.trimmedCustomMessage)\u{201D}")
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
+                        .font(Lux.serifItalic(14))
+                        .foregroundStyle(Lux.cream.opacity(0.45))
                         .lineLimit(1)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .contentShape(Rectangle())
             .onTapGesture { editorTarget = .edit(rule.wrappedValue) }
-            Toggle("Enabled", isOn: Binding(
+
+            LuxToggle(isOn: Binding(
                 get: { rule.wrappedValue.isEnabled },
                 set: { isOn in
                     rule.wrappedValue.isEnabled = isOn
                     if isOn { ensureAuthorized() }
                 }
             ))
-            .labelsHidden()
+            .accessibilityLabel("Enabled")
         }
+        .luxRow(vertical: 12)
     }
 
     private func upsert(_ rule: ReminderRule) {
@@ -663,7 +883,6 @@ private struct ReminderEditorView: View {
 // MARK: - API keys
 
 struct APIKeysSettingsView: View {
-    @Environment(\.appBackground) private var appBackground
     @State private var inviteCode = ""
     @State private var proxyURL = UserDefaults.standard.string(forKey: ClaudeEndpoint.proxyURLDefaultsKey) ?? ""
     @State private var claudeKey = ""
@@ -683,85 +902,77 @@ struct APIKeysSettingsView: View {
             || proxyURL != (UserDefaults.standard.string(forKey: ClaudeEndpoint.proxyURLDefaultsKey) ?? "")
     }
 
+    @Environment(\.dismiss) private var dismiss
+
     var body: some View {
-        Form {
-            Section {
-                TextField(
-                    hasSavedInviteCode ? "Invite code (saved)" : "Invite code",
-                    text: $inviteCode
-                )
-                .textInputAutocapitalization(.characters)
-                .autocorrectionDisabled()
+        List {
+            Group {
+                LuxSectionHeader(text: "INVITE CODE")
+                    .padding(.top, 18)
+                    .padding(.bottom, 2)
 
-                TextField("Proxy URL (advanced, optional)", text: $proxyURL)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-                    .keyboardType(.URL)
-            } header: {
-                Text("Invite code")
-            } footer: {
-                Text("Friends & family: just the code you were given. The proxy URL only matters if the app wasn't built with one baked in. An invite code takes priority over a personal Claude key below.")
-            }
+                keyRow("CODE", text: $inviteCode, saved: hasSavedInviteCode,
+                       secure: false, capitalization: .characters)
+                keyRow("PROXY URL", text: $proxyURL, saved: false, secure: false)
 
-            Section {
-                SecureField(
-                    hasSavedClaudeKey ? "Claude API key (saved)" : "Claude API key",
-                    text: $claudeKey
-                )
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
+                LuxNote("Friends & family: just the code you were given. The proxy URL only matters if the app wasn't built with one baked in. An invite code takes priority over a personal Claude key below.")
+                    .padding(.top, 12)
 
-                SecureField("USDA API key (optional)", text: $usdaKey)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-            } header: {
-                Text("Personal keys")
-            } footer: {
-                Text("Keys are stored in the iOS Keychain, never in UserDefaults. Without a USDA key the app uses the free public DEMO_KEY, which is rate-limited — get a free key at api.data.gov.")
-            }
+                LuxSectionHeader(text: "PERSONAL KEYS")
+                    .padding(.top, 26)
+                    .padding(.bottom, 2)
 
-            Section {
-                SecureField(
-                    hasSavedSpoonacular ? "Spoonacular key (saved)" : "Spoonacular key",
-                    text: $spoonacularKey
-                )
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
+                keyRow("CLAUDE", text: $claudeKey, saved: hasSavedClaudeKey)
+                keyRow("USDA", text: $usdaKey, saved: false)
 
-                SecureField(
-                    hasSavedEdamam ? "Edamam App ID (saved)" : "Edamam App ID",
-                    text: $edamamAppID
-                )
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
+                LuxNote("Keys live in the iOS Keychain, never in UserDefaults. Without a USDA key the app uses the free public DEMO_KEY, which is rate-limited — get your own at api.data.gov.")
+                    .padding(.top, 12)
 
-                SecureField(
-                    hasSavedEdamam ? "Edamam App Key (saved)" : "Edamam App Key",
-                    text: $edamamAppKey
-                )
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-            } header: {
-                Text("Recipe search (optional)")
-            } footer: {
-                Text("Powers the recipe search on the Recipes tab. TheMealDB works with no key; Spoonacular (spoonacular.com/food-api) and Edamam (developer.edamam.com) each offer a free tier with far more recipes and nutrition included.")
-            }
+                LuxSectionHeader(text: "RECIPE SEARCH")
+                    .padding(.top, 26)
+                    .padding(.bottom, 2)
 
-            Section {
-                Button("Save keys") { saveKeys() }
+                keyRow("SPOONACULAR", text: $spoonacularKey, saved: hasSavedSpoonacular)
+                keyRow("EDAMAM APP ID", text: $edamamAppID, saved: hasSavedEdamam)
+                keyRow("EDAMAM APP KEY", text: $edamamAppKey, saved: hasSavedEdamam)
+
+                LuxNote("TheMealDB works with no key. Spoonacular and Edamam each offer a free tier with far more recipes, and nutrition included.")
+                    .padding(.top, 12)
+
+                Button("SAVE KEYS") { saveKeys() }
+                    .buttonStyle(GoldCapsule(enabled: hasInput))
                     .disabled(!hasInput)
+                    .padding(.top, 24)
 
                 if savedMessageVisible {
-                    Label("Saved to Keychain", systemImage: "checkmark.circle.fill")
-                        .foregroundStyle(.green)
-                        .font(.subheadline)
+                    HStack(spacing: 6) {
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 10, weight: .semibold))
+                        Text("SAVED TO KEYCHAIN")
+                            .font(Lux.smallcaps(8))
+                            .tracking(2)
+                    }
+                    .foregroundStyle(Lux.gold)
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, 10)
                 }
+
+                Color.clear.frame(height: 40)
             }
+            .luxRowChrome()
         }
-        .appBackground(appBackground)
+        .luxList()
+        .safeAreaInset(edge: .top, spacing: 0) {
+            LuxHeader(title: "API KEYS", subtitle: "How Foob reaches the outside world.") {
+                LuxBackButton { dismiss() }
+            } trailing: {
+                EmptyView()
+            }
+            .padding(.bottom, 8)
+            .background(Lux.ground)
+        }
+        .toolbar(.hidden, for: .navigationBar)
         .keyboardDismissBar()
-        .navigationTitle("API keys")
-        .navigationBarTitleDisplayMode(.inline)
         .onAppear {
             hasSavedInviteCode = KeychainService.get(.proxyInviteCode) != nil
             hasSavedClaudeKey = KeychainService.get(.claudeAPIKey) != nil
@@ -769,6 +980,43 @@ struct APIKeysSettingsView: View {
             hasSavedEdamam = KeychainService.get(.edamamAppID) != nil
                 && KeychainService.get(.edamamAppKey) != nil
         }
+    }
+
+    /// One key row. A gold SAVED tag stands in for the old "(saved)"
+    /// placeholder text, so the field can stay empty and still say that
+    /// something is stored without ever showing it.
+    private func keyRow(
+        _ label: String, text: Binding<String>, saved: Bool,
+        secure: Bool = true, capitalization: TextInputAutocapitalization = .never
+    ) -> some View {
+        HStack(spacing: 10) {
+            LuxFieldLabel(text: label)
+            Spacer()
+            if saved, text.wrappedValue.isEmpty {
+                Text("SAVED")
+                    .font(Lux.smallcaps(7))
+                    .tracking(1.5)
+                    .foregroundStyle(Lux.gold)
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 3)
+                    .background(Capsule().stroke(Lux.controlBorder, lineWidth: 1))
+            }
+            Group {
+                if secure {
+                    SecureField("", text: text)
+                } else {
+                    TextField("", text: text)
+                }
+            }
+            .font(Lux.serifItalic(16))
+            .foregroundStyle(Lux.cream)
+            .tint(Lux.gold)
+            .textInputAutocapitalization(capitalization)
+            .autocorrectionDisabled()
+            .multilineTextAlignment(.trailing)
+            .frame(maxWidth: 150)
+        }
+        .luxRow(vertical: 10)
     }
 
     private func saveKeys() {
@@ -819,20 +1067,36 @@ struct APIKeysSettingsView: View {
 // MARK: - Developer
 
 struct DeveloperSettingsView: View {
-    @Environment(\.appBackground) private var appBackground
+    @Environment(\.dismiss) private var dismiss
+    @State private var showDiagnostics = false
 
     var body: some View {
-        Form {
-            Section {
-                NavigationLink("Match diagnostics") {
-                    DebugLogView()
+        List {
+            Group {
+                Button { showDiagnostics = true } label: {
+                    LuxNavRow(title: "Match diagnostics")
                 }
-            } footer: {
-                Text("Trace of how each logged item was matched: candidates considered, selection reason, and plausibility flags.")
+                .buttonStyle(.plain)
+                .padding(.top, 18)
+
+                LuxNote("Trace of how each logged item was matched: candidates considered, selection reason, and plausibility flags.")
+                    .padding(.top, 12)
             }
+            .luxRowChrome()
         }
-        .appBackground(appBackground)
-        .navigationTitle("Developer")
-        .navigationBarTitleDisplayMode(.inline)
+        .luxList()
+        .safeAreaInset(edge: .top, spacing: 0) {
+            LuxHeader(title: "DEVELOPER", subtitle: "Under the hood.") {
+                LuxBackButton { dismiss() }
+            } trailing: {
+                EmptyView()
+            }
+            .padding(.bottom, 8)
+            .background(Lux.ground)
+        }
+        .toolbar(.hidden, for: .navigationBar)
+        .navigationDestination(isPresented: $showDiagnostics) {
+            DebugLogView()
+        }
     }
 }

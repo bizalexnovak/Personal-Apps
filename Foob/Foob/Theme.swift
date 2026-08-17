@@ -24,32 +24,19 @@ enum AppearanceMode: String, CaseIterable, Identifiable {
     }
 }
 
-/// AppStorage keys for appearance + the customizable metric colors. Colors are
-/// stored as "#RRGGBB" hex strings; an empty string means "use the default".
+/// AppStorage keys for appearance. The per-metric colour keys and the app
+/// accent key were retired with the gold redesign — the ladder carries meaning
+/// in the Trends chart, so those colours are no longer user-adjustable. Values
+/// written by older builds are simply left on disk, unread.
 enum ThemeKeys {
     static let appearance = "theme_appearance"
-    static let appAccent = "theme_app_accent"
     static let background = "theme_background"
-    static let colorCalories = "theme_color_calories"
-    static let colorProtein = "theme_color_protein"
-    static let colorCarbs = "theme_color_carbs"
-    static let colorFat = "theme_color_fat"
-    static let colorWater = "theme_color_water"
-
-    static func key(for metric: Metric) -> String {
-        switch metric {
-        case .calories: return colorCalories
-        case .protein: return colorProtein
-        case .carbs: return colorCarbs
-        case .fat: return colorFat
-        case .water: return colorWater
-        }
-    }
 }
 
 /// The five metric colors used by the Today rings/bar and the Trends chart.
-/// Built from user overrides (falling back to the tuned defaults) and injected
-/// through the environment so every tab updates when a color changes.
+/// Fixed to the gold ladder and injected through the environment; it stays a
+/// struct rather than collapsing into `Metric.color` so a future theme (the
+/// handoff sketches a parchment light mode) can supply a different one.
 struct MetricPalette {
     var calories: Color
     var protein: Color
@@ -67,8 +54,8 @@ struct MetricPalette {
         }
     }
 
-    /// The default (tuned, CVD-validated) palette — the source of truth is
-    /// `Metric.color`, so defaults and the chart stay in sync.
+    /// The gold ladder — the source of truth is `Metric.color`, so the palette
+    /// and the chart can't drift apart.
     static let `default` = MetricPalette(
         calories: Metric.calories.color,
         protein: Metric.protein.color,
@@ -77,18 +64,6 @@ struct MetricPalette {
         water: Metric.water.color
     )
 
-    /// Resolve a palette from stored hex overrides (empty = default).
-    static func resolved(
-        calories: String, protein: String, carbs: String, fat: String, water: String
-    ) -> MetricPalette {
-        MetricPalette(
-            calories: Color(hex: calories) ?? Self.default.calories,
-            protein: Color(hex: protein) ?? Self.default.protein,
-            carbs: Color(hex: carbs) ?? Self.default.carbs,
-            fat: Color(hex: fat) ?? Self.default.fat,
-            water: Color(hex: water) ?? Self.default.water
-        )
-    }
 }
 
 private struct MetricPaletteKey: EnvironmentKey {

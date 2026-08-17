@@ -528,3 +528,29 @@ struct LuxBackButton: View {
         .accessibilityLabel("Back")
     }
 }
+
+/// A capsule toggle: gold gradient with an emerald knob when on, a hairline
+/// outline when off. Replaces the system switch, whose green is the one colour
+/// this palette can't absorb.
+struct LuxToggle: View {
+    @Binding var isOn: Bool
+
+    var body: some View {
+        Button {
+            withAnimation(.spring(response: 0.28, dampingFraction: 0.8)) { isOn.toggle() }
+        } label: {
+            ZStack(alignment: isOn ? .trailing : .leading) {
+                Capsule()
+                    .fill(isOn ? AnyShapeStyle(Lux.goldFill) : AnyShapeStyle(Color.clear))
+                    .overlay(Capsule().stroke(isOn ? .clear : Lux.controlBorder, lineWidth: 1))
+                Circle()
+                    .fill(isOn ? Lux.ground : Lux.cream.opacity(0.5))
+                    .frame(width: 18, height: 18)
+                    .padding(3)
+            }
+            .frame(width: 46, height: 26)
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(isOn ? [.isButton, .isSelected] : .isButton)
+    }
+}

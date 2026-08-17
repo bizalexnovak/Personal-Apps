@@ -192,8 +192,18 @@ extension View {
         }
     }
 
-    /// Emerald ground behind a screen, edge to edge.
+    /// Emerald ground behind a screen, edge to edge — or the user's colour
+    /// when the Custom appearance mode is on, which is why this reads the
+    /// environment instead of painting `Lux.ground` directly.
     func luxScreen() -> some View {
-        background(Lux.ground.ignoresSafeArea())
+        modifier(LuxScreenBackground())
+    }
+}
+
+private struct LuxScreenBackground: ViewModifier {
+    @Environment(\.appBackground) private var custom
+
+    func body(content: Content) -> some View {
+        content.background((custom ?? Lux.ground).ignoresSafeArea())
     }
 }

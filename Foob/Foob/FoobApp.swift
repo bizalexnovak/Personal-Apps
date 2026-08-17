@@ -29,16 +29,15 @@ struct ContentView: View {
     @Environment(\.scenePhase) private var scenePhase
 
     @AppStorage(ThemeKeys.appearance) private var appearanceRaw = AppearanceMode.dark.rawValue
-    @AppStorage(ThemeKeys.appAccent) private var colorAppAccent = ""
     @AppStorage(ThemeKeys.background) private var colorBackground = ""
-    @AppStorage(ThemeKeys.colorCalories) private var colorCalories = ""
-    @AppStorage(ThemeKeys.colorProtein) private var colorProtein = ""
-    @AppStorage(ThemeKeys.colorCarbs) private var colorCarbs = ""
-    @AppStorage(ThemeKeys.colorFat) private var colorFat = ""
-    @AppStorage(ThemeKeys.colorWater) private var colorWater = ""
 
     private var appearance: AppearanceMode { AppearanceMode(rawValue: appearanceRaw) ?? .dark }
-    private var appAccent: Color { Color(hex: colorAppAccent) ?? MetricPalette.defaultAppAccent }
+
+    /// Fixed now. The accent and the five metric colours stopped being
+    /// user-adjustable with the gold redesign — the ladder carries meaning in
+    /// the Trends chart, so a chosen hue would break it. Colours stored by
+    /// older builds are ignored rather than migrated; nothing reads those keys.
+    private var appAccent: Color { MetricPalette.defaultAppAccent }
 
     /// The custom background only applies in Custom mode; the other modes use
     /// the standard light/dark background.
@@ -57,13 +56,6 @@ struct ContentView: View {
         }
     }
 
-    private var palette: MetricPalette {
-        MetricPalette.resolved(
-            calories: colorCalories, protein: colorProtein, carbs: colorCarbs,
-            fat: colorFat, water: colorWater
-        )
-    }
-
     var body: some View {
         // The orb and add bar float *over* the content rather than shrinking
         // its safe area, so each screen keeps its full height and manages its
@@ -76,7 +68,9 @@ struct ContentView: View {
             tabScreen(SettingsView(), AppTab.settings)
         }
         .ignoresSafeArea(.container, edges: .top) // let screens go under the status bar
-        .luxScreen()
+        // Painted once at the root rather than per screen: the screens are
+        // transparent over it, so Custom mode's colour reaches all of them.
+        .background((appBackground ?? Lux.ground).ignoresSafeArea())
         .overlay(alignment: .bottom) {
             // Hidden while a keyboard is up so it doesn't collide with the
             // keyboard toolbar; it returns when the keyboard dismisses.
@@ -100,7 +94,7 @@ struct ContentView: View {
         .tint(appAccent)
         .environment(\.appAccent, appAccent)
         .environment(\.appBackground, appBackground)
-        .environment(\.metricPalette, palette)
+        .environment(\.metricPalette, .default)
         .preferredColorScheme(resolvedScheme)
         .onReceive(Timer.publish(every: 60, on: .main, in: .common).autoconnect()) { now = $0 }
         // Seed the starter recipe library and food database once, then sync
