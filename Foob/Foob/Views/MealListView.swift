@@ -88,7 +88,7 @@ struct MealListView: View {
         if coordinator.review != nil {
             MealReviewView(
                 coordinator: coordinator, onSaved: reset,
-                bottomClearance: AppTabBar.clearance - 16 // saveBar has 16 of its own
+                bottomClearance: OrbNavBar.orbOnlyClearance - 16 // saveBar has 16 of its own
             )
                 .transition(.move(edge: .bottom).combined(with: .opacity))
         } else if coordinator.isWorking {
@@ -108,7 +108,7 @@ struct MealListView: View {
                     } else {
                         Color.clear
                     }
-                    modeSwitcher.padding(.bottom, AppTabBar.clearance)
+                    modeSwitcher.padding(.bottom, OrbNavBar.orbOnlyClearance)
                 }
             case .dish:
                 dishPhase
@@ -190,7 +190,7 @@ struct MealListView: View {
                             .padding(.bottom, 64)
                     }
                     modeSwitcher
-                        .padding(.bottom, AppTabBar.clearance)
+                        .padding(.bottom, OrbNavBar.orbOnlyClearance)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
@@ -216,7 +216,7 @@ struct MealListView: View {
             } else {
                 Color.clear
             }
-            modeSwitcher.padding(.bottom, AppTabBar.clearance)
+            modeSwitcher.padding(.bottom, OrbNavBar.orbOnlyClearance)
         }
     }
 
@@ -233,7 +233,7 @@ struct MealListView: View {
             } else {
                 Color.clear
             }
-            modeSwitcher.padding(.bottom, AppTabBar.clearance)
+            modeSwitcher.padding(.bottom, OrbNavBar.orbOnlyClearance)
         }
     }
 
@@ -244,7 +244,7 @@ struct MealListView: View {
             prompt: "Listening… what's this item called?",
             subtitle: "Label scanned. Say the name of this food.",
             showSkip: true,
-            bottomClearance: AppTabBar.clearance,
+            bottomClearance: OrbNavBar.orbOnlyClearance,
             onDone: { speech.finishListening() },
             onSkip: {
                 speech.cancel()

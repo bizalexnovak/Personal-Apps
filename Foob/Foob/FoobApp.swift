@@ -21,6 +21,9 @@ struct ContentView: View {
     // Skip the welcome splash when Siri launched us straight into an action.
     @State private var showWelcome = !CaptureHub.shared.hasPendingLaunchAction
     @State private var keyboardVisible = false
+    /// Whether the orb menu is fanned open. Lives here rather than in the bar
+    /// so switching screens can close it.
+    @State private var menuOpen = false
     /// Ticks so Auto re-evaluates day/night across the 7am / 7pm boundaries.
     @State private var now = Date()
     @Environment(\.scenePhase) private var scenePhase
@@ -62,10 +65,9 @@ struct ContentView: View {
     }
 
     var body: some View {
-        // The bar floats over the content as a bottom safe-area inset: scroll
-        // views extend (and scroll) beneath it, showing through its glassy
-        // material, while non-scrolling screens (the Log capture surface) are
-        // laid out above it because it shrinks their safe area.
+        // The orb and add bar float *over* the content rather than shrinking
+        // its safe area, so each screen keeps its full height and manages its
+        // own bottom clearance (OrbNavBar.clearance / .orbOnlyClearance).
         ZStack {
             tabScreen(HomeView(), AppTab.today)
             tabScreen(MealListView(), AppTab.log)
@@ -74,13 +76,17 @@ struct ContentView: View {
             tabScreen(SettingsView(), AppTab.settings)
         }
         .ignoresSafeArea(.container, edges: .top) // let screens go under the status bar
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            // Hide the tab bar while a keyboard is up so it doesn't collide with
-            // the keyboard's toolbar; it returns when the keyboard dismisses.
+        .luxScreen()
+        .overlay(alignment: .bottom) {
+            // Hidden while a keyboard is up so it doesn't collide with the
+            // keyboard toolbar; it returns when the keyboard dismisses.
             if !keyboardVisible {
-                AppTabBar(
+                OrbNavBar(
                     selection: $hub.selectedTab,
-                    showPlus: hub.selectedTab == AppTab.today || hub.selectedTab == AppTab.trends
+                    // Only Today carries the add bar. Micros is a mode of the
+                    // Today screen, so it inherits this too.
+                    showAddBar: hub.selectedTab == AppTab.today,
+                    open: $menuOpen
                 )
                 .transition(.move(edge: .bottom))
             }
@@ -113,11 +119,14 @@ struct ContentView: View {
                 ReminderManager.refresh()
             }
         }
-        // Dismiss any open keyboard when moving between tabs.
+        // Dismiss any open keyboard when moving between screens, and close the
+        // orb menu behind a destination reached some other way (Siri, the add
+        // bar, a deep link).
         .onChange(of: hub.selectedTab) { _, _ in
             UIApplication.shared.sendAction(
                 #selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil
             )
+            menuOpen = false
         }
         .environmentObject(coordinator)
         .environmentObject(hub)
@@ -142,7 +151,7 @@ struct ContentView: View {
         }
         .overlay {
             if showWelcome {
-                WelcomeView(accent: appAccent)
+                WelcomeView()
                     .transition(.opacity)
                     .onTapGesture { dismissWelcome() }
                     .task {
@@ -173,7 +182,6 @@ struct ContentView: View {
 /// A brief welcome/splash shown at launch. Auto-dismisses after a moment, or on
 /// tap. Greets by time of day and first name: "Good morning, Alex / Good health."
 struct WelcomeView: View {
-    var accent: Color
     @AppStorage(ProfileKeys.firstName) private var firstName = ""
     @AppStorage(ProfileKeys.name) private var legacyName = ""
 
@@ -191,24 +199,33 @@ struct WelcomeView: View {
 
     var body: some View {
         ZStack {
-            LinearGradient(
-                colors: [accent, accent.opacity(0.65)],
-                startPoint: .top, endPoint: .bottom
-            )
-            .ignoresSafeArea()
-            VStack(spacing: 12) {
+            Lux.vignette.ignoresSafeArea()
+            VStack(spacing: 14) {
                 Image(systemName: "figure.strengthtraining.traditional")
-                    .font(.system(size: 52, weight: .semibold))
-                    .foregroundStyle(.white)
-                Text(greeting)
-                    .font(.custom("Bradley Hand", size: 44).weight(.bold))
-                    .foregroundStyle(.white)
+                    .font(.system(size: 44, weight: .regular))
+                    .foregroundStyle(Lux.goldFill)
+
+                Text("FOOB")
+                    .font(Lux.smallcaps(8))
+                    .tracking(4)
+                    .foregroundStyle(Lux.goldLabel.opacity(0.7))
+                    .padding(.top, 2)
+
+                // Long greetings ("Good afternoon, Alexander") get the smaller
+                // engraved size so they stay on one line.
+                Text(greeting.uppercased())
+                    .font(Lux.title(greeting.count > 16 ? 22 : 27))
+                    .tracking(3)
                     .multilineTextAlignment(.center)
+                    .engravedFill()
+
+                LuxDiamondRule().padding(.vertical, 2)
+
                 Text("Good health.")
-                    .font(.custom("Bradley Hand", size: 30).weight(.bold))
-                    .foregroundStyle(.white.opacity(0.95))
+                    .font(Lux.serifItalic(20))
+                    .foregroundStyle(Lux.cream.opacity(0.6))
             }
-            .padding()
+            .padding(.horizontal, Lux.hPad)
         }
         .contentShape(Rectangle())
     }
