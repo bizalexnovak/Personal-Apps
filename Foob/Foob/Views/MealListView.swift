@@ -2,17 +2,16 @@ import SwiftUI
 import SwiftData
 import UIKit
 
-/// The Log tab: an inline capture surface. Voice by default (a pulsing mic you
+/// The Log tab: an inline capture surface. Voice by default (a medallion mic you
 /// tap to start recording on this same screen — no modal), a camera-app-style
-/// switch to Scan (auto-captures a nutrition label) or Dish (photograph a meal
-/// for an AI estimate), a keyboard button to type, and one-tap "quick add"
-/// suggestions for items you log often. Capture, matching, and the review all
-/// happen here; logged meals are viewed and edited on the Today tab.
+/// switch to Scan (auto-captures a nutrition label), Dish (photograph a meal
+/// for an AI estimate) or Barcode, a keyboard button to type, and one-tap
+/// "quick add" suggestions for items you log often. Capture, matching, and the
+/// review all happen here; logged meals are viewed and edited on the Today tab.
 struct MealListView: View {
     @EnvironmentObject private var coordinator: MealCaptureCoordinator
     @EnvironmentObject private var hub: CaptureHub
     @Environment(\.modelContext) private var modelContext
-    @Environment(\.appBackground) private var appBackground
     @StateObject private var speech = SpeechCaptureController()
     @Query(sort: \Meal.timestamp, order: .reverse) private var meals: [Meal]
 
@@ -25,6 +24,8 @@ struct MealListView: View {
     /// the Log tab is revisited — not on every body evaluation.
     @State private var suggestions: [MealSuggestion] = []
 
+    private var isListening: Bool { speech.state == .listening }
+
     private func refreshSuggestions() {
         suggestions = MealSuggestions.compute(from: meals)
     }
@@ -33,12 +34,10 @@ struct MealListView: View {
         NavigationStack {
             content
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .appBackground(appBackground)
+                .luxScreen()
                 .keyboardDismissBar()
                 .animation(.easeInOut(duration: 0.3), value: coordinator.review?.id)
-                .navigationTitle(navigationTitle)
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar { toolbarContent }
+                .toolbar(.hidden, for: .navigationBar)
                 .overlay(alignment: .bottom) { quickAddToast }
                 .sheet(isPresented: $showTypeSheet) { typeSheet }
         }
@@ -88,9 +87,10 @@ struct MealListView: View {
         if coordinator.review != nil {
             MealReviewView(
                 coordinator: coordinator, onSaved: reset,
-                bottomClearance: OrbNavBar.orbOnlyClearance - 16 // saveBar has 16 of its own
+                bottomClearance: OrbNavBar.orbOnlyClearance - 16, // saveBar has 16 of its own
+                onCancel: reset
             )
-                .transition(.move(edge: .bottom).combined(with: .opacity))
+            .transition(.move(edge: .bottom).combined(with: .opacity))
         } else if coordinator.isWorking {
             AnalyzingView(text: coordinator.workingText)
         } else if coordinator.pendingLabel != nil {
@@ -99,21 +99,44 @@ struct MealListView: View {
             switch mode {
             case .voice: voicePhase
             case .scan:
-                ZStack(alignment: .bottom) {
-                    // Only run the camera while the Log tab is actually showing.
-                    if hub.selectedTab == AppTab.log {
-                        ScannerScreen(onCapture: { data in
-                            Task { await coordinator.beginFromLabel(imageData: data, in: modelContext) }
-                        })
-                    } else {
-                        Color.clear
-                    }
-                    modeSwitcher.padding(.bottom, OrbNavBar.orbOnlyClearance)
+                cameraPhase {
+                    ScannerScreen(onCapture: { data in
+                        Task { await coordinator.beginFromLabel(imageData: data, in: modelContext) }
+                    })
                 }
             case .dish:
-                dishPhase
+                cameraPhase {
+                    DishCameraScreen { data in
+                        Task { await coordinator.beginFromDishPhoto(imageData: data, in: modelContext) }
+                    }
+                }
             case .barcode:
-                barcodePhase
+                cameraPhase {
+                    BarcodeScannerScreen(
+                        notice: coordinator.notice,
+                        onScan: { barcode in
+                            coordinator.notice = nil
+                            Task { await coordinator.beginFromBarcode(barcode, in: modelContext) }
+                        }
+                    )
+                }
+            }
+        }
+    }
+
+    /// The three camera modes share a shell: header, live feed, mode switcher.
+    /// The camera only runs while the Log tab is actually showing.
+    private func cameraPhase<Feed: View>(@ViewBuilder feed: () -> Feed) -> some View {
+        ZStack(alignment: .bottom) {
+            if hub.selectedTab == AppTab.log {
+                feed()
+            } else {
+                Lux.cameraGround
+            }
+            VStack(spacing: 0) {
+                header
+                Spacer()
+                modeSwitcher.padding(.bottom, OrbNavBar.orbOnlyClearance)
             }
         }
     }
@@ -124,15 +147,15 @@ struct MealListView: View {
         case .listening:
             voiceLayout(listening: true)
         case .requestingPermission:
-            ProgressView("Getting the microphone ready…")
+            AnalyzingView(text: "Getting the microphone ready…")
         case .denied(let message):
             CaptureProblemView(message: message, systemImage: "mic.slash.fill") {
-                Button("Open Settings") {
+                Button("OPEN SETTINGS") {
                     if let url = URL(string: UIApplication.openSettingsURLString) {
                         UIApplication.shared.open(url)
                     }
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(GhostCapsule(gold: true))
             }
         case .captured:
             // Parsing is about to start but hasn't set workKind yet — a voice
@@ -145,14 +168,19 @@ struct MealListView: View {
         }
     }
 
-    /// The mic is pinned to a fixed position (via absolute placement) so it does
-    /// NOT move between idle and listening — only the text and the controls at
-    /// the bottom change. Tapping the mic (idle) starts recording; while
-    /// listening the suggestions/switcher give way to Done, and it keeps pulsing.
+    /// The medallion is pinned to a fixed position (via absolute placement) so
+    /// it does NOT move between idle and listening — only the halos, the text,
+    /// and the controls at the bottom change. Tapping it starts recording;
+    /// while listening the chips and switcher give way to Done.
     private func voiceLayout(listening: Bool, note: String? = nil) -> some View {
         GeometryReader { geo in
             let midX = geo.size.width / 2
-            let micY = geo.size.height * 0.40
+            let micY = geo.size.height * 0.30
+
+            VStack(spacing: 0) {
+                header
+                Spacer()
+            }
 
             // The mic is a toggle: tap to start listening, tap again to stop.
             MicGraphic(audioLevel: listening ? speech.audioLevel : nil)
@@ -165,76 +193,48 @@ struct MealListView: View {
                     }
                 }
                 .position(x: midX, y: micY)
+                .accessibilityLabel(listening ? "Stop listening" : "Start listening")
 
             Text(micText(listening: listening, note: note))
-                .font(listening && !speech.transcript.isEmpty ? .title3.weight(.medium) : .body)
-                .foregroundStyle(listening && !speech.transcript.isEmpty ? .primary : .secondary)
+                .font(Lux.serifItalic(listening && !speech.transcript.isEmpty ? 22 : 17))
+                .foregroundStyle(Lux.cream.opacity(listening && !speech.transcript.isEmpty ? 1 : 0.55))
                 .multilineTextAlignment(.center)
                 // Clamped: transient layout passes can report a width under
                 // 40 pt, and a negative maxWidth trips SwiftUI's "Invalid
                 // frame dimension" warning.
-                .frame(maxWidth: max(0, geo.size.width - 40))
-                .position(x: midX, y: micY + 128)
+                .frame(maxWidth: max(0, geo.size.width - 2 * Lux.hPad))
+                .position(x: midX, y: micY + MicGraphic.captionOffset + 8)
                 .animation(.default, value: speech.transcript)
 
-            // Bottom controls, anchored to the bottom independently of the mic.
-            // While listening they simply disappear — tapping the mic again stops.
-            // Only the switcher carries the tab-bar clearance (a Group would
-            // stamp it onto every child); the 64 pt gap sits the quick-add
-            // strip roughly midway between the mic caption and the switcher.
-            if !listening {
-                VStack(spacing: 0) {
-                    Spacer()
+            // Bottom controls, anchored independently of the medallion. While
+            // listening the chips and switcher give way to a single Done.
+            VStack(spacing: 0) {
+                Spacer()
+                if listening {
+                    Button("DONE") { speech.finishListening() }
+                        .buttonStyle(GoldCapsule())
+                        .frame(maxWidth: 220)
+                        .padding(.bottom, OrbNavBar.orbOnlyClearance)
+                } else {
                     if !suggestions.isEmpty {
                         suggestionsStrip
-                            .padding(.bottom, 64)
+                            .padding(.bottom, 46)
                     }
                     modeSwitcher
                         .padding(.bottom, OrbNavBar.orbOnlyClearance)
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
 
     private func micText(listening: Bool, note: String?) -> String {
         if listening {
-            return speech.transcript.isEmpty ? "Listening… describe what you consumed" : speech.transcript
+            return speech.transcript.isEmpty
+                ? "Listening…"
+                : "\u{201C}\(speech.transcript)\u{201D}"
         }
         return note ?? "Tap and describe what you consumed."
-    }
-
-    private var dishPhase: some View {
-        ZStack(alignment: .bottom) {
-            // Live camera with a manual shutter (framing a dish is the user's
-            // call, unlike labels which auto-capture). Only run the camera
-            // while the Log tab is actually showing.
-            if hub.selectedTab == AppTab.log {
-                DishCameraScreen { data in
-                    Task { await coordinator.beginFromDishPhoto(imageData: data, in: modelContext) }
-                }
-            } else {
-                Color.clear
-            }
-            modeSwitcher.padding(.bottom, OrbNavBar.orbOnlyClearance)
-        }
-    }
-
-    private var barcodePhase: some View {
-        ZStack(alignment: .bottom) {
-            if hub.selectedTab == AppTab.log {
-                BarcodeScannerScreen(
-                    notice: coordinator.notice,
-                    onScan: { barcode in
-                        coordinator.notice = nil
-                        Task { await coordinator.beginFromBarcode(barcode, in: modelContext) }
-                    }
-                )
-            } else {
-                Color.clear
-            }
-            modeSwitcher.padding(.bottom, OrbNavBar.orbOnlyClearance)
-        }
     }
 
     private var nameStep: some View {
@@ -253,33 +253,80 @@ struct MealListView: View {
         )
     }
 
+    // MARK: - Header
+
+    /// Weekday and a keyboard escape hatch while idle; cancel and a listening
+    /// indicator once the mic is live.
+    private var header: some View {
+        VStack(spacing: 0) {
+            HStack {
+                if isListening || coordinator.pendingLabel != nil {
+                    Button("CANCEL") { reset() }
+                        .font(Lux.smallcaps(10))
+                        .tracking(3)
+                        .foregroundStyle(Lux.cream.opacity(0.6))
+                    Spacer()
+                    Text("LISTENING")
+                        .font(Lux.smallcaps(10))
+                        .tracking(3)
+                        .foregroundStyle(Lux.gold)
+                } else {
+                    Text(Date.now.formatted(.dateTime.weekday(.wide)).uppercased())
+                        .font(Lux.smallcaps(10))
+                        .tracking(3)
+                        .foregroundStyle(Lux.goldLabel)
+                    Spacer()
+                    Button { showTypeSheet = true } label: {
+                        Image(systemName: "keyboard")
+                            .font(.system(size: 17, weight: .medium))
+                            .foregroundStyle(Lux.cream)
+                    }
+                    .accessibilityLabel("Type instead")
+                }
+            }
+            .padding(.bottom, 8)
+
+            LuxTitle(text: "LOG")
+
+            Text("Voice, label, dish, or barcode.")
+                .font(Lux.serifItalic(15))
+                .foregroundStyle(Lux.cream.opacity(0.55))
+                .padding(.top, 6)
+        }
+        .padding(.horizontal, Lux.hPad)
+        .padding(.top, 64)
+    }
+
     // MARK: - Quick-add suggestions
 
     private var suggestionsStrip: some View {
-        VStack(spacing: 6) {
-            Text("Quick add")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+        VStack(spacing: 10) {
+            Text("QUICK ADD")
+                .font(Lux.smallcaps(9))
+                .tracking(2.5)
+                .foregroundStyle(Lux.goldLabel)
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
                     ForEach(suggestions) { suggestion in
                         Button { quickLog(suggestion) } label: {
-                            VStack(alignment: .leading, spacing: 1) {
+                            VStack(spacing: 2) {
                                 Text(suggestion.name)
-                                    .font(.subheadline.weight(.medium))
+                                    .font(Lux.serif(15))
+                                    .foregroundStyle(Lux.cream)
                                     .lineLimit(1)
-                                Text("\(quantityText(suggestion)) \(suggestion.unit) · \(Int(suggestion.calories.rounded())) kcal")
-                                    .font(.caption2)
-                                    .foregroundStyle(.secondary)
+                                Text("\(quantityText(suggestion)) \(suggestion.unit.uppercased()) · \(Int(suggestion.calories.rounded())) KCAL")
+                                    .font(Lux.smallcaps(7))
+                                    .tracking(1.5)
+                                    .foregroundStyle(Lux.goldLabel)
                             }
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 8)
-                            .background(Capsule().fill(.quaternary.opacity(0.5)))
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 9)
+                            .background(Capsule().stroke(Lux.controlBorder, lineWidth: 1))
                         }
                         .buttonStyle(.plain)
                     }
                 }
-                .padding(.horizontal)
+                .padding(.horizontal, Lux.hPad)
             }
         }
     }
@@ -291,13 +338,20 @@ struct MealListView: View {
     @ViewBuilder
     private var quickAddToast: some View {
         if let lastQuickAdd {
-            Label("Added \(lastQuickAdd)", systemImage: "checkmark.circle.fill")
-                .font(.subheadline)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 10)
-                .background(.thinMaterial, in: Capsule())
-                .padding(.bottom, 24)
-                .transition(.move(edge: .bottom).combined(with: .opacity))
+            HStack(spacing: 7) {
+                Image(systemName: "checkmark")
+                    .font(.system(size: 10, weight: .semibold))
+                Text("ADDED \(lastQuickAdd.uppercased())")
+                    .font(Lux.smallcaps(9))
+                    .tracking(2)
+            }
+            .foregroundStyle(Lux.ground)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 11)
+            .background(Capsule().fill(Lux.goldFill))
+            .luxFloating()
+            .padding(.bottom, OrbNavBar.orbOnlyClearance)
+            .transition(.move(edge: .bottom).combined(with: .opacity))
         }
     }
 
@@ -318,81 +372,69 @@ struct MealListView: View {
         }
     }
 
-    // MARK: - Mode switcher (camera-app style)
+    // MARK: - Mode switcher
 
     private var modeSwitcher: some View {
-        HStack(spacing: 4) {
-            ForEach(LogCaptureMode.allCases) { option in
-                switchButton(option)
-            }
-        }
-        .padding(4)
-        .background(Capsule().fill(.ultraThinMaterial))
+        LuxSwitcher(
+            options: LogCaptureMode.allCases.map { ($0, $0.title.uppercased()) },
+            selection: Binding(
+                get: { mode },
+                set: { option in
+                    mode = option
+                    hub.logMode = option
+                    if option != .voice { speech.cancel() }
+                }
+            ),
+            spacing: 20,
+            size: 10
+        )
     }
 
-    private func switchButton(_ option: LogCaptureMode) -> some View {
-        Button {
-            withAnimation(.easeInOut(duration: 0.2)) { mode = option }
-            hub.logMode = option
-            if option != .voice { speech.cancel() }
-        } label: {
-            Text(option.title.uppercased())
-                .font(.caption.weight(.semibold))
-                .tracking(0.5)
-                .foregroundStyle(mode == option ? Color.accentColor : .secondary)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 8)
-                .background(Capsule().fill(mode == option ? Color.accentColor.opacity(0.15) : .clear))
-        }
-        .buttonStyle(.plain)
-    }
-
-    // MARK: - Chrome
-
-    private var navigationTitle: String {
-        if coordinator.review != nil { return "Review Meal" }
-        if coordinator.pendingLabel != nil { return "Name the Item" }
-        return "Log"
-    }
-
-    @ToolbarContentBuilder
-    private var toolbarContent: some ToolbarContent {
-        if coordinator.review != nil || speech.state == .listening || coordinator.pendingLabel != nil {
-            ToolbarItem(placement: .cancellationAction) {
-                Button("Cancel") { reset() }
-            }
-        } else {
-            ToolbarItem(placement: .topBarTrailing) {
-                Button { showTypeSheet = true } label: { Image(systemName: "keyboard") }
-                    .accessibilityLabel("Type instead")
-            }
-        }
-    }
+    // MARK: - Typed entry
 
     private var typeSheet: some View {
-        NavigationStack {
-            Form {
-                Section {
-                    TextField("Describe what you consumed…", text: $typedText, axis: .vertical)
-                        .lineLimit(3...6)
-                } footer: {
-                    Text("Example: \u{201C}two eggs, a slice of toast, and a coffee with milk.\u{201D}")
+        LuxSheet {
+            VStack(alignment: .leading, spacing: 0) {
+                HStack {
+                    Button("CANCEL") { typedText = ""; showTypeSheet = false }
+                        .font(Lux.smallcaps(9))
+                        .tracking(2)
+                        .foregroundStyle(Lux.cream.opacity(0.6))
+                    Spacer()
+                    Button("LOG") { submitTyped() }
+                        .font(Lux.smallcaps(9))
+                        .tracking(2)
+                        .foregroundStyle(canSubmitTyped ? Lux.gold : Lux.cream.opacity(0.35))
+                        .disabled(!canSubmitTyped)
                 }
+                .padding(.top, 18)
+
+                Text("BY HAND")
+                    .font(Lux.title(20))
+                    .tracking(3)
+                    .engravedFill()
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, 18)
+
+                LuxUnderlinedField(
+                    placeholder: "Two eggs and a slice of toast…",
+                    text: $typedText,
+                    autocapitalization: .sentences
+                )
+                .padding(.top, 26)
+
+                LuxNote("Describe what you consumed — plain English is enough.")
+                    .padding(.top, 12)
+
+                Spacer()
             }
-            .keyboardDismissBar()
-            .navigationTitle("Type a meal")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { typedText = ""; showTypeSheet = false }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Log") { submitTyped() }
-                        .disabled(typedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                }
-            }
+            .padding(.horizontal, Lux.hPad)
         }
         .presentationDetents([.medium])
+    }
+
+    private var canSubmitTyped: Bool {
+        !typedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     // MARK: - Actions

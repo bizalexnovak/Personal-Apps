@@ -25,15 +25,16 @@ struct DishCameraScreen: View {
                 message: "Foob needs camera access to photograph your dish. Enable it in Settings.",
                 systemImage: "camera.fill"
             ) {
-                Button("Open Settings") {
+                Button("OPEN SETTINGS") {
                     if let url = URL(string: UIApplication.openSettingsURLString) {
                         UIApplication.shared.open(url)
                     }
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(GhostCapsule(gold: true))
             }
         } else {
             ZStack {
+                Lux.cameraGround.ignoresSafeArea()
                 DishCameraView(
                     trigger: trigger,
                     onCapture: onCapture,
@@ -41,36 +42,50 @@ struct DishCameraScreen: View {
                 )
                 .ignoresSafeArea()
 
+                // A circular guide rather than the label scanner's rectangle:
+                // a plate has no edges to square up to, so the framing hint is
+                // "centre it", not "align it".
+                ZStack {
+                    Circle()
+                        .stroke(Lux.gold.opacity(0.45), lineWidth: 1)
+                    Circle()
+                        .stroke(Lux.gold.opacity(0.3),
+                                style: StrokeStyle(lineWidth: 1, dash: [5, 6]))
+                        .padding(24)
+                }
+                .frame(width: 280, height: 280)
+
                 VStack {
-                    Text("Frame your dish, then tap the shutter for an AI nutrition estimate.")
-                        .font(.caption)
-                        .foregroundStyle(.white)
-                        .multilineTextAlignment(.center)
-                        .padding(10)
-                        .background(.black.opacity(0.45), in: RoundedRectangle(cornerRadius: 10))
-                        .padding(.top, 24)
                     Spacer()
+                    Text("Frame the dish, then take the photo — AI estimates the plate.")
+                        .font(Lux.serifItalic(15))
+                        .foregroundStyle(Lux.cream.opacity(0.8))
+                        .multilineTextAlignment(.center)
+                        .shadow(color: .black.opacity(0.7), radius: 6)
                     shutterButton
-                        // Clears the floating tab bar AND the mode switcher
+                        .padding(.top, 26)
+                        // Clears the floating orb AND the mode switcher
                         // pinned above it.
                         .padding(.bottom, OrbNavBar.orbOnlyClearance + 64)
                 }
-                .padding()
+                .padding(.horizontal, Lux.hPad)
             }
         }
     }
 
+    /// Manual, unlike the label and barcode modes: when to press the shutter on
+    /// a plate is a judgement call the app shouldn't make.
     private var shutterButton: some View {
         Button {
             trigger.fire()
         } label: {
             ZStack {
                 Circle()
-                    .stroke(.white, lineWidth: 4)
+                    .stroke(Lux.cream.opacity(0.85), lineWidth: 2)
                     .frame(width: 72, height: 72)
                 Circle()
-                    .fill(.white)
-                    .frame(width: 58, height: 58)
+                    .fill(Lux.goldFill)
+                    .frame(width: 56, height: 56)
             }
         }
         .accessibilityLabel("Take photo")

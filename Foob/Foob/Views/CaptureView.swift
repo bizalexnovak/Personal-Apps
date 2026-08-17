@@ -20,7 +20,15 @@ struct CaptureView: View {
         NavigationStack {
             Group {
                 if coordinator.review != nil {
-                    MealReviewView(coordinator: coordinator, onSaved: { dismiss() })
+                    MealReviewView(
+                        coordinator: coordinator,
+                        onSaved: { dismiss() },
+                        onCancel: {
+                            speech.cancel()
+                            coordinator.cancelReview()
+                            dismiss()
+                        }
+                    )
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                 } else {
                     captureContent
@@ -29,6 +37,8 @@ struct CaptureView: View {
             .animation(.easeInOut(duration: 0.3), value: coordinator.review?.id)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .keyboardDismissBar()
+            .luxScreen()
+            .toolbar(coordinator.review == nil ? .visible : .hidden, for: .navigationBar)
             .navigationTitle(navigationTitle)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -116,24 +126,24 @@ struct CaptureView: View {
     private var voicePhase: some View {
         switch speech.state {
         case .idle, .requestingPermission:
-            ProgressView("Getting the microphone ready…")
+            AnalyzingView(text: "Getting the microphone ready…")
         case .listening:
             listening(prompt: "Listening… describe what you consumed", subtitle: nil, showSkip: false)
         case .captured:
             AnalyzingView(text: MealCaptureCoordinator.WorkKind.parsingText.text)
         case .denied(let message):
             CaptureProblemView(message: message, systemImage: "mic.slash.fill") {
-                Button("Open Settings") {
+                Button("OPEN SETTINGS") {
                     if let url = URL(string: UIApplication.openSettingsURLString) {
                         UIApplication.shared.open(url)
                     }
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(GhostCapsule(gold: true))
             }
         case .failed(let message):
             CaptureProblemView(message: message, systemImage: "waveform.slash") {
-                Button("Try again") { Task { await speech.restart() } }
-                    .buttonStyle(.borderedProminent)
+                Button("TRY AGAIN") { Task { await speech.restart() } }
+                    .buttonStyle(GhostCapsule(gold: true))
             }
         }
     }

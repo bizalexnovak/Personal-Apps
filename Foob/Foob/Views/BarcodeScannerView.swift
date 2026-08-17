@@ -6,7 +6,6 @@ import AVFoundation
 /// EAN-8, EAN-13, and UPC-A barcodes. Shows an optional notice banner (e.g.
 /// "product not found — try the label scan") without leaving the scanner.
 struct BarcodeScannerScreen: View {
-    @Environment(\.appAccent) private var accent
     var notice: String?
     var onScan: (String) -> Void
     @State private var denied = false
@@ -17,42 +16,49 @@ struct BarcodeScannerScreen: View {
                 message: "Foob needs camera access to scan barcodes. Enable it in Settings.",
                 systemImage: "camera.fill"
             ) {
-                Button("Open Settings") {
+                Button("OPEN SETTINGS") {
                     if let url = URL(string: UIApplication.openSettingsURLString) {
                         UIApplication.shared.open(url)
                     }
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(GhostCapsule(gold: true))
             }
         } else {
             ZStack {
+                Lux.cameraGround.ignoresSafeArea()
                 BarcodeScannerCameraView(onScan: onScan, onDenied: { denied = true })
                     .ignoresSafeArea()
-                VStack {
+                VStack(spacing: 18) {
                     if let notice {
-                        Label(notice, systemImage: "exclamationmark.triangle")
-                            .font(.caption.weight(.medium))
-                            .foregroundStyle(.black)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 8)
-                            .background(.orange, in: RoundedRectangle(cornerRadius: 10))
-                            .padding(.top, 8)
+                        HStack(spacing: 7) {
+                            Image(systemName: "exclamationmark.triangle")
+                                .font(.system(size: 10))
+                            Text(notice.uppercased())
+                                .font(Lux.smallcaps(9))
+                                .tracking(1.5)
+                        }
+                        .foregroundStyle(Lux.ground)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 9)
+                        .background(Capsule().fill(Lux.ember))
+                        .padding(.top, 8)
                     }
                     Spacer()
-                    RoundedRectangle(cornerRadius: 10)
-                        .strokeBorder(accent, style: StrokeStyle(lineWidth: 3, dash: [10, 8]))
-                        .frame(maxWidth: 300)
-                        .frame(height: 100)
-                    Text("Point at a barcode — it scans automatically.")
-                        .font(.caption)
-                        .foregroundStyle(.white)
+                    ZStack {
+                        CornerBrackets(size: CGSize(width: 270, height: 170), leg: 30)
+                        Image(systemName: "barcode")
+                            .font(.system(size: 46, weight: .ultraLight))
+                            .foregroundStyle(Lux.cream.opacity(0.5))
+                    }
+                    .frame(width: 270, height: 170)
+                    Text("Center the barcode — it reads on its own.")
+                        .font(Lux.serifItalic(15))
+                        .foregroundStyle(Lux.cream.opacity(0.8))
                         .multilineTextAlignment(.center)
-                        .padding(10)
-                        .background(.black.opacity(0.45), in: RoundedRectangle(cornerRadius: 10))
-                        .padding(.top, 16)
+                        .shadow(color: .black.opacity(0.7), radius: 6)
                     Spacer()
                 }
-                .padding()
+                .padding(.horizontal, Lux.hPad)
             }
         }
     }
