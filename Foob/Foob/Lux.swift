@@ -270,19 +270,22 @@ struct GhostCapsule: ButtonStyle {
 /// capture-mode row, and the Trends range picker: no track, no pill — the
 /// active item is cream over a gold underline.
 struct LuxSwitcher<T: Hashable>: View {
-    let options: [(value: T, label: String)]
+    /// Unlabelled tuples on purpose: Swift won't implicitly convert
+    /// `[(T, String)]` into a labelled-tuple array, and most callers build
+    /// this with `.map`.
+    let options: [(T, String)]
     @Binding var selection: T
     var spacing: CGFloat = 18
     var size: CGFloat = 9
 
     var body: some View {
         HStack(spacing: spacing) {
-            ForEach(options, id: \.value) { option in
-                let active = option.value == selection
+            ForEach(options, id: \.0) { option in
+                let active = option.0 == selection
                 Button {
-                    withAnimation(.easeInOut(duration: 0.2)) { selection = option.value }
+                    withAnimation(.easeInOut(duration: 0.2)) { selection = option.0 }
                 } label: {
-                    Text(option.label)
+                    Text(option.1)
                         .font(Lux.smallcaps(size))
                         .tracking(2)
                         .foregroundStyle(active ? Lux.cream : Lux.cream.opacity(0.45))

@@ -214,8 +214,9 @@ struct CaptureProblemView<Action: View>: View {
 // MARK: - Camera framing
 
 /// Four corner brackets marking the capture area — the camera modes' shared
-/// reticle. Legs are drawn rather than stroked as a dashed rectangle so the
-/// corners stay crisp at any frame size.
+/// reticle. Drawn as one path rather than four rotated copies of a corner,
+/// because rotating a shape inside a non-square frame throws three of the
+/// corners off the rectangle.
 struct CornerBrackets: View {
     var size: CGSize
     var leg: CGFloat = 34
@@ -223,28 +224,27 @@ struct CornerBrackets: View {
     var color: Color = Lux.gold
 
     var body: some View {
-        ZStack {
-            ForEach(0..<4, id: \.self) { corner in
-                bracket
-                    .rotationEffect(.degrees(Double(corner) * 90))
-            }
+        Path { path in
+            let w = size.width, h = size.height, l = min(leg, min(w, h) / 2)
+            // top-left
+            path.move(to: CGPoint(x: 0, y: l))
+            path.addLine(to: CGPoint(x: 0, y: 0))
+            path.addLine(to: CGPoint(x: l, y: 0))
+            // top-right
+            path.move(to: CGPoint(x: w - l, y: 0))
+            path.addLine(to: CGPoint(x: w, y: 0))
+            path.addLine(to: CGPoint(x: w, y: l))
+            // bottom-right
+            path.move(to: CGPoint(x: w, y: h - l))
+            path.addLine(to: CGPoint(x: w, y: h))
+            path.addLine(to: CGPoint(x: w - l, y: h))
+            // bottom-left
+            path.move(to: CGPoint(x: l, y: h))
+            path.addLine(to: CGPoint(x: 0, y: h))
+            path.addLine(to: CGPoint(x: 0, y: h - l))
         }
+        .stroke(color, style: StrokeStyle(lineWidth: lineWidth, lineCap: .square))
         .frame(width: size.width, height: size.height)
-    }
-
-    /// One top-left bracket; the other three are rotations of it. Rotating a
-    /// non-square frame needs the corner drawn inside a square, so it is laid
-    /// out against the larger dimension and clipped by the parent frame.
-    private var bracket: some View {
-        GeometryReader { geo in
-            Path { path in
-                path.move(to: CGPoint(x: 0, y: leg))
-                path.addLine(to: CGPoint(x: 0, y: 0))
-                path.addLine(to: CGPoint(x: leg, y: 0))
-            }
-            .stroke(color, style: StrokeStyle(lineWidth: lineWidth, lineCap: .square))
-            .frame(width: geo.size.width, height: geo.size.height)
-        }
     }
 }
 
