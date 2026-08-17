@@ -9,8 +9,6 @@ import WidgetKit
 struct HomeView: View {
     @Query(sort: \Meal.timestamp, order: .reverse) private var meals: [Meal]
     @Environment(\.modelContext) private var modelContext
-    @Environment(\.metricPalette) private var palette
-    @Environment(\.appBackground) private var appBackground
 
     @AppStorage(TargetKeys.calories) private var calorieTarget = 2000.0
     @AppStorage(TargetKeys.protein) private var proteinTarget = 150.0
@@ -26,6 +24,9 @@ struct HomeView: View {
     @State private var tallyScope: TallyScope = .macros
     /// Micronutrient row tapped in the Micros tally → its info sheet.
     @State private var microInfoField: MicronutrientField?
+    /// Meal row tapped → Edit Meal. Held by ID rather than by object so the
+    /// destination survives the model refreshing underneath it.
+    @State private var editingMealID: PersistentIdentifier?
 
     private var isToday: Bool { Calendar.current.isDateInToday(selectedDate) }
 
@@ -137,111 +138,41 @@ struct HomeView: View {
         let day = dayAggregate
         let snapshot = todaySnapshot(reusing: isToday ? day : nil)
         return NavigationStack {
-            List {
-                Section {
-                    Picker("View", selection: $tallyScope) {
-                        Text("Macros").tag(TallyScope.macros)
-                        Text("Micros").tag(TallyScope.micros)
+            VStack(spacing: 0) {
+                header(day: day)
+                // Still a List, not a ScrollView: the rows keep swipe-to-delete
+                // and the diary keeps its cell recycling. Every piece of its
+                // chrome is stripped so the ruled-ledger look survives.
+                List {
+                    Group {
+                        switch tallyScope {
+                        case .macros: macrosContent(day: day)
+                        case .micros: microsContent(day: day)
+                        }
                     }
-                    .pickerStyle(.segmented)
+                    .listRowBackground(Color.clear)
                     .listRowSeparator(.hidden)
+                    .listRowInsets(EdgeInsets(top: 0, leading: Lux.hPad, bottom: 0, trailing: Lux.hPad))
 
-                    switch tallyScope {
-                    case .macros:
-                        MacroProgressRow(
-                            label: "Calories", unit: "kcal", color: palette.calories,
-                            value: day.calories, target: calorieTarget
-                        )
-                        HStack(alignment: .top, spacing: 8) {
-                            MacroRing(label: "Protein", unit: "g", color: palette.protein,
-                                      value: day.protein, target: proteinTarget)
-                            MacroRing(label: "Carbs", unit: "g", color: palette.carbs,
-                                      value: day.carbs, target: carbTarget)
-                            MacroRing(label: "Fat", unit: "g", color: palette.fat,
-                                      value: day.fat, target: fatTarget)
-                            MacroRing(label: "Water", unit: "oz", color: palette.water,
-                                      value: day.water, target: waterTarget)
-                        }
-                        .padding(.vertical, 4)
-                    case .micros:
-                        // The day's summed vitamins/minerals/supplements
-                        // against adult Daily Values; tap a row for what it
-                        // does and overconsumption warnings.
-                        MicroTallySection(micros: day.micros) { field in
-                            microInfoField = field
-                        }
-                    }
+                    Color.clear
+                        .frame(height: OrbNavBar.clearance)
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
+                        .listRowInsets(EdgeInsets())
                 }
-
-                if day.meals.isEmpty {
-                    ContentUnavailableView(
-                        isToday ? "Nothing logged today" : "Nothing logged this day",
-                        systemImage: "fork.knife",
-                        description: Text(isToday
-                            ? "Say \u{201C}Log meal in Foob\u{201D} to Siri, or add a meal from the Meals tab."
-                            : "No meals were logged on this day.")
-                    )
-                } else {
-                    Section {
-                        hourlyChart(bins: day.bins)
-                    } header: {
-                        Text("When you ate & drank")
-                    } footer: {
-                        Text("Each bar is that hour's share of your daily calorie or water goal.")
-                    }
-
-                    Section("Meals") {
-                        ForEach(day.meals) { meal in
-                            NavigationLink {
-                                EditMealView(meal: meal)
-                            } label: {
-                                mealRow(meal)
-                            }
-                        }
-                        .onDelete { deleteMeals($0, from: day.meals) }
-                    }
-
-                    // The day's full micronutrient tally lives in the Micros
-                    // scope of the switch at the top of the screen.
+                .listStyle(.plain)
+                .scrollContentBackground(.hidden)
+                .environment(\.defaultMinListRowHeight, 0)
+            }
+            .luxScreen()
+            .toolbar(.hidden, for: .navigationBar)
+            .navigationDestination(item: $editingMealID) { id in
+                if let meal = meals.first(where: { $0.persistentModelID == id }) {
+                    EditMealView(meal: meal)
                 }
             }
-            .appBackground(appBackground)
             .onAppear { refreshWidget(snapshot) }
             .onChange(of: snapshot) { _, newValue in refreshWidget(newValue) }
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button { shiftDay(-1) } label: {
-                        Image(systemName: "chevron.left")
-                    }
-                    .accessibilityLabel("Previous day")
-                }
-                ToolbarItem(placement: .principal) {
-                    // Tap the date to pop open a calendar and jump anywhere.
-                    Button {
-                        showDatePicker = true
-                    } label: {
-                        HStack(spacing: 4) {
-                            Text(smartDateTitle).font(.headline)
-                            Image(systemName: "chevron.down").font(.caption2)
-                        }
-                        .foregroundStyle(.primary)
-                    }
-                    .accessibilityLabel("Choose date")
-                }
-                ToolbarItemGroup(placement: .topBarTrailing) {
-                    if !isToday {
-                        Button("Today") {
-                            selectedDate = Calendar.current.startOfDay(for: .now)
-                        }
-                    }
-                    Button { shiftDay(1) } label: {
-                        Image(systemName: "chevron.right")
-                    }
-                    .disabled(isToday)
-                    .accessibilityLabel("Next day")
-                }
-            }
             .sheet(isPresented: $showDatePicker) {
                 datePickerSheet
             }
@@ -255,22 +186,146 @@ struct HomeView: View {
         }
     }
 
-    private var datePickerSheet: some View {
-        DatePicker(
-            "",
-            selection: $selectedDate,
-            in: ...Calendar.current.startOfDay(for: .now),
-            displayedComponents: .date
-        )
-        .datePickerStyle(.graphical)
-        .labelsHidden()
-        .padding(.horizontal)
-        .onChange(of: selectedDate) { _, newValue in
-            let normalized = Calendar.current.startOfDay(for: newValue)
-            if normalized != selectedDate { selectedDate = normalized }
-            showDatePicker = false // tapping a day jumps and closes
+    // MARK: Header
+
+    private func header(day: DayAggregate) -> some View {
+        VStack(spacing: 0) {
+            HStack {
+                Button { shiftDay(-1) } label: {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundStyle(Lux.cream)
+                }
+                .accessibilityLabel("Previous day")
+
+                Spacer()
+
+                // Forward a day is only meaningful in the past; on today the
+                // calendar is the only way out, so it takes the slot alone.
+                if !isToday {
+                    Button { shiftDay(1) } label: {
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundStyle(Lux.cream)
+                    }
+                    .accessibilityLabel("Next day")
+                    .padding(.trailing, 16)
+                }
+
+                Button { showDatePicker = true } label: {
+                    Image(systemName: "calendar")
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundStyle(Lux.cream)
+                }
+                .accessibilityLabel("Choose date")
+            }
+            .padding(.bottom, 8)
+
+            LuxTitle(text: smartDateTitle.uppercased())
+
+            Text(subtitle(day: day))
+                .font(Lux.serifItalic(15))
+                .foregroundStyle(Lux.cream.opacity(0.55))
+                .padding(.top, 6)
+
+            LuxSwitcher(
+                options: [(TallyScope.macros, "MACROS"), (TallyScope.micros, "MICROS")],
+                selection: $tallyScope
+            )
+            .padding(.top, 12)
         }
-        .presentationDetents([.height(420)])
+        .padding(.horizontal, Lux.hPad)
+        .padding(.top, 64)
+    }
+
+    /// "Sunday, 17 August · 1,365 kcal in." — the day and what it amounts to,
+    /// in one line.
+    private func subtitle(day: DayAggregate) -> String {
+        let date = selectedDate.formatted(.dateTime.weekday(.wide).day().month(.wide))
+        guard day.calories > 0 else { return "\(date) · nothing logged yet." }
+        return "\(date) · \(Self.grouped(day.calories)) kcal in."
+    }
+
+    private static func grouped(_ value: Double) -> String {
+        value.formatted(.number.precision(.fractionLength(0)))
+    }
+
+    // MARK: Macros
+
+    @ViewBuilder
+    private func macrosContent(day: DayAggregate) -> some View {
+        LuxSectionHeader(text: "CALORIES")
+            .padding(.top, 14)
+            .padding(.bottom, 2)
+
+        HStack(alignment: .firstTextBaseline) {
+            Text(Self.grouped(day.calories))
+                .font(Lux.serif(38, medium: true))
+                .monospacedDigit()
+                .foregroundStyle(Lux.cream)
+            Spacer()
+            Text("of \(Self.grouped(calorieTarget)) kcal")
+                .font(Lux.serifItalic(15))
+                .foregroundStyle(Lux.cream.opacity(0.5))
+        }
+
+        LuxBar(progress: calorieTarget > 0 ? min(day.calories / calorieTarget, 1) : 0)
+            .padding(.top, 6)
+
+        HStack(spacing: 6) {
+            LuxRing(label: "PROTEIN", unit: "g", metric: .protein,
+                    value: day.protein, target: proteinTarget)
+            LuxRing(label: "CARBS", unit: "g", metric: .carbs,
+                    value: day.carbs, target: carbTarget)
+            LuxRing(label: "FAT", unit: "g", metric: .fat,
+                    value: day.fat, target: fatTarget)
+            LuxRing(label: "WATER", unit: "oz", metric: .water,
+                    value: day.water, target: waterTarget)
+        }
+        .padding(.top, 18)
+        .padding(.bottom, 4)
+
+        if day.meals.isEmpty {
+            LuxNote(isToday
+                    ? "Nothing logged today. Tap the bar below to describe a meal, or say “Log meal in Foob” to Siri."
+                    : "No meals were logged on this day.",
+                    size: 15)
+                .padding(.top, 24)
+        } else {
+            LuxSectionHeader(text: "WHEN YOU ATE & DRANK")
+                .padding(.top, 20)
+                .padding(.bottom, 8)
+
+            hourlyChart(bins: day.bins)
+
+            LuxSectionHeader(text: "MEALS")
+                .padding(.top, 20)
+                .padding(.bottom, 2)
+
+            // A Button rather than a NavigationLink: links in a List draw a
+            // system disclosure chevron, and these rows end in a gold value.
+            ForEach(day.meals) { meal in
+                Button {
+                    editingMealID = meal.persistentModelID
+                } label: {
+                    LuxMealRow(meal: meal)
+                }
+                .buttonStyle(.plain)
+                .luxRow()
+            }
+            .onDelete { deleteMeals($0, from: day.meals) }
+        }
+    }
+
+    @ViewBuilder
+    private func microsContent(day: DayAggregate) -> some View {
+        MicroTallySection(micros: day.micros) { field in
+            microInfoField = field
+        }
+        .padding(.top, 8)
+
+        LuxNote("Measured against adult Daily Values; nutrients without one show the tally alone.")
+            .padding(.top, 12)
     }
 
     // MARK: Day navigation
@@ -290,65 +345,24 @@ struct HomeView: View {
         selectedDate = min(cal.startOfDay(for: shifted), today)
     }
 
-    /// One diary row: name, calories + time, and the macro chips — all from a
-    /// single pass over the meal's items.
-    private func mealRow(_ meal: Meal) -> some View {
-        let t = meal.totals
-        return VStack(alignment: .leading, spacing: 3) {
-            Text(meal.displayName)
-                .lineLimit(2)
-            Text("\(Int(t.calories.rounded())) kcal · \(meal.timestamp, format: .dateTime.hour().minute())")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            macroChips(for: t)
+    private var datePickerSheet: some View {
+        DatePicker(
+            "",
+            selection: $selectedDate,
+            in: ...Calendar.current.startOfDay(for: .now),
+            displayedComponents: .date
+        )
+        .datePickerStyle(.graphical)
+        .tint(Lux.gold)
+        .labelsHidden()
+        .padding(.horizontal)
+        .onChange(of: selectedDate) { _, newValue in
+            let normalized = Calendar.current.startOfDay(for: newValue)
+            if normalized != selectedDate { selectedDate = normalized }
+            showDatePicker = false // tapping a day jumps and closes
         }
-    }
-
-    /// Per-meal macro totals as small colored chips (matching the app's metric
-    /// palette). Water-only meals skip the all-zero P/C/F chips and just show
-    /// the water amount.
-    @ViewBuilder
-    private func macroChips(for t: MealTotals) -> some View {
-        let hasMacros = t.calories > 0 || t.protein > 0 || t.carbs > 0 || t.fat > 0
-        HStack(spacing: 5) {
-            if hasMacros || t.waterOunces == 0 {
-                macroChip("P", t.protein, palette.protein)
-                macroChip("C", t.carbs, palette.carbs)
-                macroChip("F", t.fat, palette.fat)
-            }
-            if t.waterOunces > 0 {
-                waterChip(t.waterOunces)
-            }
-        }
-        .padding(.top, 1)
-    }
-
-    private func macroChip(_ label: String, _ value: Double, _ color: Color) -> some View {
-        HStack(spacing: 3) {
-            Text(label)
-                .font(.caption2.weight(.bold))
-                .foregroundStyle(color)
-            Text("\(Int(value.rounded()))g")
-                .font(.caption2.monospacedDigit().weight(.medium))
-                .foregroundStyle(.secondary)
-        }
-        .padding(.horizontal, 7)
-        .padding(.vertical, 3)
-        .background(Capsule().fill(color.opacity(0.12)))
-    }
-
-    private func waterChip(_ ounces: Double) -> some View {
-        HStack(spacing: 3) {
-            Image(systemName: "drop.fill")
-                .font(.system(size: 8))
-                .foregroundStyle(palette.water)
-            Text("\(Int(ounces.rounded())) oz")
-                .font(.caption2.monospacedDigit().weight(.medium))
-                .foregroundStyle(.secondary)
-        }
-        .padding(.horizontal, 7)
-        .padding(.vertical, 3)
-        .background(Capsule().fill(palette.water.opacity(0.12)))
+        .presentationDetents([.height(420)])
+        .presentationBackground(Lux.sheet)
     }
 
     private func deleteMeals(_ offsets: IndexSet, from dayMeals: [Meal]) {
@@ -366,99 +380,176 @@ struct HomeView: View {
     private func hourlyChart(bins: [IntakeBin]) -> some View {
         let startOfDay = Calendar.current.startOfDay(for: selectedDate)
         let endOfDay = startOfDay.addingTimeInterval(24 * 3600)
-        return Chart(bins) { bin in
-            BarMark(
-                x: .value("Time", bin.time, unit: .hour),
-                y: .value("Share of goal", bin.amount)
-            )
-            .foregroundStyle(by: .value("Logged", bin.series.rawValue))
-            .position(by: .value("Logged", bin.series.rawValue))
-            .cornerRadius(3)
-        }
-        .chartForegroundStyleScale([
-            IntakeBin.Series.food.rawValue: palette.calories,
-            IntakeBin.Series.water.rawValue: palette.water,
-        ])
-        .chartXScale(domain: startOfDay ... endOfDay)
-        .chartXAxis {
-            AxisMarks(values: .stride(by: .hour, count: 6)) { _ in
-                AxisGridLine()
-                AxisValueLabel(format: .dateTime.hour())
+        return VStack(spacing: 10) {
+            Chart(bins) { bin in
+                BarMark(
+                    x: .value("Time", bin.time, unit: .hour),
+                    y: .value("Share of goal", bin.amount)
+                )
+                .foregroundStyle(by: .value("Logged", bin.series.rawValue))
+                .position(by: .value("Logged", bin.series.rawValue))
+                .cornerRadius(1)
+            }
+            .chartForegroundStyleScale([
+                IntakeBin.Series.food.rawValue: Lux.gold,
+                IntakeBin.Series.water.rawValue: Lux.cream.opacity(0.55),
+            ])
+            .chartLegend(.hidden)
+            .chartXScale(domain: startOfDay ... endOfDay)
+            .chartXAxis {
+                AxisMarks(values: .stride(by: .hour, count: 6)) { _ in
+                    AxisGridLine().foregroundStyle(Lux.cream.opacity(0.1))
+                    AxisValueLabel(format: .dateTime.hour())
+                        .font(Lux.smallcaps(9))
+                        .foregroundStyle(Lux.cream.opacity(0.45))
+                }
+            }
+            .chartYAxis {
+                AxisMarks(format: FloatingPointFormatStyle<Double>.Percent()) { _ in
+                    AxisGridLine().foregroundStyle(Lux.cream.opacity(0.1))
+                    AxisValueLabel()
+                        .font(Lux.smallcaps(9))
+                        .foregroundStyle(Lux.cream.opacity(0.45))
+                }
+            }
+            .frame(height: 150)
+
+            // Square swatches rather than the default dots — the chart has no
+            // rounded geometry anywhere else.
+            HStack(spacing: 14) {
+                legendSwatch("FOOD", Lux.gold)
+                legendSwatch("WATER", Lux.cream.opacity(0.55))
+                Spacer()
             }
         }
-        .chartYAxis {
-            AxisMarks(format: FloatingPointFormatStyle<Double>.Percent())
+        .luxPanel()
+    }
+
+    private func legendSwatch(_ label: String, _ color: Color) -> some View {
+        HStack(spacing: 5) {
+            Rectangle().fill(color).frame(width: 7, height: 7)
+            Text(label)
+                .font(Lux.smallcaps(7.5))
+                .tracking(1.5)
+                .foregroundStyle(Lux.cream.opacity(0.45))
         }
-        .frame(height: 170)
-        .padding(.vertical, 4)
     }
 }
 
-/// Calories vs. goal as a labelled progress bar (kept for the headline metric).
-private struct MacroProgressRow: View {
-    let label: String
-    let unit: String
-    let color: Color
-    let value: Double
-    let target: Double
+// MARK: - Meal ledger
+
+/// One diary row: serif name, a smallcaps line of time and macros, and the
+/// day's contribution right-aligned in gold.
+struct LuxMealRow: View {
+    let meal: Meal
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack {
-                Text(label)
-                    .font(.headline)
-                Spacer()
-                Text("\(Int(value.rounded())) / \(Int(target.rounded())) \(unit)")
-                    .font(.subheadline.monospacedDigit())
-                    .foregroundStyle(.secondary)
+        let t = meal.totals
+        let waterOnly = t.calories == 0 && t.waterOunces > 0
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(meal.displayName)
+                    .font(Lux.serif(18, medium: true))
+                    .foregroundStyle(Lux.cream)
+                    .lineLimit(2)
+                Text(subtitle(t, waterOnly: waterOnly))
+                    .font(Lux.smallcaps(8))
+                    .tracking(1.5)
+                    .foregroundStyle(Lux.cream.opacity(0.45))
             }
-            ProgressView(value: target > 0 ? min(value / target, 1) : 0)
-                .tint(color)
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            HStack(alignment: .firstTextBaseline, spacing: 4) {
+                Text("\(Int((waterOnly ? t.waterOunces : t.calories).rounded()))")
+                    .font(Lux.serif(22))
+                    .monospacedDigit()
+                    .foregroundStyle(Lux.gold)
+                Text(waterOnly ? "OZ" : "KCAL")
+                    .font(Lux.smallcaps(7))
+                    .tracking(1.5)
+                    .foregroundStyle(Lux.cream.opacity(0.45))
+            }
         }
-        .padding(.vertical, 4)
+    }
+
+    private func subtitle(_ t: MealTotals, waterOnly: Bool) -> String {
+        let time = meal.timestamp.formatted(.dateTime.hour().minute())
+        guard !waterOnly else { return time }
+        return "\(time) · P \(Int(t.protein.rounded())) · C \(Int(t.carbs.rounded())) · F \(Int(t.fat.rounded()))"
+    }
+}
+
+// MARK: - Gauges
+
+/// A 3pt goal bar: cream track, gold gradient fill.
+struct LuxBar: View {
+    let progress: Double
+    var height: CGFloat = 3
+
+    var body: some View {
+        GeometryReader { geo in
+            ZStack(alignment: .leading) {
+                Capsule().fill(Lux.cream.opacity(0.08))
+                Capsule()
+                    .fill(Lux.goldFillH)
+                    .frame(width: geo.size.width * max(0, min(progress, 1)))
+            }
+        }
+        .frame(height: height)
+        .animation(.easeInOut(duration: 0.3), value: progress)
     }
 }
 
 /// A macro shown as a circular progress ring: consumed in the centre, goal
-/// underneath. Fills toward the daily target and caps at a full ring.
-private struct MacroRing: View {
+/// underneath. Fills toward the daily target and caps at a full ring. The
+/// track is the ring's own colour at low alpha, so each ring reads as one
+/// object rather than a coloured arc on shared grey.
+struct LuxRing: View {
     let label: String
     let unit: String
-    let color: Color
+    let metric: Metric
     let value: Double
     let target: Double
 
     private var progress: Double { target > 0 ? min(value / target, 1) : 0 }
+    private var color: Color { metric.luxRingColor }
 
     var body: some View {
-        VStack(spacing: 6) {
+        VStack(spacing: 7) {
             ZStack {
                 Circle()
-                    .stroke(color.opacity(0.18), lineWidth: 7)
+                    .stroke(color.opacity(0.16), lineWidth: 6)
                 Circle()
                     .trim(from: 0, to: progress)
-                    .stroke(color, style: StrokeStyle(lineWidth: 7, lineCap: .round))
+                    .stroke(color, style: StrokeStyle(lineWidth: 6, lineCap: .round))
                     .rotationEffect(.degrees(-90))
                 Text("\(Int(value.rounded()))")
-                    .font(.callout.monospacedDigit().weight(.semibold))
+                    .font(Lux.serif(20))
+                    .monospacedDigit()
+                    .foregroundStyle(color)
                     .minimumScaleFactor(0.6)
                     .lineLimit(1)
+                    .padding(6)
             }
-            .frame(width: 60, height: 60)
+            .padding(3)
+            .frame(width: 62, height: 62)
             .animation(.easeInOut(duration: 0.3), value: progress)
 
-            VStack(spacing: 1) {
+            VStack(spacing: 2) {
                 Text(label)
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
+                    .font(Lux.smallcaps(7.5))
+                    .tracking(1.8)
+                    .foregroundStyle(Lux.cream.opacity(0.6))
                 Text("/ \(Int(target.rounded())) \(unit)")
-                    .font(.caption2.monospacedDigit())
-                    .foregroundStyle(.tertiary)
+                    .font(Lux.smallcaps(7))
+                    .tracking(1)
+                    .monospacedDigit()
+                    .foregroundStyle(Lux.cream.opacity(0.35))
             }
         }
         .frame(maxWidth: .infinity)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(label): \(Int(value.rounded())) of \(Int(target.rounded())) \(unit)")
+        .accessibilityLabel("\(label.capitalized): \(Int(value.rounded())) of \(Int(target.rounded())) \(unit)")
     }
 }
 

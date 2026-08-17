@@ -16,8 +16,6 @@ struct MicroTallySection: View {
     /// the ForEach itself would attach one per row, which SwiftUI mishandles).
     var onSelect: (MicronutrientField) -> Void
 
-    @Environment(\.appAccent) private var accent
-
     var body: some View {
         ForEach(Micronutrients.fields) { field in
             let value = micros[keyPath: field.keyPath] ?? 0
@@ -28,33 +26,39 @@ struct MicroTallySection: View {
                 row(field: field, value: value, info: info)
             }
             .buttonStyle(.plain)
+            .luxRow(vertical: 10)
         }
     }
 
     private func row(field: MicronutrientField, value: Double, info: MicronutrientInfo?) -> some View {
         let target = info?.dailyValue
         let overLimit = info?.upperLimit.map { value > $0 } ?? false
-        return VStack(alignment: .leading, spacing: 4) {
-            HStack {
+        return VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text(field.label)
-                    .font(.subheadline)
+                    .font(Lux.serif(17))
+                    .foregroundStyle(Lux.cream)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 if overLimit {
                     Image(systemName: "exclamationmark.triangle.fill")
-                        .font(.caption)
-                        .foregroundStyle(.orange)
+                        .font(.system(size: 10))
+                        .foregroundStyle(Lux.ember)
                         .accessibilityLabel("Above the daily upper limit")
                 }
-                Spacer()
                 Text(amountText(value, target: target, unit: field.unit))
-                    .font(.subheadline.monospacedDigit())
-                    .foregroundStyle(.secondary)
+                    .font(Lux.serif(15))
+                    .monospacedDigit()
+                    .foregroundStyle(overLimit ? Lux.ember : Lux.gold)
                 Image(systemName: "info.circle")
-                    .font(.caption)
-                    .foregroundStyle(.tertiary)
+                    .font(.system(size: 11))
+                    .foregroundStyle(Lux.cream.opacity(0.35))
+                    .alignmentGuide(.firstTextBaseline) { $0[.bottom] - 1 }
             }
+            // Only nutrients with a Daily Value get a gauge — trans fat, total
+            // sugars and caffeine have no reference to measure against, so a
+            // bar there would imply a target that doesn't exist.
             if let target, target > 0 {
-                ProgressView(value: min(value / target, 1))
-                    .tint(overLimit ? .orange : accent)
+                LuxBar(progress: min(value / target, 1), height: 2)
             }
         }
         .contentShape(Rectangle())
