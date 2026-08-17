@@ -102,10 +102,11 @@ extension EnvironmentValues {
     }
 }
 
-/// The overall app accent (buttons, active tab, the +/capture controls). The
-/// default is Foob's orange; customizable under Settings → Appearance.
+/// The overall app accent (buttons, the capture controls, the orb). Gold, and
+/// no longer customizable — see Settings → Appearance, where the accent and
+/// per-metric colour pickers were retired so the gold ladder stays intact.
 extension MetricPalette {
-    static let defaultAppAccent = Color(.sRGB, red: 0.961, green: 0.486, blue: 0.0)
+    static let defaultAppAccent = Lux.gold
 }
 
 private struct AppAccentKey: EnvironmentKey {

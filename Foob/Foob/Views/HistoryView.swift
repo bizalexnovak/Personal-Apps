@@ -293,15 +293,17 @@ enum Metric: String, CaseIterable, Identifiable {
         default: return "g"
         }
     }
-    /// Chart-tuned shades of the app's macro colors — deeper than the Home
-    /// rings so thin lines stay visible on a light surface (CVD-validated).
+    /// Series colour: the five-step gold ladder, brightest at the top of the
+    /// stack so calories reads first. Hue no longer separates the series — the
+    /// chart leans on line weight, dash pattern, and mark shape instead, which
+    /// is also what makes it legible to colour-blind readers.
     var color: Color {
         switch self {
-        case .calories: return Color(.sRGB, red: 0.961, green: 0.486, blue: 0.0)   // orange
-        case .protein:  return Color(.sRGB, red: 0.898, green: 0.224, blue: 0.208) // red
-        case .carbs:    return Color(.sRGB, red: 0.118, green: 0.533, blue: 0.898) // blue
-        case .fat:      return Color(.sRGB, red: 0.722, green: 0.576, blue: 0.039) // gold
-        case .water:    return Color(.sRGB, red: 0.0, green: 0.627, blue: 0.690)   // teal
+        case .calories: return Lux.goldBright
+        case .protein:  return Lux.goldMidBright
+        case .carbs:    return Lux.gold
+        case .fat:      return Lux.goldDeep
+        case .water:    return Lux.bronze
         }
     }
 }

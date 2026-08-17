@@ -38,6 +38,17 @@ targets:
         CFBundleDisplayName: Foob
         UILaunchScreen: {}
         ITSAppUsesNonExemptEncryption: false
+        # Bundled display faces (Resources/Fonts, OFL). Entries are bare
+        # filenames because xcodegen adds each file to the Resources phase
+        # individually, which copies them to the bundle root rather than
+        # preserving the folder. Reference them in code by PostScript name
+        # (see Lux.Face), which is not always the filename.
+        UIAppFonts:
+          - CinzelDecorative-Bold.ttf
+          - CormorantGaramond-Regular.ttf
+          - CormorantGaramond-Medium.ttf
+          - CormorantGaramond-Italic.ttf
+          - CormorantGaramond-MediumItalic.ttf
         NSMicrophoneUsageDescription: Foob uses the microphone to hear you describe your meal.
         NSSpeechRecognitionUsageDescription: Foob transcribes your meal description so it can be parsed and logged.
         NSCameraUsageDescription: Foob uses the camera to read nutrition facts labels you photograph.
