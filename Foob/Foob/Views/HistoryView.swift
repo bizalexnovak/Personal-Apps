@@ -14,8 +14,6 @@ struct HistoryView: View {
     @AppStorage(TargetKeys.fat) private var fatTarget = 70.0
     @AppStorage(TargetKeys.water) private var waterTarget = 64.0
 
-    @Environment(\.metricPalette) private var palette
-    @Environment(\.appBackground) private var appBackground
     @State private var range: TrendRange = .week
     @State private var selectedMetrics: Set<Metric> = Set(Metric.allCases)
 
@@ -93,44 +91,77 @@ struct HistoryView: View {
     var body: some View {
         let days = daysInRange
         return NavigationStack {
-            List {
-                Section {
-                    Picker("Range", selection: $range) {
-                        ForEach(TrendRange.allCases) { r in Text(r.title).tag(r) }
-                    }
-                    .pickerStyle(.segmented)
-
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
                     if days.isEmpty {
-                        ContentUnavailableView(
-                            "No data in this range",
-                            systemImage: "chart.xyaxis.line",
-                            description: Text("Log some meals and your trends will show here.")
-                        )
+                        LuxNote("Log some meals and your trends will show here.", size: 15)
+                            .padding(.top, 40)
+                    } else if visibleMetrics.isEmpty {
+                        LuxNote("Every nutrient is hidden — tap one below to show it.", size: 15)
+                            .padding(.top, 40)
                     } else {
-                        if visibleMetrics.isEmpty {
-                            ContentUnavailableView(
-                                "No nutrients selected",
-                                systemImage: "chart.xyaxis.line",
-                                description: Text("Tap a nutrient below to show it.")
-                            )
-                            .frame(height: 240)
-                        } else {
-                            trendChart(points: chartPoints(from: days))
-                        }
-                        metricSelector(days: days)
+                        trendChart(points: chartPoints(from: days))
+                            .padding(.top, 18)
                     }
-                } footer: {
+
                     if !days.isEmpty {
-                        Text("Each line is that nutrient as a percent of your daily goal (dashed line = 100%). Tap a nutrient to show or hide it; the number is its average per day. Tap a day on the Today tab to see and edit its meals.")
+                        LuxSectionHeader(text: "AVERAGE PER DAY")
+                            .padding(.top, 24)
+                            .padding(.bottom, 2)
+
+                        ForEach(Metric.allCases) { metric in
+                            metricRow(metric, days: days)
+                        }
+
+                        LuxNote("Each line is that nutrient as a percent of your daily goal. Tap a row to show or hide it.")
+                            .padding(.top, 14)
                     }
                 }
+                .padding(.horizontal, Lux.hPad)
+                .padding(.bottom, OrbNavBar.orbOnlyClearance)
             }
-            .listSectionSpacing(.compact)
-            .contentMargins(.top, 6, for: .scrollContent)
-            .appBackground(appBackground)
-            .navigationTitle("Trends")
-            .navigationBarTitleDisplayMode(.inline)
+            .safeAreaInset(edge: .top, spacing: 0) {
+                header(days: days)
+            }
+            .luxScreen()
+            .toolbar(.hidden, for: .navigationBar)
         }
+    }
+
+    // MARK: Header
+
+    private func header(days: [DayTotals]) -> some View {
+        VStack(spacing: 0) {
+            LuxHeader(
+                title: "TRENDS",
+                subtitle: "How the days add up."
+            ) {
+                Text(sinceLabel(days: days))
+                    .font(Lux.smallcaps(10))
+                    .tracking(3)
+                    .foregroundStyle(Lux.goldLabel)
+            } trailing: {
+                Image(systemName: "calendar")
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundStyle(Lux.cream)
+            }
+
+            LuxSwitcher(
+                options: TrendRange.allCases.map { ($0, $0.title.uppercased()) },
+                selection: $range,
+                spacing: 14
+            )
+            .padding(.top, 12)
+            .padding(.bottom, 10)
+        }
+        .background(Lux.ground)
+    }
+
+    /// "SINCE 19 JULY" — the first day with data in the current range, which
+    /// says more than repeating the range name already shown in the picker.
+    private func sinceLabel(days: [DayTotals]) -> String {
+        guard let first = days.first?.date else { return "NO DATA" }
+        return "SINCE \(first.formatted(.dateTime.day().month(.wide)))".uppercased()
     }
 
     // MARK: Chart
@@ -138,88 +169,112 @@ struct HistoryView: View {
     private func trendChart(points: [MetricPoint]) -> some View {
         Chart {
             RuleMark(y: .value("Goal", 100))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Lux.cream.opacity(0.5))
                 .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 3]))
                 .annotation(position: .top, alignment: .leading) {
-                    Text("goal").font(.caption2).foregroundStyle(.secondary)
+                    Text("GOAL")
+                        .font(Lux.smallcaps(7))
+                        .tracking(1.5)
+                        .foregroundStyle(Lux.cream.opacity(0.45))
                 }
             ForEach(points) { point in
                 LineMark(
                     x: .value("Day", point.date, unit: .day),
                     y: .value("% of goal", point.percent)
                 )
-                .foregroundStyle(by: .value("Nutrient", point.metric.title))
-                .symbol(by: .value("Nutrient", point.metric.title))
+                .foregroundStyle(point.metric.color)
+                .lineStyle(point.metric.lineStyle)
+                .symbol(point.metric.symbol)
+                .symbolSize(point.metric == .calories ? 36 : 24)
                 .interpolationMethod(.catmullRom)
             }
         }
-        .chartForegroundStyleScale(domain: visibleMetrics.map(\.title), range: visibleMetrics.map { palette.color(for: $0) })
+        // The series share one hue family, so weight, dash and mark shape do
+        // the separating that colour used to. That also makes the chart
+        // readable without colour vision, which the old palette was not.
         .chartYAxis {
             AxisMarks { value in
-                AxisGridLine()
+                AxisGridLine().foregroundStyle(Lux.cream.opacity(0.1))
                 AxisValueLabel {
-                    if let v = value.as(Double.self) { Text("\(Int(v))%") }
+                    if let v = value.as(Double.self) {
+                        Text("\(Int(v))%")
+                            .font(Lux.smallcaps(9))
+                            .foregroundStyle(Lux.cream.opacity(0.45))
+                    }
                 }
             }
         }
-        .chartLegend(.hidden)   // the tappable selector below is the legend
+        .chartXAxis {
+            AxisMarks { _ in
+                AxisGridLine().foregroundStyle(Lux.cream.opacity(0.1))
+                AxisValueLabel()
+                    .font(Lux.smallcaps(9))
+                    .foregroundStyle(Lux.cream.opacity(0.45))
+            }
+        }
+        .chartLegend(.hidden)   // the tappable ledger below is the legend
         .frame(height: 240)
-        .padding(.vertical, 4)
+        .luxPanel()
     }
 
-    // MARK: Metric selector (also the legend + averages)
+    // MARK: Average ledger (also the legend + series toggles)
 
-    private func metricSelector(days: [DayTotals]) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Average per day · \(range.averageCaption) · \(days.count) logged day\(days.count == 1 ? "" : "s")")
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-            LazyVGrid(
-                columns: [GridItem(.adaptive(minimum: 108), spacing: 8)],
-                alignment: .leading,
-                spacing: 8
-            ) {
-                ForEach(Metric.allCases) { metric in
-                    metricChip(metric, days: days)
-                }
-            }
-        }
-        .padding(.vertical, 4)
-    }
-
-    private func metricChip(_ metric: Metric, days: [DayTotals]) -> some View {
+    private func metricRow(_ metric: Metric, days: [DayTotals]) -> some View {
         let on = selectedMetrics.contains(metric)
-        let color = palette.color(for: metric)
         return Button {
             if on { selectedMetrics.remove(metric) } else { selectedMetrics.insert(metric) }
         } label: {
-            HStack(spacing: 6) {
+            HStack(spacing: 10) {
                 Circle()
-                    .fill(color)
-                    .frame(width: 9, height: 9)
-                    .opacity(on ? 1 : 0.35)
-                VStack(alignment: .leading, spacing: 0) {
-                    Text(metric.title)
-                        .font(.caption2)
-                        .foregroundStyle(on ? .primary : .secondary)
-                    Text("\(Int(average(metric, over: days).rounded())) \(metric.unit)")
-                        .font(.caption.monospacedDigit().weight(.medium))
-                        .foregroundStyle(on ? .primary : .secondary)
-                }
-                Spacer(minLength: 0)
+                    .fill(metric.color)
+                    .frame(width: 8, height: 8)
+                    .opacity(on ? 1 : 0.3)
+                Text(metric.title.uppercased())
+                    .font(Lux.smallcaps(9))
+                    .tracking(2)
+                    .foregroundStyle(on ? Lux.cream.opacity(0.7) : Lux.cream.opacity(0.3))
+                Spacer()
+                Text("\(Int(average(metric, over: days).rounded()))")
+                    .font(Lux.serif(20))
+                    .monospacedDigit()
+                    .foregroundStyle(on ? Lux.gold : Lux.cream.opacity(0.3))
+                Text(metric.unit.uppercased())
+                    .font(Lux.smallcaps(7))
+                    .tracking(1.5)
+                    .foregroundStyle(Lux.cream.opacity(on ? 0.45 : 0.25))
             }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 5)
-            .background(
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(on ? color.opacity(0.12) : Color.clear)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 8)
-                    .strokeBorder(on ? color.opacity(0.4) : Color.secondary.opacity(0.25), lineWidth: 1)
-            )
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .luxRow(vertical: 11)
+        .accessibilityAddTraits(on ? [.isButton, .isSelected] : .isButton)
+    }
+}
+
+// MARK: - Series styling
+
+extension Metric {
+    /// Weight and dash carry series identity now that every line is gold.
+    /// Calories is heaviest and solid because it is the headline; the dashed
+    /// pairs sit next to each other on the ladder and need the extra help.
+    var lineStyle: StrokeStyle {
+        switch self {
+        case .calories: return StrokeStyle(lineWidth: 2.2)
+        case .protein:  return StrokeStyle(lineWidth: 1.4)
+        case .carbs:    return StrokeStyle(lineWidth: 1.4, dash: [5, 3])
+        case .fat:      return StrokeStyle(lineWidth: 1.4, dash: [2, 2.5])
+        case .water:    return StrokeStyle(lineWidth: 1.2)
+        }
+    }
+
+    var symbol: BasicChartSymbolShape {
+        switch self {
+        case .calories: return .circle
+        case .protein:  return .square
+        case .carbs:    return .diamond
+        case .fat:      return .triangle
+        case .water:    return .plus
+        }
     }
 }
 

@@ -8,7 +8,6 @@ struct RecipesView: View {
     @Query(sort: \Recipe.name) private var recipes: [Recipe]
     @Query(sort: \Meal.timestamp, order: .reverse) private var meals: [Meal]
     @Environment(\.modelContext) private var modelContext
-    @Environment(\.appBackground) private var appBackground
 
     @AppStorage(TargetKeys.calories) private var calorieTarget = 2000.0
     @AppStorage(TargetKeys.protein) private var proteinTarget = 150.0
@@ -24,57 +23,98 @@ struct RecipesView: View {
     /// window and macro gaps stay current without churning on every render.
     @State private var recommendations: [RecipeRecommendation] = []
 
+    /// Recipe tapped → its detail. Routed by ID rather than by NavigationLink
+    /// so the rows don't inherit a system disclosure chevron.
+    @State private var openRecipeID: PersistentIdentifier?
+
     var body: some View {
         NavigationStack {
             List {
-                if !recommendations.isEmpty {
-                    Section {
+                Group {
+                    if !recommendations.isEmpty {
+                        LuxSectionHeader(text: "RECOMMENDED FOR NOW")
+                            .padding(.top, 16)
+                            .padding(.bottom, 2)
+
                         ForEach(recommendations) { rec in
                             recommendationRow(rec)
                         }
-                    } header: {
-                        Text("Recommended for now")
-                    } footer: {
-                        Text("Ranked by time of day, how far you are from today\u{2019}s macro goals, and what you log most.")
+
+                        LuxNote("Ranked by time of day, how far you are from today\u{2019}s macro goals, and what you log most.")
+                            .padding(.top, 12)
                     }
+                }
+                .luxRowChrome()
+
+                if recipes.isEmpty {
+                    LuxNote("No recipes yet. Create one with +, search the web with the magnifying glass, or open a meal on Today and tap \u{201C}Save as recipe\u{201D}.", size: 15)
+                        .padding(.top, 40)
+                        .luxRowChrome()
+                } else {
+                    LuxSectionHeader(text: "ALL RECIPES")
+                        .padding(.top, 24)
+                        .padding(.bottom, 2)
+                        .luxRowChrome()
+
+                    ForEach(recipes) { recipe in
+                        Button {
+                            openRecipeID = recipe.persistentModelID
+                        } label: {
+                            HStack(spacing: 12) {
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text(recipe.name)
+                                        .font(Lux.serif(18))
+                                        .foregroundStyle(Lux.cream)
+                                    Text(recipeSubtitle(recipe))
+                                        .font(Lux.smallcaps(8))
+                                        .tracking(1.5)
+                                        .foregroundStyle(Lux.cream.opacity(0.45))
+                                }
+                                Spacer()
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 11, weight: .medium))
+                                    .foregroundStyle(Lux.goldLabel)
+                            }
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .luxRow(vertical: 12)
+                        .luxRowChrome()
+                    }
+                    .onDelete(perform: deleteRecipes)
                 }
 
-                Section {
-                    if recipes.isEmpty {
-                        ContentUnavailableView(
-                            "No recipes yet",
-                            systemImage: "book",
-                            description: Text("Create one with the + button, search the web with the magnifying glass, or open a meal on the Today tab and tap \u{201C}Save as recipe\u{201D}.")
-                        )
-                    } else {
-                        ForEach(recipes) { recipe in
-                            NavigationLink {
-                                RecipeDetailView(recipe: recipe)
-                            } label: {
-                                recipeRow(recipe)
-                            }
-                        }
-                        .onDelete(perform: deleteRecipes)
-                    }
-                } header: {
-                    if !recipes.isEmpty { Text("All recipes") }
-                }
+                Color.clear
+                    .frame(height: OrbNavBar.orbOnlyClearance)
+                    .luxRowChrome()
             }
-            .appBackground(appBackground)
-            .navigationTitle("Recipes")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
+            .luxList()
+            .safeAreaInset(edge: .top, spacing: 0) {
+                LuxHeader(
+                    title: "RECIPES",
+                    subtitle: subtitle
+                ) {
                     Button { showSearch = true } label: {
                         Image(systemName: "magnifyingglass")
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundStyle(Lux.cream)
                     }
                     .accessibilityLabel("Search recipes online")
-                }
-                ToolbarItem(placement: .topBarTrailing) {
+                } trailing: {
                     Button { newName = ""; showNamePrompt = true } label: {
                         Image(systemName: "plus")
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundStyle(Lux.cream)
                     }
                     .accessibilityLabel("New recipe")
+                }
+                .padding(.bottom, 8)
+                .background(Lux.ground)
+            }
+            .toolbar(.hidden, for: .navigationBar)
+            .navigationDestination(item: $openRecipeID) { id in
+                if let recipe = recipes.first(where: { $0.persistentModelID == id }) {
+                    RecipeDetailView(recipe: recipe)
                 }
             }
             .sheet(isPresented: $showSearch) {
@@ -93,6 +133,21 @@ struct RecipesView: View {
         // Re-rank when a meal is logged (macro gaps shift) or recipes change.
         .onChange(of: meals) { _, _ in refreshRecommendations() }
         .onChange(of: recipes) { _, _ in refreshRecommendations() }
+    }
+
+    /// "Seven on file, ranked for this morning." — the count, and what the
+    /// ranking is currently keyed to.
+    private var subtitle: String {
+        let count = recipes.count
+        guard count > 0 else { return "Nothing on file yet." }
+        let hour = Calendar.current.component(.hour, from: .now)
+        let slot = hour < 11 ? "this morning" : (hour < 16 ? "this afternoon" : "this evening")
+        return "\(count) on file, ranked for \(slot)."
+    }
+
+    private func recipeSubtitle(_ recipe: Recipe) -> String {
+        let n = recipe.ingredients.count
+        return "\(n) INGREDIENT\(n == 1 ? "" : "S") · \(Int(recipe.totalCalories.rounded())) KCAL"
     }
 
     private func refreshRecommendations() {
@@ -115,42 +170,43 @@ struct RecipesView: View {
     }
 
     private func recommendationRow(_ rec: RecipeRecommendation) -> some View {
-        HStack(spacing: 12) {
-            NavigationLink {
-                RecipeDetailView(recipe: rec.recipe)
+        let logged = justLoggedID == rec.recipe.id
+        return HStack(spacing: 12) {
+            Button {
+                openRecipeID = rec.recipe.persistentModelID
             } label: {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(rec.recipe.name)
-                    Text(rec.reason)
-                        .font(.caption2.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 3)
-                        .background(Capsule().fill(.quaternary.opacity(0.6)))
-                    Text("\(Int(rec.recipe.totalCalories.rounded())) kcal · P \(Int(rec.recipe.totalProtein.rounded()))g · C \(Int(rec.recipe.totalCarbs.rounded()))g · F \(Int(rec.recipe.totalFat.rounded()))g")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .font(Lux.serif(19, medium: true))
+                        .foregroundStyle(Lux.cream)
+                    Text(rec.reason.uppercased())
+                        .font(Lux.smallcaps(8))
+                        .tracking(2)
+                        .foregroundStyle(Lux.goldLabel)
+                    Text("\(Int(rec.recipe.totalCalories.rounded())) KCAL · P \(Int(rec.recipe.totalProtein.rounded())) · C \(Int(rec.recipe.totalCarbs.rounded())) · F \(Int(rec.recipe.totalFat.rounded()))")
+                        .font(Lux.smallcaps(8))
+                        .tracking(1.5)
+                        .foregroundStyle(Lux.cream.opacity(0.45))
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
+            .buttonStyle(.plain)
+
+            // The gold coin is the whole point of this section: one tap logs
+            // the recipe without opening it.
             Button {
                 quickLog(rec.recipe)
             } label: {
-                Image(systemName: justLoggedID == rec.recipe.id ? "checkmark.circle.fill" : "plus.circle.fill")
-                    .font(.title2)
-                    .foregroundStyle(justLoggedID == rec.recipe.id ? Color.green : Color.accentColor)
+                Image(systemName: logged ? "checkmark" : "plus")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(Lux.ground)
+                    .frame(width: 32, height: 32)
+                    .background(Circle().fill(Lux.goldFill))
             }
-            .buttonStyle(.borderless)
+            .buttonStyle(.plain)
             .accessibilityLabel("Log \(rec.recipe.name) now")
         }
-    }
-
-    private func recipeRow(_ recipe: Recipe) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(recipe.name)
-            Text("\(recipe.ingredients.count) ingredient\(recipe.ingredients.count == 1 ? "" : "s") · \(Int(recipe.totalCalories.rounded())) kcal")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        }
+        .luxRow(vertical: 12)
     }
 
     /// Log a recommended recipe straight to today and record the preference so
@@ -188,7 +244,6 @@ struct RecipesView: View {
 struct RecipeDetailView: View {
     @Bindable var recipe: Recipe
     @Environment(\.modelContext) private var modelContext
-    @Environment(\.appBackground) private var appBackground
 
     @State private var showIngredientEditor = false
     @State private var justLogged = false
@@ -280,7 +335,7 @@ struct RecipeDetailView: View {
             }
         }
         .keyboardDismissBar()
-        .appBackground(appBackground)
+        .luxSheetChrome()
         .navigationTitle(recipe.name.isEmpty ? "Recipe" : recipe.name)
         .navigationBarTitleDisplayMode(.inline)
         .sheet(isPresented: $showIngredientEditor) {
