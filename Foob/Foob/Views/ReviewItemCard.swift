@@ -2,7 +2,7 @@ import SwiftUI
 
 /// One reviewable food item: matched name, macros, and Confirm / Edit / Search
 /// actions. Low-confidence items auto-open in Edit, unmatched ones in Search.
-/// Rendered inline inside CaptureView after capture + matching complete.
+/// Rendered inline inside the review after capture + matching complete.
 struct ReviewItemCard: View {
     let item: MealCaptureCoordinator.ReviewItem
     @ObservedObject var coordinator: MealCaptureCoordinator
@@ -30,7 +30,7 @@ struct ReviewItemCard: View {
     @State private var searched = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 12) {
             header
 
             if let question = item.clarificationQuestion, !item.options.isEmpty, item.status == .needsReview {
@@ -57,11 +57,12 @@ struct ReviewItemCard: View {
             case .search: searchPane
             }
         }
-        .padding(12)
-        .background(RoundedRectangle(cornerRadius: 14).fill(.quaternary.opacity(0.5)))
+        .padding(13)
+        .background(Lux.panel)
+        .clipShape(RoundedRectangle(cornerRadius: Lux.panelRadius))
         .overlay(
-            RoundedRectangle(cornerRadius: 14)
-                .strokeBorder(borderColor, lineWidth: 1.5)
+            RoundedRectangle(cornerRadius: Lux.panelRadius)
+                .stroke(borderColor, lineWidth: needsAttention ? 1.5 : 1)
         )
         .onAppear(perform: autoOpenIfNeeded)
         .sheet(isPresented: $showMicroEditor) {
@@ -69,75 +70,101 @@ struct ReviewItemCard: View {
                 initial: item.match?.micros ?? .empty,
                 contextLine: "Per \(item.request.quantity.formatted()) \(item.request.unit) of \(item.request.name)"
             ) { coordinator.applyMicrosEdit(item.id, micros: $0) }
+            .luxSheetChrome()
         }
     }
 
+    /// An item the parser or the match isn't sure about. The whole card takes
+    /// the ember treatment rather than just its seal, so it reads as one thing
+    /// wanting attention.
+    private var needsAttention: Bool {
+        item.match == nil
+            || item.match?.confidence == MatchConfidence.low
+            || (item.status == .needsReview && item.needsAttention)
+    }
+
     private var borderColor: Color {
-        switch item.status {
-        case .confirmed: return .green.opacity(0.6)
-        case .edited: return .blue.opacity(0.6)
-        case .needsReview: return item.needsAttention ? .yellow.opacity(0.8) : .clear
-        }
+        needsAttention ? Lux.ember.opacity(0.6) : Lux.panelBorder
     }
 
     // MARK: Header
 
     private var header: some View {
-        HStack(alignment: .top, spacing: 8) {
-            statusIcon
-            VStack(alignment: .leading, spacing: 2) {
+        HStack(alignment: .top, spacing: 10) {
+            statusSeal
+            VStack(alignment: .leading, spacing: 3) {
                 // Prominent title = the cleanly parsed name the user said, so a
                 // wrong USDA match is obvious (parsed vs. matched visibly differ).
                 Text(item.request.name)
-                    .font(.subheadline.weight(.semibold))
-                if let matched = item.match?.matchedDescription {
-                    Text("Matched to: \(matched)")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                } else {
-                    Text("No match found")
-                        .font(.caption)
-                        .foregroundStyle(.orange)
-                }
-                Text("\(item.request.quantity.formatted()) \(item.request.unit)")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
+                    .font(Lux.serif(21, medium: true))
+                    .foregroundStyle(Lux.cream)
+                Text(matchLine)
+                    .font(Lux.serifItalic(13))
+                    .foregroundStyle(item.match == nil ? Lux.ember : Lux.cream.opacity(0.5))
             }
-            Spacer()
+            Spacer(minLength: 8)
             Button {
                 coordinator.removeItem(item.id)
             } label: {
                 Image(systemName: "trash")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .font(.system(size: 13))
+                    .foregroundStyle(Lux.cream.opacity(0.4))
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Remove item")
         }
     }
 
-    private var statusIcon: some View {
+    /// "Matched to Bar, granola — 1 bar." — what it was matched against and
+    /// how much of it, in one line.
+    private var matchLine: String {
+        let portion = "\(item.request.quantity.formatted()) \(item.request.unit)"
+        guard let matched = item.match?.matchedDescription else {
+            return "No match found — \(portion)."
+        }
+        return "Matched to \(matched) — \(portion)."
+    }
+
+    private var statusSeal: some View {
         Group {
             switch item.status {
             case .confirmed:
-                Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
+                Circle()
+                    .fill(Lux.goldFill)
+                    .overlay(
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(Lux.ground))
             case .edited:
-                Image(systemName: "pencil.circle.fill").foregroundStyle(.blue)
+                Circle()
+                    .fill(Lux.goldFill)
+                    .overlay(
+                        Image(systemName: "pencil")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(Lux.ground))
             case .needsReview:
-                Image(systemName: item.needsAttention ? "exclamationmark.circle.fill" : "circle")
-                    .foregroundStyle(item.needsAttention ? .yellow : .secondary)
+                if needsAttention {
+                    Circle()
+                        .stroke(Lux.ember, lineWidth: 1.5)
+                        .overlay(
+                            Image(systemName: "exclamationmark")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundStyle(Lux.ember))
+                } else {
+                    Circle().stroke(Lux.controlBorder, lineWidth: 1)
+                }
             }
         }
-        .font(.title3)
+        .frame(width: 26, height: 26)
     }
 
     // MARK: Option chips (clarification interpretations)
 
     private func optionChips(question: String) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 8) {
             Text(question)
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                .font(Lux.serifItalic(14))
+                .foregroundStyle(Lux.cream.opacity(0.55))
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
                     ForEach(item.options) { option in
@@ -145,10 +172,11 @@ struct ReviewItemCard: View {
                             Task { await coordinator.chooseOption(item.id, option: option) }
                         } label: {
                             Text(option.label)
-                                .font(.caption)
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 6)
-                                .background(Capsule().fill(.orange.opacity(0.15)))
+                                .font(Lux.serif(15))
+                                .foregroundStyle(Lux.cream)
+                                .padding(.horizontal, 14)
+                                .padding(.vertical, 7)
+                                .background(Capsule().stroke(Lux.ember.opacity(0.7), lineWidth: 1))
                         }
                         .buttonStyle(.plain)
                     }
@@ -166,36 +194,51 @@ struct ReviewItemCard: View {
         if isWater {
             // Water is tracked in ounces, not macros.
             let oz = WaterConversion.ounces(quantity: item.request.quantity, unit: item.request.unit)
-            HStack(spacing: 6) {
-                Image(systemName: "drop.fill").foregroundStyle(.cyan)
-                Text("\(Int(oz.rounded())) oz water")
-                    .font(.subheadline.weight(.medium))
+            HStack(alignment: .firstTextBaseline, spacing: 5) {
+                Text("\(Int(oz.rounded()))")
+                    .font(Lux.serif(22))
+                    .monospacedDigit()
+                    .foregroundStyle(Lux.gold)
+                Text("OZ WATER")
+                    .font(Lux.smallcaps(7))
+                    .tracking(1.5)
+                    .foregroundStyle(Lux.cream.opacity(0.45))
                 Spacer()
             }
         } else {
-            HStack(spacing: 16) {
-                macroValue("kcal", item.match?.calories)
-                macroValue("P", item.match?.protein)
-                macroValue("C", item.match?.carbs)
-                macroValue("F", item.match?.fat)
-                Spacer()
+            HStack(alignment: .top, spacing: 0) {
+                macroValue("KCAL", item.match?.calories)
+                macroValue("PROTEIN", item.match?.protein)
+                macroValue("CARBS", item.match?.carbs)
+                macroValue("FAT", item.match?.fat)
                 if item.match?.confidence == MatchConfidence.low {
-                    Label("Check", systemImage: "exclamationmark.triangle.fill")
-                        .font(.caption2)
-                        .foregroundStyle(.yellow)
+                    VStack(spacing: 3) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .font(.system(size: 11))
+                            .foregroundStyle(Lux.ember)
+                        Text("CHECK")
+                            .font(Lux.smallcaps(7))
+                            .tracking(1.5)
+                            .foregroundStyle(Lux.ember)
+                    }
+                    .frame(maxWidth: .infinity)
                 }
             }
         }
     }
 
     private func macroValue(_ label: String, _ value: Double?) -> some View {
-        VStack(spacing: 0) {
+        VStack(spacing: 3) {
             Text(value.map { "\(Int($0.rounded()))" } ?? "—")
-                .font(.subheadline.monospacedDigit().weight(.medium))
+                .font(Lux.serif(22))
+                .monospacedDigit()
+                .foregroundStyle(Lux.gold)
             Text(label)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
+                .font(Lux.smallcaps(7))
+                .tracking(1.5)
+                .foregroundStyle(Lux.cream.opacity(0.45))
         }
+        .frame(maxWidth: .infinity)
     }
 
     // MARK: Scale
@@ -215,133 +258,150 @@ struct ReviewItemCard: View {
                 coordinator.confirm(item.id)
                 pane = .none
             } label: {
-                Label("Confirm", systemImage: "checkmark")
-                    .frame(maxWidth: .infinity)
+                Text("CONFIRM").frame(maxWidth: .infinity)
             }
-            .buttonStyle(.bordered)
-            .tint(.green)
+            .buttonStyle(GhostCapsule(gold: true, height: 36))
             .disabled(item.match == nil || item.status == .confirmed)
+            .opacity(item.match == nil || item.status == .confirmed ? 0.4 : 1)
 
             Button {
                 syncEditFields()
                 pane = pane == .edit ? .none : .edit
             } label: {
-                Label("Edit", systemImage: "pencil")
-                    .frame(maxWidth: .infinity)
+                Text("EDIT").frame(maxWidth: .infinity)
             }
-            .buttonStyle(.bordered)
+            .buttonStyle(GhostCapsule(height: 36))
 
             if !isWater {
                 Button {
                     pane = pane == .search ? .none : .search
                 } label: {
-                    Label("Search", systemImage: "magnifyingglass")
-                        .frame(maxWidth: .infinity)
+                    Text("SEARCH").frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(GhostCapsule(height: 36))
             }
         }
-        .font(.caption)
-        .controlSize(.small)
     }
 
     // MARK: Edit pane
 
     @ViewBuilder
     private var editPane: some View {
-        if isWater {
-            VStack(spacing: 8) {
-                editField("Water (oz)", value: $waterOz)
-                Button("Apply") {
+        VStack(spacing: 0) {
+            if isWater {
+                editRow("WATER (OZ)", value: $waterOz)
+                applyButton {
                     coordinator.applyWaterEdit(item.id, ounces: waterOz)
-                    pane = .none
                 }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.small)
-            }
-            .padding(.top, 4)
-        } else {
-            VStack(spacing: 8) {
+            } else {
                 HStack {
-                    Text("Name").font(.caption).foregroundStyle(.secondary)
-                    TextField("Name", text: $editedName)
-                        .textFieldStyle(.roundedBorder)
+                    LuxFieldLabel(text: "NAME")
+                    Spacer()
+                    TextField("", text: $editedName)
+                        .font(Lux.serif(17))
+                        .foregroundStyle(Lux.cream)
+                        .tint(Lux.gold)
+                        .multilineTextAlignment(.trailing)
                 }
-                editField("Calories (kcal)", value: $calories)
-                editField("Protein (g)", value: $protein)
-                editField("Carbs (g)", value: $carbs)
-                editField("Fat (g)", value: $fat)
-                Button("Apply") {
+                .luxRow(vertical: 9)
+
+                editRow("CALORIES", value: $calories)
+                editRow("PROTEIN (G)", value: $protein)
+                editRow("CARBS (G)", value: $carbs)
+                editRow("FAT (G)", value: $fat)
+                applyButton {
                     coordinator.rename(item.id, to: editedName)
                     coordinator.applyEdit(item.id, calories: calories, protein: protein, carbs: carbs, fat: fat)
-                    pane = .none
                 }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.small)
             }
-            .padding(.top, 4)
         }
+        .padding(.top, 2)
     }
 
-    private func editField(_ label: String, value: Binding<Double>) -> some View {
+    private func editRow(_ label: String, value: Binding<Double>) -> some View {
         HStack {
-            Text(label)
-                .font(.caption)
+            LuxFieldLabel(text: label)
             Spacer()
-            TextField(label, value: value, format: .number)
+            TextField("", value: value, format: .number)
                 .keyboardType(.decimalPad)
+                .font(Lux.serif(17))
+                .monospacedDigit()
+                .foregroundStyle(Lux.cream)
+                .tint(Lux.gold)
                 .multilineTextAlignment(.trailing)
-                .textFieldStyle(.roundedBorder)
-                .frame(maxWidth: 100)
+                .frame(maxWidth: 110)
         }
+        .luxRow(vertical: 9)
+    }
+
+    private func applyButton(_ action: @escaping () -> Void) -> some View {
+        HStack {
+            Spacer()
+            Button("APPLY") {
+                action()
+                pane = .none
+            }
+            .buttonStyle(GoldCapsule(height: 38))
+            .frame(maxWidth: 130)
+        }
+        .padding(.top, 12)
     }
 
     // MARK: Search pane
 
     private var searchPane: some View {
-        VStack(spacing: 8) {
-            HStack {
-                TextField("Search USDA foods…", text: $query)
-                    .textFieldStyle(.roundedBorder)
-                    .autocorrectionDisabled()
-                    .onSubmit { Task { await runSearch() } }
-                Button("Go") {
-                    Task { await runSearch() }
-                }
-                .disabled(query.trimmingCharacters(in: .whitespaces).isEmpty || isSearching)
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 10) {
+                LuxUnderlinedField(
+                    placeholder: "Search USDA foods…",
+                    text: $query,
+                    size: 17,
+                    autocapitalization: .sentences
+                )
+                .onSubmit { Task { await runSearch() } }
+
+                Button("GO") { Task { await runSearch() } }
+                    .buttonStyle(GhostCapsule(gold: true, height: 34))
+                    .disabled(query.trimmingCharacters(in: .whitespaces).isEmpty || isSearching)
             }
 
             if isSearching {
-                ProgressView()
+                LuxNote("Searching…")
             } else if results.isEmpty, searched {
-                Text("Nothing found — try fewer words, or use Edit to enter macros.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                LuxNote("Nothing found — try fewer words, or use Edit to enter macros.")
             } else {
-                LazyVStack(alignment: .leading, spacing: 6) {
+                LazyVStack(alignment: .leading, spacing: 0) {
                     ForEach(results.prefix(6)) { food in
                         Button {
                             coordinator.applyPickedFood(item.id, food: food)
                             pane = .none
                         } label: {
-                            VStack(alignment: .leading, spacing: 1) {
+                            VStack(alignment: .leading, spacing: 2) {
                                 Text(food.description)
-                                    .font(.caption)
+                                    .font(Lux.serif(16))
+                                    .foregroundStyle(Lux.cream)
                                     .multilineTextAlignment(.leading)
-                                Text("\(food.dataType ?? "") · \(Int(food.macrosPer100g.calories.rounded())) kcal / 100 g\(food.brandOwner.map { " · \($0)" } ?? "")")
-                                    .font(.caption2)
-                                    .foregroundStyle(.secondary)
+                                Text(resultSubtitle(food))
+                                    .font(Lux.smallcaps(8))
+                                    .tracking(1.5)
+                                    .foregroundStyle(Lux.cream.opacity(0.45))
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(6)
-                            .background(RoundedRectangle(cornerRadius: 8).fill(.quaternary.opacity(0.5)))
                         }
                         .buttonStyle(.plain)
+                        .luxRow(vertical: 9)
                     }
                 }
             }
         }
         .padding(.top, 4)
+    }
+
+    private func resultSubtitle(_ food: USDAFood) -> String {
+        let kind = (food.dataType ?? "").uppercased()
+        let kcal = "\(Int(food.macrosPer100g.calories.rounded())) KCAL / 100 G"
+        let brand = food.brandOwner.map { " · \($0.uppercased())" } ?? ""
+        return kind.isEmpty ? "\(kcal)\(brand)" : "\(kind) · \(kcal)\(brand)"
     }
 
     private func runSearch() async {

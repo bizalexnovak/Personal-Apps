@@ -18,71 +18,88 @@ struct EditMealView: View {
     @State private var justDuplicated = false
     @State private var justSavedRecipe = false
 
+    @Environment(\.dismiss) private var dismiss
+
     var body: some View {
         List {
-            Section {
-                // Capped at now: the Today diary can't navigate into the
-                // future, so a future-dated meal would become unreachable.
-                DatePicker(
-                    "Logged",
-                    selection: $meal.timestamp,
-                    in: ...Date(),
-                    displayedComponents: [.date, .hourAndMinute]
-                )
-            } header: {
-                Text("Date & time")
-            }
+            Group {
+                LuxValueRow(label: "LOGGED") {
+                    // Capped at now: the Today diary can't navigate into the
+                    // future, so a future-dated meal would become unreachable.
+                    DatePicker(
+                        "",
+                        selection: $meal.timestamp,
+                        in: ...Date(),
+                        displayedComponents: [.date, .hourAndMinute]
+                    )
+                    .labelsHidden()
+                    .tint(Lux.gold)
+                }
 
-            Section {
-                Text(meal.rawText)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-            } header: {
-                Text("Original description")
+                if !meal.rawText.isEmpty {
+                    Text("You said — \u{201C}\(meal.rawText)\u{201D}")
+                        .font(Lux.serifItalic(15))
+                        .foregroundStyle(Lux.cream.opacity(0.55))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.top, 14)
+                }
             }
+            .luxRowChrome()
 
             ForEach(meal.items) { item in
                 FoodItemEditor(item: item) { kind in
                     sheet = EditorSheet(item: item, kind: kind)
                 }
+                .luxRowChrome()
             }
 
-            Section {
-                Button {
-                    duplicateToToday()
-                } label: {
-                    Label(
-                        justDuplicated ? "Added to today" : "Log this meal again today",
-                        systemImage: justDuplicated ? "checkmark.circle.fill" : "plus.square.on.square"
-                    )
+            Group {
+                LuxSectionHeader(text: "DO IT AGAIN")
+                    .padding(.top, 24)
+                    .padding(.bottom, 2)
+
+                Button { duplicateToToday() } label: {
+                    LuxNavRow(title: justDuplicated ? "Added to today" : "Log this meal again today")
                 }
+                .buttonStyle(.plain)
                 .disabled(justDuplicated)
 
-                Button {
-                    saveAsRecipe()
-                } label: {
-                    Label(
-                        justSavedRecipe ? "Saved to Recipes" : "Save as recipe",
-                        systemImage: justSavedRecipe ? "checkmark.circle.fill" : "book.closed"
-                    )
+                Button { saveAsRecipe() } label: {
+                    LuxNavRow(title: justSavedRecipe ? "Saved to Recipes" : "Save as recipe")
                 }
+                .buttonStyle(.plain)
                 .disabled(justSavedRecipe)
-            } footer: {
-                Text("\u{201C}Log again\u{201D} adds a copy of this meal to today's diary. \u{201C}Save as recipe\u{201D} keeps it on the Recipes tab for one-tap re-logging anytime.")
+
+                LuxNote("\u{201C}Log again\u{201D} adds a copy of this meal to today's diary. \u{201C}Save as recipe\u{201D} keeps it on the Recipes tab for one-tap re-logging anytime.")
+                    .padding(.top, 12)
+                    .padding(.bottom, 40)
             }
+            .luxRowChrome()
+        }
+        .luxList()
+        .safeAreaInset(edge: .top, spacing: 0) {
+            LuxHeader(title: "EDIT MEAL", subtitle: meal.displayName) {
+                LuxBackButton { dismiss() }
+            } trailing: {
+                EmptyView()
+            }
+            .padding(.bottom, 10)
+            .background(Lux.ground)
         }
         .keyboardDismissBar()
-        .navigationTitle("Edit Meal")
-        .navigationBarTitleDisplayMode(.inline)
+        .toolbar(.hidden, for: .navigationBar)
         .sheet(item: $sheet) { target in
-            switch target.kind {
-            case .macros:
-                MacroOverrideSheet(item: target.item)
-            case .swap:
-                FoodSwapView(item: target.item)
-            case .micros:
-                MicroOverrideSheet(item: target.item)
+            Group {
+                switch target.kind {
+                case .macros:
+                    MacroOverrideSheet(item: target.item)
+                case .swap:
+                    FoodSwapView(item: target.item)
+                case .micros:
+                    MicroOverrideSheet(item: target.item)
+                }
             }
+            .luxSheetChrome()
         }
     }
 
@@ -177,64 +194,85 @@ private struct FoodItemEditor: View {
     }
 
     var body: some View {
-        Section {
-            TextField("Name", text: $item.name)
-                .textFieldStyle(.roundedBorder)
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 8) {
+                Text(item.name.isEmpty ? "Item" : item.name)
+                    .font(Lux.serif(21, medium: true))
+                    .foregroundStyle(Lux.cream)
+                if item.matchConfidence == MatchConfidence.low {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: 11))
+                        .foregroundStyle(Lux.ember)
+                        .accessibilityLabel("Low confidence match")
+                }
+                Spacer()
+            }
+            .padding(.top, 24)
 
-            // Quantity has +/- steppers for quick count changes (e.g. bumping
+            HStack {
+                LuxFieldLabel(text: "NAME")
+                Spacer()
+                TextField("", text: $item.name)
+                    .font(Lux.serif(17))
+                    .foregroundStyle(Lux.cream)
+                    .tint(Lux.gold)
+                    .multilineTextAlignment(.trailing)
+            }
+            .luxRow(vertical: 9)
+
+            // Quantity keeps its steppers for quick count changes (bumping
             // "6 strips of bacon" to 7) while still allowing tap-to-type. The
             // macros rescale with the count; they aren't stepped directly.
-            Stepper(value: quantityBinding, in: 0...9999, step: 1) {
-                HStack {
-                    TextField("Quantity", value: quantityBinding, format: .number)
-                        .keyboardType(.decimalPad)
-                        .frame(maxWidth: 70)
-                        .textFieldStyle(.roundedBorder)
-                    TextField("Unit", text: $item.unit)
-                        .textFieldStyle(.roundedBorder)
-                }
+            HStack {
+                LuxFieldLabel(text: "QUANTITY")
+                Spacer()
+                TextField("", value: quantityBinding, format: .number)
+                    .keyboardType(.decimalPad)
+                    .font(Lux.serif(17))
+                    .monospacedDigit()
+                    .foregroundStyle(Lux.cream)
+                    .tint(Lux.gold)
+                    .multilineTextAlignment(.trailing)
+                    .frame(maxWidth: 60)
+                TextField("", text: $item.unit)
+                    .font(Lux.serif(17))
+                    .foregroundStyle(Lux.cream.opacity(0.7))
+                    .tint(Lux.gold)
+                    .frame(maxWidth: 70)
+                Stepper("", value: quantityBinding, in: 0...9999, step: 1)
+                    .labelsHidden()
+                    .tint(Lux.gold)
             }
+            .luxRow(vertical: 9)
 
             PortionSliderView(factor: Binding(
                 get: { scaleFactor },
                 set: { applyFactor($0) }
             ))
+            .padding(.top, 4)
 
             Button {
                 present(.macros)
             } label: {
-                HStack(spacing: 12) {
-                    macroValue("kcal", item.calories)
-                    macroValue("P", item.protein)
-                    macroValue("C", item.carbs)
-                    macroValue("F", item.fat)
-                    Spacer()
-                    Image(systemName: "pencil")
-                        .foregroundStyle(.secondary)
+                HStack(spacing: 0) {
+                    macroValue("KCAL", item.calories)
+                    macroValue("PROTEIN", item.protein)
+                    macroValue("CARBS", item.carbs)
+                    macroValue("FAT", item.fat)
                 }
             }
             .buttonStyle(.plain)
+            .padding(.top, 6)
 
-            Button("Swap matched food…") {
-                present(.swap)
+            HStack(spacing: 8) {
+                Button("SWAP FOOD") { present(.swap) }
+                    .buttonStyle(GhostCapsule(height: 36))
+                Button("MICRONUTRIENTS") { present(.micros) }
+                    .buttonStyle(GhostCapsule(height: 36))
+                Spacer()
             }
-            .font(.subheadline)
-
-            Button("Edit micronutrients & caffeine…") {
-                present(.micros)
-            }
-            .font(.subheadline)
 
             MicronutrientDisclosure(micros: item.micros)
-        } header: {
-            HStack {
-                Text(item.name.isEmpty ? "Item" : item.name)
-                if item.matchConfidence == MatchConfidence.low {
-                    Image(systemName: "exclamationmark.triangle.fill")
-                        .foregroundStyle(.yellow)
-                        .accessibilityLabel("Low confidence match")
-                }
-            }
         }
         .onAppear { reanchor() }
         // Re-anchor the portion slider's 1× when macros change from outside the
@@ -246,13 +284,17 @@ private struct FoodItemEditor: View {
     }
 
     private func macroValue(_ label: String, _ value: Double) -> some View {
-        VStack(spacing: 0) {
+        VStack(spacing: 3) {
             Text("\(Int(value.rounded()))")
-                .font(.subheadline.monospacedDigit())
+                .font(Lux.serif(22))
+                .monospacedDigit()
+                .foregroundStyle(Lux.gold)
             Text(label)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
+                .font(Lux.smallcaps(7))
+                .tracking(1.5)
+                .foregroundStyle(Lux.cream.opacity(0.45))
         }
+        .frame(maxWidth: .infinity)
     }
 }
 
@@ -501,37 +543,41 @@ struct MicronutrientDisclosure: View {
 
     var body: some View {
         let recorded = micros.recorded
-        DisclosureGroup(recorded.isEmpty ? "Micronutrients" : "Micronutrients (\(recorded.count))") {
+        DisclosureGroup {
             if recorded.isEmpty {
-                Text("None recorded.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                LuxNote("None recorded.")
+                    .padding(.top, 6)
             } else {
                 ForEach(recorded, id: \.label) { entry in
-                    LabeledContent(entry.label) {
+                    HStack {
+                        Text(entry.label)
+                            .font(Lux.serif(16))
+                            .foregroundStyle(Lux.cream.opacity(0.85))
+                        Spacer()
                         Text(format(entry.value, unit: entry.unit))
+                            .font(Lux.serif(16))
                             .monospacedDigit()
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(Lux.gold)
                     }
-                    .font(.subheadline)
+                    .luxRow(vertical: 8)
                 }
             }
             if let onEdit {
-                Button {
+                Button(recorded.isEmpty ? "ADD MICRONUTRIENTS" : "EDIT MICRONUTRIENTS") {
                     onEdit()
-                } label: {
-                    Label(
-                        recorded.isEmpty ? "Add micronutrients…" : "Edit micronutrients…",
-                        systemImage: "pencil"
-                    )
-                    .font(.subheadline)
                 }
-                .buttonStyle(.borderless)
-                .padding(.top, 2)
+                .buttonStyle(GhostCapsule(height: 34))
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.top, 10)
             }
+        } label: {
+            Text(recorded.isEmpty ? "MICRONUTRIENTS" : "MICRONUTRIENTS (\(recorded.count))")
+                .font(Lux.smallcaps(9))
+                .tracking(2.5)
+                .foregroundStyle(Lux.goldLabel)
         }
-        .font(.subheadline)
+        .tint(Lux.goldLabel)
+        .padding(.top, 4)
     }
 
     /// One decimal for small gram amounts, whole numbers for mg/mcg.
@@ -544,3 +590,4 @@ struct MicronutrientDisclosure: View {
         return "\(Int(value.rounded())) \(unit)"
     }
 }
+

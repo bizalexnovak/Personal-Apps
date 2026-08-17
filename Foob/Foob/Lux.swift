@@ -405,3 +405,126 @@ extension Metric {
         }
     }
 }
+
+// MARK: - List chrome
+
+extension View {
+    /// Strips a List's or Form's system chrome so ruled rows can be drawn on
+    /// the emerald ground. Applied to the container; rows also need
+    /// `luxRowChrome()`.
+    func luxList() -> some View {
+        self
+            .listStyle(.plain)
+            .scrollContentBackground(.hidden)
+            .environment(\.defaultMinListRowHeight, 0)
+            .luxScreen()
+    }
+
+    /// Clears one row's background and separator so `luxRow` can draw the
+    /// hairline instead.
+    func luxRowChrome(inset: CGFloat = Lux.hPad) -> some View {
+        self
+            .listRowBackground(Color.clear)
+            .listRowSeparator(.hidden)
+            .listRowInsets(EdgeInsets(top: 0, leading: inset, bottom: 0, trailing: inset))
+    }
+}
+
+/// A label-left / value-right row on a hairline — the shape most of Settings
+/// and the editors are built from.
+struct LuxValueRow<Value: View>: View {
+    let label: String
+    @ViewBuilder var value: Value
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Text(label)
+                .font(Lux.smallcaps(9))
+                .tracking(2)
+                .foregroundStyle(Lux.cream.opacity(0.45))
+            Spacer()
+            value
+        }
+        .luxRow(vertical: 11)
+    }
+}
+
+/// A navigable row: serif title, gold chevron. Settings is a stack of these.
+struct LuxNavRow: View {
+    let title: String
+    var detail: String?
+    var size: CGFloat = 18
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Text(title)
+                .font(Lux.serif(size))
+                .foregroundStyle(Lux.cream)
+            Spacer()
+            if let detail {
+                Text(detail)
+                    .font(Lux.serifItalic(15))
+                    .foregroundStyle(Lux.cream.opacity(0.45))
+            }
+            Image(systemName: "chevron.right")
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(Lux.goldLabel)
+        }
+        .contentShape(Rectangle())
+        .luxRow(vertical: 13)
+    }
+}
+
+/// A screen header: optional leading/trailing controls, engraved title, and an
+/// italic subtitle. Every destination in the app opens with one.
+struct LuxHeader<Leading: View, Trailing: View>: View {
+    let title: String
+    var subtitle: String?
+    var eyebrow: Bool = true
+    @ViewBuilder var leading: Leading
+    @ViewBuilder var trailing: Trailing
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack {
+                leading
+                Spacer()
+                trailing
+            }
+            .frame(minHeight: 20)
+            .padding(.bottom, 8)
+
+            LuxTitle(text: title, eyebrow: eyebrow)
+
+            if let subtitle {
+                Text(subtitle)
+                    .font(Lux.serifItalic(15))
+                    .foregroundStyle(Lux.cream.opacity(0.55))
+                    .multilineTextAlignment(.center)
+                    .padding(.top, 6)
+            }
+        }
+        .padding(.horizontal, Lux.hPad)
+        .padding(.top, 64)
+    }
+}
+
+extension LuxHeader where Leading == EmptyView, Trailing == EmptyView {
+    init(title: String, subtitle: String? = nil, eyebrow: Bool = true) {
+        self.init(title: title, subtitle: subtitle, eyebrow: eyebrow,
+                  leading: { EmptyView() }, trailing: { EmptyView() })
+    }
+}
+
+/// A back chevron for pushed destinations, which hide the system nav bar.
+struct LuxBackButton: View {
+    var action: () -> Void
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: "chevron.left")
+                .font(.system(size: 16, weight: .medium))
+                .foregroundStyle(Lux.cream)
+        }
+        .accessibilityLabel("Back")
+    }
+}
