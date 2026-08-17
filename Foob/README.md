@@ -62,10 +62,11 @@ privacy manifest) ships in the app target.
 ## Siri & voice capture
 
 Capture happens on the **Log** tab, inline — no modal. It's voice by default
-(a pulsing mic you tap to start recording on that same screen), with a
-camera-app-style **Voice / Scan** switch and a keyboard button to type. A **"+"** button beside the tabs (Today / Trends) on a custom bottom bar opens
-a mini menu (Voice / Scan / AI / Type) that jumps to the Log tab in the chosen
-mode. Siri (**"Log meal in Foob"**, **"Log drink in Foob"**, **"Scan a
+(a gold **medallion** mic you tap to start recording on that same screen —
+fixed in place, so starting to speak never moves the thing you just tapped),
+with a typographic **Voice / Scan / AI / Barcode** switch and a keyboard button
+to type. The cream **add bar** pinned on Today jumps to the Log tab: tap it to
+open voice capture, or its mic glyph to start listening immediately. Siri (**"Log meal in Foob"**, **"Log drink in Foob"**, **"Scan a
 label in Foob"**) opens the same flow modally via `CaptureView`. Items can
 be renamed and portion-scaled with a **`PortionSliderView`** — a slider that
 snaps toward ½× / 1× / 2× / 5× / 10× (with tick marks) plus a **type-in field**
@@ -75,7 +76,8 @@ step. The review's **Date** row (defaults to today) back-dates a meal to a
 previous day.
 
 - **Voice**: tap the pulsing mic to start (mic + speech permissions on first
-  use); it pulses idly before you start and with your voice while listening,
+  use); its halos breathe slowly before you start and speed up with your voice
+  while listening,
   shows the live transcript, and auto-stops after ~2 s of silence (or tap Done).
   Recognition is biased toward food vocabulary — brands like Chobani, proteins,
   units — via `contextualStrings`. (`CaptureComponents` holds the shared pulse /
@@ -194,22 +196,41 @@ raw text ─▶ ClaudeMealParsingService ─▶ [FoodItemRequest] ─▶ USDANut
   save as recipe), Recipes (saved meal templates, one-tap re-log), Trends
   (multi-day chart), Settings (Profile / Daily goals / Appearance / API keys /
   Developer sub-screens), Onboarding.
+- **Lux.swift** — the gold-on-emerald design language: palette, the two
+  gradients that carry most of the look (gold fill, engraved title), and the
+  shapes every screen is built from — panel chrome, ruled rows, the capsule
+  button styles, the typographic switcher, the underlined field. Screens
+  reference `Lux.…` rather than inlining hex, so the language is changeable
+  from one file. Sizes are logical points; the design was drawn at 402×874
+  (iPhone 16 Pro), where its px map 1:1 to pt.
+- **Type** — Cinzel Decorative Bold for engraved screen titles, Cormorant
+  Garamond (regular/medium, upright and italic) for values, row titles and
+  anything conversational, and letterspaced system sans in uppercase for
+  labels and units. The faces live in `Foob/Resources/Fonts` under the OFL and
+  are registered through `UIAppFonts` in `project.yml`. They are static
+  instances cut from the variable originals and subset to Latin — the variable
+  Cormorant defaults to Light and resolves unpredictably by PostScript name on
+  iOS, and the full character set was 2.4 MB against 276 KB subset. Reference
+  them by PostScript name via `Lux.Face`, which is not always the filename.
+- **Navigation** — no tab bar. A gold orb bottom-right fans five labelled orbs
+  when tapped (`OrbNav.swift`); the cream add bar beside it is pinned on Today
+  only. Screens declare their own bottom clearance
+  (`OrbNavBar.clearance` / `.orbOnlyClearance`) because the orb floats over
+  them rather than shrinking their safe area.
 - **Theme** — four appearance modes: **Light**, **Dark**, **Auto** (flips
   light/dark by time of day, ~7am–7pm, re-evaluated on a minute timer), and
-  **Custom** (uses a customizable background colour, with text auto-switching to
-  light/dark based on the colour's luma). Plus a customizable **app accent**
-  (buttons, active tab, capture controls, the "+") and a customizable
-  five-colour **metric palette**. All stored in AppStorage and injected through
-  the environment (`appAccent`, `appBackground`, `MetricPalette`) so the UI,
-  Today rings/bar, and Trends chart update live; Settings → Appearance edits
-  them. Default is Dark.
-- **Tools/make_app_icon.py** — the app icon (white spiral notebook + cutlery on
-  mint) is generated from vector source rather than hand-exported, so the colour
-  or artwork can change without a design tool:
+  **Custom** (a customizable background colour, with text auto-switching based
+  on the colour's luma). Default is Dark. The app accent and the five
+  per-metric colours are **not** adjustable: the gold ladder carries meaning —
+  Trends uses it to tell five same-hue lines apart — so `MetricPalette` is
+  fixed. Colours written by older builds are left on disk and never read.
+- **Tools/make_app_icon.py** — the app icon (gold fork and knife on the
+  emerald vignette) is generated from vector source rather than hand-exported,
+  so the colour or artwork can change without a design tool:
 
       pip install cairosvg pillow && python3 Tools/make_app_icon.py
 
-  Edit `BACKGROUND` or the SVG in that file and re-run; it overwrites
+  Edit `GROUND` or the SVG in that file and re-run; it overwrites
   `Assets.xcassets/AppIcon.appiconset/icon-1024.png`. It flattens to RGB on the
   way out because App Store Connect rejects icons with an alpha channel.
 
