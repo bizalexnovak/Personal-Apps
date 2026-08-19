@@ -17,9 +17,57 @@ xcodegen generate
 open MindLog.xcodeproj
 ```
 
-Then select your development team under Signing & Capabilities and run on a
-device or simulator. Run the unit tests with **⌘U** (pure logic + in-memory
-models — no network, no keys, no special setup).
+Signing is already wired up: the Team ID lives in `Signing.xcconfig`, which
+both the Debug and Release configs pull in, so `xcodegen generate` can't throw
+it away. Run on a device or simulator with **⌘R**, and the unit tests with
+**⌘U** (pure logic + in-memory models — no network, no keys, no special setup).
+
+## Updating on your phone
+
+MindLog isn't on the App Store or TestFlight — it's built on your Mac and
+installed straight onto your phone. After one cabled install, every update
+after that goes over Wi-Fi with a single command.
+
+### One-time setup
+
+1. **Team ID.** Put your 10-character Apple Developer Team ID in
+   `Signing.xcconfig` (developer.apple.com → Membership, or the code in
+   parentheses in Xcode's team dropdown).
+2. **Developer Mode on the phone.** Settings → Privacy & Security → Developer
+   Mode → on, then restart the phone when it asks.
+3. **Plug the phone in once** and run the app from Xcode (**⌘R**) with the
+   phone selected as the destination. This is the cabled install; it's also
+   what pairs the phone with this Mac. On the phone, trust the developer
+   certificate if prompted (Settings → General → VPN & Device Management).
+4. **Turn on wireless.** With the cable still attached, open Xcode → Window →
+   **Devices and Simulators**, select the phone, and tick **Connect via
+   network**. A globe appears next to its name once it's reachable wirelessly.
+   Now unplug it.
+
+### Every update after that
+
+Same Wi-Fi, phone unlocked, one command:
+
+```sh
+cd MindLog && bash bin/deploy-phone.sh
+```
+
+That regenerates the project, builds Release for the device, installs over the
+network, and launches the app — the phone lights up with the new build a
+minute or so later. Running it twice in a row is harmless: the install replaces
+the app in place and the launch terminates any running copy first.
+
+If you have more than one paired device, or the script picks the wrong one,
+name the phone explicitly:
+
+```sh
+DEVICE_NAME="Nova" bash bin/deploy-phone.sh
+```
+
+The script checks its preconditions before it does any work, so the common
+failures — no Team ID, phone not reachable, build broken — come back as a
+plain-English explanation of what to fix rather than a wall of xcodebuild
+output.
 
 ## The two halves
 
@@ -130,6 +178,39 @@ skipped if the habit is already done — a check-in reminder stays quiet on
 days you've checked in. Six future days are always scheduled so nudges keep
 firing even if the app isn't opened for a while.
 
+### Silent capture
+
+Voice is the depth layer, not the only door. A mood can be logged in under
+five seconds without opening the app and without speaking:
+
+- **Widgets** — a lock-screen (`accessoryRectangular` / `accessoryCircular`)
+  and home-screen (`systemSmall` / `systemMedium`) widget with five tappable
+  mood emoji. Each is an iOS 17 interactive `Button(intent:)` running
+  `LogMoodIntent` with `openAppWhenRun = false` — the tap is the whole
+  interaction.
+- **Notification check-ins** — Settings → Check-ins opens a window (default
+  10 AM – 9 PM, twice a day) inside which MindLog picks unpredictable
+  moments. The notification carries five mood actions with `options: []`,
+  so answering it never opens the app. **Off by default.**
+- **Backdating** — any entry's timestamp is editable, and the Today screen's
+  mood card works on whichever day it's showing, so a forgotten yesterday is
+  still loggable. `EntryEditing` holds that logic (clamped to a one-year
+  window ending at now) and is unit-tested.
+- **The optional second step** — after any check-in a sheet offers emotion
+  words (scoped to the mood just tapped) and who/what/where context tags.
+  It is skippable in *zero* taps: the check-in is already saved before it
+  appears. See `docs/REFERENCES.md`.
+- **Health** — Settings → Health soft-asks for read-only sleep and step
+  data. Read-only, cached locally, and the app is complete without it.
+
+Neither the widget process nor the notification callback can safely open the
+app's SwiftData store, so both append a `PendingCheckIn` to an App Group
+queue (`CheckInInbox`) that the app drains on next foreground
+(`CheckInSync.drain`), keeping the *tap's* timestamp. Draining is idempotent
+— the queued id becomes the `JournalEntry` id, so a replay can't double-log.
+The App Group (`group.com.alexnovak.MindLog`) is a second on-device sandbox
+shared by the app and its widget; nothing leaves the phone.
+
 ## Privacy stance
 
 Mental-health data is the most sensitive thing a personal app can hold, so
@@ -177,9 +258,13 @@ type entry / log activity / breathe / meditate).
 
 ## Roadmap
 
-- **HealthKit** — import Mindful Minutes and sleep; export sessions.
-- **Home-screen widget** — today's score ring + one-tap check-in (App Group
-  plumbing mirrors Foob's widget).
+- **HealthKit, further** — sleep + steps read landed in M1; Mindful Minutes
+  import and session export are still open.
+- **Score-ring widget** — the check-in widget shipped in M1; a today's-score
+  ring family is still open.
+- **Apple Watch app** — deliberately deferred.
+- **Correlations & export** — mood ↔ sleep/steps insights and export are
+  the next milestone, not this one.
 - **Optional Claude-powered weekly reflection** — a gentle summary of the
   week's entries via the same invite-code proxy Foob uses. Off by
   default and clearly opt-in, because it means journal text leaving the

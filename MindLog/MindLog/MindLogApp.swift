@@ -2,9 +2,18 @@ import SwiftUI
 import SwiftData
 import Combine
 import UIKit
+import UserNotifications
+import WidgetKit
 
 @main
 struct MindLogApp: App {
+    init() {
+        // Owns the notification response callback, so tapping a mood inside a
+        // notification queues a check-in instead of just opening the app.
+        UNUserNotificationCenter.current().delegate = CheckInNotificationDelegate.shared
+        CheckInNotifications.registerCategories()
+    }
+
     var body: some Scene {
         WindowGroup {
             ContentView()
@@ -21,6 +30,7 @@ struct ContentView: View {
     /// Ticks so Auto re-evaluates day/night across the 7am / 7pm boundaries.
     @State private var now = Date()
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.modelContext) private var context
 
     // Reminder refresh needs today's live state; queried here once so the
     // scenePhase handler doesn't reach into child views.
@@ -97,10 +107,27 @@ struct ContentView: View {
         // "skip when already done today" reflects the latest entries.
         .onChange(of: scenePhase) { _, phase in
             if phase == .background || phase == .active {
+                if phase == .active {
+                    // Anything tapped on the lock screen or in a notification
+                    // while we were away becomes a row now — timestamped when
+                    // it was tapped, not when we got round to it.
+                    CheckInSync.drain(into: context, existing: entries)
+                }
                 ReminderManager.refresh(
                     today: ReminderManager.todayState(entries: entries, logs: logs)
                 )
+                CheckInNotifications.refresh(
+                    today: ReminderManager.todayState(entries: entries, logs: logs)
+                )
             }
+        }
+        // Keep the widget's picture of today in step with the real rows.
+        .onChange(of: entries.count, initial: true) { _, _ in
+            CheckInSnapshotStore.write(CheckInSync.snapshot(from: entries))
+            WidgetCenter.shared.reloadAllTimelines()
+        }
+        .task {
+            CheckInSync.drain(into: context, existing: entries)
         }
         // Dismiss any open keyboard when moving between tabs.
         .onChange(of: hub.selectedTab) { _, _ in

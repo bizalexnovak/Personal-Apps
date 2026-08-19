@@ -13,6 +13,8 @@ struct JournalEntryDetailView: View {
     @State private var mood: Int?
     @State private var timestamp: Date = .now
     @State private var confirmDelete = false
+    @State private var emotionWords: [String] = []
+    @State private var contextTags: [String] = []
 
     var body: some View {
         NavigationStack {
@@ -37,10 +39,38 @@ struct JournalEntryDetailView: View {
                     DatePicker(
                         "When",
                         selection: $timestamp,
-                        in: ...Date(),
+                        in: EntryEditing.earliestAllowed()...Date(),
                         displayedComponents: [.date, .hourAndMinute]
                     )
                     .font(.subheadline)
+
+                    // Same optional, skippable layer as the check-in detail
+                    // step — any entry can gain or lose words/tags later.
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Feeling words")
+                            .font(.subheadline.weight(.medium))
+                        FlowLayout(spacing: 8) {
+                            ForEach(EmotionVocabulary.words(for: mood ?? 3), id: \.self) { word in
+                                SelectableChip(label: word, isOn: emotionWords.contains(word)) {
+                                    emotionWords = toggling(word, in: emotionWords)
+                                }
+                            }
+                        }
+                    }
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Context")
+                            .font(.subheadline.weight(.medium))
+                        ForEach(ContextTagCatalog.groups, id: \.title) { group in
+                            FlowLayout(spacing: 8) {
+                                ForEach(group.tags, id: \.self) { tag in
+                                    SelectableChip(label: tag, isOn: contextTags.contains(tag)) {
+                                        contextTags = toggling(tag, in: contextTags)
+                                    }
+                                }
+                            }
+                        }
+                    }
 
                     if entry.source == EntrySource.voice {
                         Label("Captured by voice", systemImage: "mic.fill")
@@ -86,6 +116,8 @@ struct JournalEntryDetailView: View {
             text = entry.text
             mood = entry.moodScore
             timestamp = entry.timestamp
+            emotionWords = entry.emotionWords
+            contextTags = entry.contextTags
         }
     }
 
@@ -93,11 +125,29 @@ struct JournalEntryDetailView: View {
         !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || mood != nil
     }
 
+    /// Returns the list with `value` added or removed. A pure transform rather
+    /// than an `inout` mutation so the chip's escaping tap closure doesn't have
+    /// to borrow this view's @State storage.
+    private func toggling(_ value: String, in list: [String]) -> [String] {
+        var list = list
+        if let index = list.firstIndex(of: value) {
+            list.remove(at: index)
+        } else {
+            list.append(value)
+        }
+        return list
+    }
+
     private func save() {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         entry.text = trimmed
         entry.moodScore = mood
-        entry.timestamp = timestamp
+        // Clamp defensively even though the picker's own range already
+        // excludes the future/too-far-past — a belt-and-braces guard
+        // against a stale binding slipping an out-of-window date through.
+        entry.timestamp = EntryEditing.clamp(timestamp)
+        entry.emotionWords = emotionWords
+        entry.contextTags = contextTags
         entry.sentimentScore = SentimentAnalyzer.score(for: trimmed)
         if trimmed.isEmpty {
             entry.source = EntrySource.checkIn
