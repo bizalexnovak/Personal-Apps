@@ -46,6 +46,15 @@ struct OrbNavBar: View {
             }
             bottomRow
         }
+        // Claims the full screen and reaches through the bottom safe area.
+        // Both matter: the bar's 30pt is measured from the physical bottom
+        // edge (as the design specifies) rather than from above the home
+        // indicator, and the scrim has somewhere to cover — laid out inside
+        // the safe area it stopped short and left an unlit band at the foot
+        // of the screen. Empty regions of a ZStack take no hits, so content
+        // underneath stays tappable when the menu is closed.
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+        .ignoresSafeArea(.container, edges: .bottom)
         .animation(.spring(response: 0.34, dampingFraction: 0.78), value: open)
     }
 
